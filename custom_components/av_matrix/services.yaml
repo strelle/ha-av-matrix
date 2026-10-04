@@ -1,0 +1,53 @@
+route:
+  target:
+    entity:
+      integration: av_matrix
+      domain: select
+    device:
+      integration: av_matrix
+  fields:
+    source:
+      required: true
+      example: "STUDIO-PC (Slides)"
+      selector:
+        text:
+
+salvo:
+  fields:
+    routes:
+      required: true
+      example: '[{"destination": "select.lobby_screen_source", "source": "STUDIO-PC (Slides)"}, {"destination": "select.stage_screen_source", "source": "None"}]'
+      selector:
+        object:
+
+lock:
+  target:
+    entity:
+      integration: av_matrix
+      domain: select
+    device:
+      integration: av_matrix
+
+unlock:
+  target:
+    entity:
+      integration: av_matrix
+      domain: select
+    device:
+      integration: av_matrix
+
+undo:
+  target:
+    entity:
+      integration: av_matrix
+      domain: select
+    device:
+      integration: av_matrix
+
+refresh_sources:
+  target:
+    entity:
+      integration: av_matrix
+      domain: select
+    device:
+      integration: av_matrix

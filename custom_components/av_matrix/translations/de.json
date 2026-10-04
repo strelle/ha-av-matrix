@@ -1,0 +1,222 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Gerät hinzufügen",
+        "description": "Protokoll und Gerätetyp wählen. Jedes Gerät (Decoder, Empfänger) wird ein Eintrag; seine Ausgänge werden Ziele der Kreuzschiene.",
+        "data": {
+          "driver": "Gerätetyp"
+        }
+      },
+      "device": {
+        "title": "{device}",
+        "description": "Die Verbindung wird vor dem Hinzufügen getestet.",
+        "data": {
+          "host": "Host / IP-Adresse",
+          "port": "Port",
+          "username": "Benutzername",
+          "password": "Passwort",
+          "name": "Anzeigename (optional)",
+          "channels": "Anzahl Decoder-Kanäle"
+        },
+        "data_description": {
+          "host": "IP-Adresse oder Hostname des Geräts, z. B. 192.0.2.10.",
+          "port": "Leer lassen für den Standard-Port dieses Gerätetyps.",
+          "username": "Magewell-Werkseinstellung: Admin",
+          "password": "Magewell-Werkseinstellung: Admin (bitte ändern!). BirdDog: nur nötig, wenn die API eine Anmeldung verlangt.",
+          "name": "Standard: der Name des Geräts.",
+          "channels": "Nur für mehrkanalige BirdDog-Geräte (1-4)."
+        }
+      },
+      "reauth_confirm": {
+        "title": "{name} neu anmelden",
+        "description": "Das Gerät hat die gespeicherten Zugangsdaten abgelehnt.",
+        "data": {
+          "username": "Benutzername",
+          "password": "Passwort"
+        }
+      },
+      "reconfigure": {
+        "title": "Gerät neu konfigurieren",
+        "description": "Passwort leer lassen, um das gespeicherte zu behalten.",
+        "data": {
+          "host": "Host / IP-Adresse",
+          "port": "Port",
+          "username": "Benutzername",
+          "password": "Passwort",
+          "channels": "Anzahl Decoder-Kanäle"
+        },
+        "data_description": {
+          "host": "IP-Adresse oder Hostname des Geräts, z. B. 192.0.2.10.",
+          "port": "Leer lassen für den Standard-Port dieses Gerätetyps.",
+          "username": "Magewell-Werkseinstellung: Admin",
+          "password": "Magewell-Werkseinstellung: Admin (bitte ändern!). BirdDog: nur nötig, wenn die API eine Anmeldung verlangt.",
+          "channels": "Nur für mehrkanalige BirdDog-Geräte (1-4)."
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Gerät nicht erreichbar (falsche Adresse/Port oder anderer Gerätetyp).",
+      "invalid_auth": "Das Gerät hat Benutzername oder Passwort abgelehnt.",
+      "unknown": "Unerwarteter Fehler, siehe Protokoll."
+    },
+    "abort": {
+      "already_configured": "Dieses Gerät ist bereits eingerichtet.",
+      "reauth_successful": "Neu-Anmeldung erfolgreich.",
+      "reconfigure_successful": "Neukonfiguration erfolgreich.",
+      "unique_id_mismatch": "Diese Adresse gehört zu einem anderen Gerät."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Optionen",
+        "data": {
+          "scan_interval": "Abfrageintervall"
+        },
+        "data_description": {
+          "scan_interval": "Sekunden zwischen zwei Abfragen. Offline-Geräte werden mit wachsender Pause (bis 30 s) erneut versucht."
+        }
+      },
+      "display": {
+        "title": "Verknüpfter Bildschirm: {destination}",
+        "description": "Optional: ein TV oder Beamer (beliebiger media_player), der an diesem Ziel hängt. Leer lassen für keinen.",
+        "data": {
+          "entity_id": "Bildschirm (Media-Player)",
+          "auto_on": "Beim Schalten einschalten und Eingang wählen",
+          "off_on_none": "Bildschirm ausschalten, wenn auf „None“ geschaltet wird"
+        }
+      },
+      "display_input": {
+        "title": "Bildschirm-Eingang: {destination}",
+        "description": "Eingang von {display}, an dem der Decoder hängt (z. B. HDMI 2). Leer lassen, um nur einzuschalten.",
+        "data": {
+          "input": "Eingang"
+        }
+      }
+    }
+  },
+  "entity": {
+    "select": {
+      "source": {
+        "name": "Quelle"
+      },
+      "source_channel": {
+        "name": "{channel} Quelle"
+      }
+    },
+    "sensor": {
+      "connection": {
+        "name": "Verbindung",
+        "state": {
+          "connected": "Verbunden",
+          "connecting": "Verbinde",
+          "no_source": "Keine Quelle",
+          "source_lost": "Quelle sendet nicht",
+          "offline": "Offline"
+        }
+      },
+      "connection_channel": {
+        "name": "{channel} Verbindung",
+        "state": {
+          "connected": "Verbunden",
+          "connecting": "Verbinde",
+          "no_source": "Keine Quelle",
+          "source_lost": "Quelle sendet nicht",
+          "offline": "Offline"
+        }
+      },
+      "resolution": {
+        "name": "Auflösung"
+      },
+      "resolution_channel": {
+        "name": "{channel} Auflösung"
+      }
+    },
+    "binary_sensor": {
+      "connected": {
+        "name": "Verbunden"
+      },
+      "connected_channel": {
+        "name": "{channel} verbunden"
+      }
+    },
+    "button": {
+      "refresh_sources": {
+        "name": "Quellen aktualisieren"
+      }
+    },
+    "switch": {
+      "lock": {
+        "name": "Schaltsperre"
+      },
+      "lock_channel": {
+        "name": "{channel} Schaltsperre"
+      }
+    }
+  },
+  "exceptions": {
+    "destination_locked": {
+      "message": "{destination} ist gesperrt. Zuerst entsperren."
+    },
+    "unknown_destination": {
+      "message": "Unbekanntes Ziel: {destination}"
+    },
+    "no_destination": {
+      "message": "Kein AV-Matrix-Ziel im Target."
+    },
+    "route_failed": {
+      "message": "Schalten von {destination} fehlgeschlagen: {error}"
+    },
+    "salvo_failed": {
+      "message": "Einige Schaltungen sind fehlgeschlagen: {errors}"
+    },
+    "nothing_to_undo": {
+      "message": "Für {destination} gibt es nichts rückgängig zu machen."
+    },
+    "refresh_failed": {
+      "message": "Aktualisieren der Quellen fehlgeschlagen: {error}"
+    },
+    "unknown_protocol": {
+      "message": "Unbekanntes Protokoll."
+    }
+  },
+  "services": {
+    "route": {
+      "name": "Schalten",
+      "description": "Eine Quelle auf ein oder mehrere Ziele schalten.",
+      "fields": {
+        "source": {
+          "name": "Quelle",
+          "description": "Quellname (NDI®: der volle NDI-Name) oder sein Label. „None“ schaltet das Ziel aus."
+        }
+      }
+    },
+    "salvo": {
+      "name": "Salvo",
+      "description": "Mehrere Ziele auf einmal schalten. Alle werden zuerst geprüft; ist eines unbekannt oder gesperrt, wird nichts geschaltet.",
+      "fields": {
+        "routes": {
+          "name": "Schaltungen",
+          "description": "Liste von {destination: <Select-Entity>, source: <Name>}."
+        }
+      }
+    },
+    "lock": {
+      "name": "Sperren",
+      "description": "Ziele gegen Umschalten sperren."
+    },
+    "unlock": {
+      "name": "Entsperren",
+      "description": "Umschalten wieder erlauben."
+    },
+    "undo": {
+      "name": "Rückgängig",
+      "description": "Die vorherige Quelle der Ziele wiederherstellen."
+    },
+    "refresh_sources": {
+      "name": "Quellen aktualisieren",
+      "description": "Die Geräte ihre Quellenlisten neu aufbauen lassen."
+    }
+  }
+}

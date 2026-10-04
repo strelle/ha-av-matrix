@@ -1,0 +1,42 @@
+{
+  "entity": {
+    "select": {
+      "source": { "default": "mdi:video-input-hdmi" },
+      "source_channel": { "default": "mdi:video-input-hdmi" }
+    },
+    "sensor": {
+      "connection": {
+        "default": "mdi:lan-pending",
+        "state": {
+          "connected": "mdi:lan-connect",
+          "connecting": "mdi:lan-pending",
+          "no_source": "mdi:video-off-outline",
+          "source_lost": "mdi:alert-circle-outline",
+          "offline": "mdi:lan-disconnect"
+        }
+      },
+      "connection_channel": { "default": "mdi:lan-pending" },
+      "resolution": { "default": "mdi:monitor-screenshot" },
+      "resolution_channel": { "default": "mdi:monitor-screenshot" }
+    },
+    "binary_sensor": {
+      "connected": { "default": "mdi:lan-connect" },
+      "connected_channel": { "default": "mdi:lan-connect" }
+    },
+    "button": {
+      "refresh_sources": { "default": "mdi:refresh" }
+    },
+    "switch": {
+      "lock": { "default": "mdi:lock-open-variant-outline", "state": { "on": "mdi:lock" } },
+      "lock_channel": { "default": "mdi:lock-open-variant-outline", "state": { "on": "mdi:lock" } }
+    }
+  },
+  "services": {
+    "route": { "service": "mdi:video-switch" },
+    "salvo": { "service": "mdi:playlist-play" },
+    "lock": { "service": "mdi:lock" },
+    "unlock": { "service": "mdi:lock-open-variant" },
+    "undo": { "service": "mdi:undo" },
+    "refresh_sources": { "service": "mdi:refresh" }
+  }
+}

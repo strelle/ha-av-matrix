@@ -1,0 +1,222 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Add a device",
+        "description": "Choose the protocol and device type. Each device (decoder, receiver) becomes one entry; its outputs become destinations of the matrix.",
+        "data": {
+          "driver": "Device type"
+        }
+      },
+      "device": {
+        "title": "{device}",
+        "description": "The connection is tested before the device is added.",
+        "data": {
+          "host": "Host / IP address",
+          "port": "Port",
+          "username": "User name",
+          "password": "Password",
+          "name": "Display name (optional)",
+          "channels": "Number of decoder channels"
+        },
+        "data_description": {
+          "host": "IP address or host name of the device, e.g. 192.0.2.10.",
+          "port": "Leave empty for the default port of this device type.",
+          "username": "Magewell factory default: Admin",
+          "password": "Magewell factory default: Admin (change it!). BirdDog: only needed if the API requires a login.",
+          "name": "Defaults to the device's own name.",
+          "channels": "Multi-channel BirdDog devices only (1-4)."
+        }
+      },
+      "reauth_confirm": {
+        "title": "Re-authenticate {name}",
+        "description": "The device rejected the stored credentials.",
+        "data": {
+          "username": "User name",
+          "password": "Password"
+        }
+      },
+      "reconfigure": {
+        "title": "Reconfigure device",
+        "description": "Leave the password empty to keep the stored one.",
+        "data": {
+          "host": "Host / IP address",
+          "port": "Port",
+          "username": "User name",
+          "password": "Password",
+          "channels": "Number of decoder channels"
+        },
+        "data_description": {
+          "host": "IP address or host name of the device, e.g. 192.0.2.10.",
+          "port": "Leave empty for the default port of this device type.",
+          "username": "Magewell factory default: Admin",
+          "password": "Magewell factory default: Admin (change it!). BirdDog: only needed if the API requires a login.",
+          "channels": "Multi-channel BirdDog devices only (1-4)."
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Cannot reach the device (wrong address/port, or it is not this device type).",
+      "invalid_auth": "The device rejected the user name or password.",
+      "unknown": "Unexpected error, see the log."
+    },
+    "abort": {
+      "already_configured": "This device is already configured.",
+      "reauth_successful": "Re-authentication was successful.",
+      "reconfigure_successful": "Reconfiguration was successful.",
+      "unique_id_mismatch": "This address belongs to a different device."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Options",
+        "data": {
+          "scan_interval": "Polling interval"
+        },
+        "data_description": {
+          "scan_interval": "Seconds between two polls. Offline devices are retried with a growing pause (up to 30 s)."
+        }
+      },
+      "display": {
+        "title": "Linked display: {destination}",
+        "description": "Optional: a TV or projector (any media_player) fed by this destination. Leave empty for none.",
+        "data": {
+          "entity_id": "Display (media player)",
+          "auto_on": "Power on and switch input on route",
+          "off_on_none": "Turn display off when routed to None"
+        }
+      },
+      "display_input": {
+        "title": "Display input: {destination}",
+        "description": "Input of {display} the decoder is connected to (e.g. HDMI 2). Leave empty to only power it on.",
+        "data": {
+          "input": "Input"
+        }
+      }
+    }
+  },
+  "entity": {
+    "select": {
+      "source": {
+        "name": "Source"
+      },
+      "source_channel": {
+        "name": "{channel} source"
+      }
+    },
+    "sensor": {
+      "connection": {
+        "name": "Connection",
+        "state": {
+          "connected": "Connected",
+          "connecting": "Connecting",
+          "no_source": "No source",
+          "source_lost": "Source not sending",
+          "offline": "Offline"
+        }
+      },
+      "connection_channel": {
+        "name": "{channel} connection",
+        "state": {
+          "connected": "Connected",
+          "connecting": "Connecting",
+          "no_source": "No source",
+          "source_lost": "Source not sending",
+          "offline": "Offline"
+        }
+      },
+      "resolution": {
+        "name": "Resolution"
+      },
+      "resolution_channel": {
+        "name": "{channel} resolution"
+      }
+    },
+    "binary_sensor": {
+      "connected": {
+        "name": "Connected"
+      },
+      "connected_channel": {
+        "name": "{channel} connected"
+      }
+    },
+    "button": {
+      "refresh_sources": {
+        "name": "Refresh sources"
+      }
+    },
+    "switch": {
+      "lock": {
+        "name": "Route lock"
+      },
+      "lock_channel": {
+        "name": "{channel} route lock"
+      }
+    }
+  },
+  "exceptions": {
+    "destination_locked": {
+      "message": "{destination} is locked. Unlock it first."
+    },
+    "unknown_destination": {
+      "message": "Unknown destination: {destination}"
+    },
+    "no_destination": {
+      "message": "No AV Matrix destination in the target."
+    },
+    "route_failed": {
+      "message": "Routing to {destination} failed: {error}"
+    },
+    "salvo_failed": {
+      "message": "Some routes failed: {errors}"
+    },
+    "nothing_to_undo": {
+      "message": "Nothing to undo for {destination}."
+    },
+    "refresh_failed": {
+      "message": "Refreshing sources failed: {error}"
+    },
+    "unknown_protocol": {
+      "message": "Unknown protocol."
+    }
+  },
+  "services": {
+    "route": {
+      "name": "Route",
+      "description": "Route a source to one or more destinations.",
+      "fields": {
+        "source": {
+          "name": "Source",
+          "description": "Source name (NDI®: the full NDI name) or its label. \"None\" switches the destination off."
+        }
+      }
+    },
+    "salvo": {
+      "name": "Salvo",
+      "description": "Switch several destinations at once. All are validated first; if one is unknown or locked, nothing is switched.",
+      "fields": {
+        "routes": {
+          "name": "Routes",
+          "description": "List of {destination: <select entity>, source: <name>}."
+        }
+      }
+    },
+    "lock": {
+      "name": "Lock",
+      "description": "Protect destinations against switching."
+    },
+    "unlock": {
+      "name": "Unlock",
+      "description": "Allow switching again."
+    },
+    "undo": {
+      "name": "Undo",
+      "description": "Restore the previous source of destinations."
+    },
+    "refresh_sources": {
+      "name": "Refresh sources",
+      "description": "Let the devices rebuild their source lists."
+    }
+  }
+}
