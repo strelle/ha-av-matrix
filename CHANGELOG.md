@@ -3,7 +3,7 @@
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions follow [SemVer](https://semver.org/).
 
-## [Unreleased]
+## [0.2.1] - 2026-10-04
 
 ### Fixed
 - Magewell: the *Resolution* sensor no longer stays `unknown` after switching. Follow-up polls (1.5 / 3 / 5 / 8 / 12 s)
@@ -18,6 +18,10 @@ All notable changes to this project are documented here. The format follows
 - mDNS discovery is stopped again when the first device fails to set up.
 - CI: `ruff check` added (imports cleaned up); the WebSocket test no longer hard-codes the version (failed after
   every release).
+
+### Commits
+
+- fix: resolution stuck at unknown after switching (Magewell), routing races, ruff in CI (ff1a677)
 
 ## [0.2.0] - 2026-10-04
 
