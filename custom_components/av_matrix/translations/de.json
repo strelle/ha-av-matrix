@@ -198,7 +198,7 @@
       "fields": {
         "routes": {
           "name": "Schaltungen",
-          "description": "Liste von {destination: <Select-Entity>, source: <Name>}."
+          "description": "Liste von Schaltungen, jeweils mit destination (Quellen-Select-Entity) und source (Name, Label oder None)."
         }
       }
     },

@@ -198,7 +198,7 @@
       "fields": {
         "routes": {
           "name": "Routes",
-          "description": "List of {destination: <select entity>, source: <name>}."
+          "description": "List of routes, each with destination (a source select entity) and source (name, label or None)."
         }
       }
     },

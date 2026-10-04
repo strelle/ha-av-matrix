@@ -3,8 +3,6 @@ route:
     entity:
       integration: av_matrix
       domain: select
-    device:
-      integration: av_matrix
   fields:
     source:
       required: true
@@ -25,29 +23,21 @@ lock:
     entity:
       integration: av_matrix
       domain: select
-    device:
-      integration: av_matrix
 
 unlock:
   target:
     entity:
       integration: av_matrix
       domain: select
-    device:
-      integration: av_matrix
 
 undo:
   target:
     entity:
       integration: av_matrix
       domain: select
-    device:
-      integration: av_matrix
 
 refresh_sources:
   target:
     entity:
       integration: av_matrix
       domain: select
-    device:
-      integration: av_matrix
