@@ -96,8 +96,17 @@ jobs:
           path = pathlib.Path("CHANGELOG.md")
           text = path.read_text()
           entry = f"## [{version}] - {datetime.date.today().isoformat()}\n\n{notes}\n\n"
-          marker = text.find("\n## [")
-          text = text + "\n" + entry if marker < 0 else text[: marker + 1] + entry + text[marker + 1 :]
+          if "\n## [Unreleased]" in text:
+              # hand-written notes win; the commit list is appended below them
+              text = text.replace("## [Unreleased]", f"## [{version}] - {datetime.date.today().isoformat()}", 1)
+              head, _, rest = text.partition(f"## [{version}]")
+              nxt = rest.find("\n## [", 1)
+              body = rest if nxt < 0 else rest[:nxt]
+              tail = "" if nxt < 0 else rest[nxt:]
+              text = head + f"## [{version}]" + body.rstrip() + "\n\n### Commits\n\n" + notes + "\n" + tail
+          else:
+              marker = text.find("\n## [")
+              text = text + "\n" + entry if marker < 0 else text[: marker + 1] + entry + text[marker + 1 :]
           path.write_text(text)
           PY
           git config user.name "github-actions[bot]"

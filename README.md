@@ -12,8 +12,16 @@ HomeKit, and optional TV power/input control.
 
 > Deutsch: [siehe unten](#deutsch).
 
-<!-- Screenshot placeholder: add docs/images/card.png and replace this comment with ![Matrix card](docs/images/card.png) -->
-*Screenshots coming soon.*
+![Matrix view: destinations x sources with tally, presets and crosshair](docs/screenshots/matrix-desktop.png)
+
+<table><tr>
+<td width="68%"><img src="docs/screenshots/panel-desktop.png" alt="Panel (X-Y) view with two destinations armed for a salvo"><br>
+<img src="docs/screenshots/panel-light.png" alt="Panel view in a light theme with the routing history open"></td>
+<td width="32%"><img src="docs/screenshots/panel-phone.png" alt="Panel view on a phone"></td>
+</tr></table>
+
+*Screenshots from the [mock demo](docs/demo/index.html) (no Home Assistant needed: serve the repo with
+`python3 -m http.server` and open `/docs/demo/`).*
 
 ## Features
 
@@ -31,7 +39,8 @@ HomeKit, and optional TV power/input control.
   `av_matrix.lock` / `unlock`, `av_matrix.undo`, `av_matrix.refresh_sources`; event `av_matrix_routed`.
 - **Linked displays:** power on a TV/projector and switch its input when a destination is routed.
 - **Labels:** give cryptic NDI names a friendly label and tags (via the WebSocket API / card).
-- **Matrix card** `custom:av-matrix-card`, shipped with the integration — no manual resource needed.
+- **Router panel card** `custom:av-matrix-card`, shipped with the integration — no manual resource needed:
+  X-Y panel and matrix view, direct or preset + TAKE (salvo), lock, undo, labels, history, keyboard control.
 - **HomeKit-ready:** the source selects work with the HomeKit Bridge (one switch per source).
 - Config flow with connection test, re-authentication, reconfigure, options, diagnostics (passwords redacted).
 - Protocol-independent core: NDI® today, Dante on the roadmap.
@@ -80,18 +89,72 @@ Sources need no configuration: everything that sends NDI on the network shows up
 
 ## Dashboard card
 
-The card is loaded automatically. Add it via *Add card → AV Matrix* or YAML:
+The card is loaded automatically. Add it via *Add card → AV Matrix* (visual editor) or YAML. In a sections
+view give it the full width.
 
 ```yaml
 type: custom:av-matrix-card
 title: Video routing
-# protocol: ndi            # optional: start on this protocol tab
-# show_offline_sources: true
+mode: panel            # panel (X-Y) | matrix
+take_mode: preset      # direct | preset (arm + TAKE)
+# protocol: ndi        # start tab
+# show_offline: true
+# compact: false
+# columns: 6           # source columns in the panel, 0 = auto
+# destinations:        # selection and order, default: all
+#   - select.stage_left_source
+#   - select.stage_right_source
 ```
 
-Rows are destinations, columns are sources, click a crosspoint to route. The dot shows the connection state
-(green connected, yellow connecting, red offline/source lost); an orange crosspoint means the routed source is not
-sending. You can also use the plain `select` entities in any entities card.
+| Option | Default | Description |
+|---|---|---|
+| `title` | `AV Matrix` | Card title (empty = none). |
+| `mode` | `panel` | `panel`: destinations on top, sources below (X-Y panel). `matrix`: destinations × sources grid. Narrow cards (< 640 px) start in panel mode. |
+| `take_mode` | `direct` | `direct`: tapping a source switches immediately. `preset`: tapping arms the route (amber), **TAKE** switches all armed routes at once (salvo). |
+| `protocol` | first | Protocol tab to start on (`ndi`, later `dante`). Only sources of the same protocol can be routed. |
+| `show_offline` | `true` | Show sources that stopped sending (greyed, "offline · 6 min"). |
+| `compact` | `false` | Smaller tiles. |
+| `columns` | auto | Number of source columns in panel mode. |
+| `destinations` | all | List of destination `select` entities: which ones to show, in this order. |
+
+Mode and take mode can also be switched in the card header at any time.
+
+**Operating it like a router panel**
+
+- **Panel:** pick a destination (its current source lights up red = program/tally), then pick a source.
+  Several destinations: **Shift/Ctrl-click** or **long-press** (touch) – the source then goes to all of them
+  (salvo). Number badges show the selection order.
+- **Matrix:** click a crosspoint. Filled red = on air, amber ring = armed, orange = routed source not sending.
+  Hover shows a crosshair; headers stay in place while scrolling large matrices.
+- **Preset + TAKE:** armed routes are listed in the take bar; **TAKE** switches them together (validated first –
+  a locked destination fails the whole salvo), **Clear**/Esc discards them. If switching fails the presets come back
+  and an error is shown.
+- **Status:** LED and top line per destination – green connected, yellow (pulsing) connecting, grey no source,
+  orange source not sending, red device offline; resolution chip (e.g. `1080p50`).
+- **Lock** (padlock) protects a destination, **undo** (↶) restores its previous source; *Undo last* in the footer
+  undoes the latest route made from the card. The **TV** button switches a linked display on/off and shows its input.
+- **Search and tags** filter the sources; *Live only* hides offline sources.
+- **Labels (admins):** pencil button in the header, then tap a source – or right-click / long-press a source.
+  Give cryptic NDI names a friendly label and tags; the NDI name stays visible in small print.
+- **History:** the last 50 routes with time, destination, source, previous source, origin and user (who switched;
+  user names are resolved for admins).
+- Switching shows *switching…* immediately and is confirmed by the live state from Home Assistant.
+
+**Keyboard** (when the card has focus):
+
+| Key | Action |
+|---|---|
+| `/` | Search sources (Esc clears, ↓ jumps into the sources) |
+| Arrow keys | Move between destinations, sources and crosspoints |
+| Enter / Space | Press the focused tile; **Enter** elsewhere (or Ctrl/⌘+Enter anywhere) = **TAKE** |
+| Esc | Clear presets / multi-selection |
+| `U` | Undo (focused or selected destination, else the last route) |
+| `L` | Lock / unlock the focused or selected destination |
+| `1` – `9` | Select destination 1–9 (Shift adds to the selection) |
+
+The card follows your Home Assistant theme (dark and light) and respects *reduced motion*. Tally colours can be
+themed with `--av-matrix-tally-color` and `--av-matrix-preset-color`. Without the WebSocket API (older version)
+it falls back to the `select` entities (*basic mode*). The plain `select` entities work in any entities card too.
 
 ## Automations
 
@@ -231,7 +294,6 @@ automation:
 - More NDI® decoders: Kiloview, NewTek/Vizrt Connect Spark, Teradek, …
 - **HDMI-CEC via decoder APIs** (if supported by the device) as an alternative to linked displays.
 - NDI port-5960 queries as an extra source of truth, Discovery Server support.
-- A full-featured matrix card (salvos, tags, labels) built on the [frontend API](docs/frontend-api.md).
 
 ## Development
 
@@ -257,6 +319,9 @@ linked displays, config flow, services, WebSocket API).
 - **Bildschirme koppeln:** In den Optionen pro Ziel einen `media_player` (z. B. LG-TV über webOS) und den Eingang
   wählen – beim Schalten wird der TV eingeschaltet und der Eingang gewählt, bei „None“ optional ausgeschaltet.
 - **Karte:** `type: custom:av-matrix-card` – wird von der Integration selbst ausgeliefert, keine Ressource nötig.
+  Kreuzschienen-Bedienfeld wie bei Videohub & Co.: Panel (Ziel wählen → Quelle) oder Matrix, Direkt oder
+  Preset + TAKE (Salvo, Mehrfachauswahl per Shift/Long-Press), Sperre, Undo, Labels/Tags (Admin), Verlauf mit
+  Benutzer, Tastatur (`/` Suche, Enter TAKE, Esc verwerfen, U Undo, L Sperre). Optionen siehe Tabelle oben.
 - **HomeKit:** die Quellen-Auswahl über die HomeKit-Bridge freigeben (ein Schalter pro Quelle; neue Quellen erst nach Neuladen der Bridge).
 - **Updates** kommen über HACS (Update-Entität), danach Home Assistant neu starten.
 - **Keine Quellen sichtbar?** mDNS muss HA erreichen (Host-Netzwerk, Multicast zwischen VLANs). Mit NDI Discovery

@@ -3,6 +3,21 @@
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- Card `custom:av-matrix-card` rebuilt as a broadcast-style router panel: X-Y panel mode and matrix mode
+  (sticky headers, crosshair), direct or preset + TAKE (multi-destination salvo, Shift/long-press selection),
+  lock/undo per destination, linked-display toggle, source search and tag filters, label/tag editor for admins,
+  routing history with user names, keyboard control and ARIA roles, optimistic switching with rollback on errors,
+  light/dark theme support, visual card editor, fallback to the select entities.
+- Options `mode`, `take_mode`, `show_offline`, `compact`, `columns`, `destinations`.
+- `docs/demo/` runs the card against a mocked Home Assistant; screenshots in `docs/screenshots/`.
+
+### Changed
+- The `av_matrix_routed` event now carries the context of the service call (so `context.user_id` tells who
+  switched), and `origin` is `service` for `av_matrix.route` (was reported as `salvo`).
+
 ## [0.1.0] - 2026-10-04
 
 ### Added
