@@ -1,0 +1,39 @@
+name: Bug report
+description: Something does not work as expected
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: AV Matrix version
+      placeholder: 0.1.0
+    validations:
+      required: true
+  - type: input
+    id: ha
+    attributes:
+      label: Home Assistant version
+      placeholder: 2026.8.0
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Device(s) and firmware
+      placeholder: Magewell Pro Convert NDI to AIO, FW 1.3.24
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Debug log and diagnostics
+      description: |
+        Enable debug logging (`logger: logs: custom_components.av_matrix: debug`) and attach the
+        diagnostics download of the device (passwords are redacted). Please remove anything private.
+      render: text

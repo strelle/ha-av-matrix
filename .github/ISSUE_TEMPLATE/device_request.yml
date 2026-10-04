@@ -1,0 +1,32 @@
+name: Device / protocol request
+description: Ask for support of another decoder, receiver or protocol
+labels: [device request]
+body:
+  - type: input
+    id: device
+    attributes:
+      label: Manufacturer, model and firmware
+      placeholder: Kiloview N40, FW 2.x
+    validations:
+      required: true
+  - type: dropdown
+    id: protocol
+    attributes:
+      label: Protocol
+      options: [NDI®, Dante, SDVoE, other]
+    validations:
+      required: true
+  - type: textarea
+    id: api
+    attributes:
+      label: Control API
+      description: Link to the API documentation, or example requests/answers (curl). Remove passwords and serial numbers.
+    validations:
+      required: true
+  - type: checkboxes
+    id: help
+    attributes:
+      label: Can you help?
+      options:
+        - label: I can test a development version on my device
+        - label: I would like to write the driver myself (see CONTRIBUTING.md)
