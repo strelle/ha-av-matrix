@@ -81,7 +81,11 @@ def async_setup_services(hass: HomeAssistant) -> None:
     async def route(call: ServiceCall) -> None:
         h = hub()
         dests = _destinations(hass, h, call)
-        await h.async_salvo([(d.uid, h.resolve_source(d.protocol, call.data[ATTR_SOURCE])) for d in dests])
+        await h.async_salvo(
+            [(d.uid, h.resolve_source(d.protocol, call.data[ATTR_SOURCE])) for d in dests],
+            origin="service",
+            context=call.context,
+        )
 
     async def salvo(call: ServiceCall) -> None:
         h = hub()
@@ -89,7 +93,7 @@ def async_setup_services(hass: HomeAssistant) -> None:
         for item in call.data[ATTR_ROUTES]:
             dest = _dest_for_entity(h, item[ATTR_DESTINATION])
             plan.append((dest.uid, h.resolve_source(dest.protocol, item[ATTR_SOURCE])))
-        await h.async_salvo(plan)
+        await h.async_salvo(plan, context=call.context)
 
     async def lock(call: ServiceCall) -> None:
         for dest in _destinations(hass, hub(), call):
@@ -101,7 +105,7 @@ def async_setup_services(hass: HomeAssistant) -> None:
 
     async def undo(call: ServiceCall) -> None:
         for dest in _destinations(hass, hub(), call):
-            await hub().async_undo(dest.uid)
+            await hub().async_undo(dest.uid, context=call.context)
 
     async def refresh(call: ServiceCall) -> None:
         from .button import async_refresh_device  # noqa: PLC0415

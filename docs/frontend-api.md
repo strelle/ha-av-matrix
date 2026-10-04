@@ -131,6 +131,9 @@ await hass.callService("av_matrix", "route", { entity_id: "select.lobby_source",
   "origin": "service | select | salvo | undo" }
 ```
 
+The event is fired with the context of the action that caused it, so `event.context.user_id` identifies the user
+(null for automations without a user). The card resolves it to a name via `config/auth/list` for admins.
+
 ## Card loading
 
 The integration serves `/av_matrix_static/av-matrix-card.js` and registers it with `frontend.add_extra_js_url`,

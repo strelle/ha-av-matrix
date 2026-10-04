@@ -47,7 +47,9 @@ class AvMatrixSourceSelect(AvMatrixDestinationEntity, SelectEntity):
         return self.hub.display_name(self.dest.protocol, self.hub.current_source(self.dest))
 
     async def async_select_option(self, option: str) -> None:
-        await self.hub.async_route(self.dest.uid, self.hub.resolve_source(self.dest.protocol, option), origin="select")
+        await self.hub.async_route(
+            self.dest.uid, self.hub.resolve_source(self.dest.protocol, option), origin="select", context=self._context
+        )
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:

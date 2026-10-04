@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from homeassistant import config_entries
 from homeassistant.config_entries import ConfigEntryState
-from homeassistant.core import HomeAssistant
+from homeassistant.core import Context, HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import device_registry as dr, entity_registry as er
@@ -214,6 +214,36 @@ async def test_select_routes_fires_event_and_undo(hass: HomeAssistant) -> None:
     assert FakeDecoder.state("192.0.2.20")["routes"][-1] == "OLD-PC (Gone)"
     with pytest.raises(ServiceValidationError):
         await hass.services.async_call(DOMAIN, "undo", {"entity_id": "select.lobby_source"}, blocking=True)
+
+
+async def test_routed_event_carries_user_context(hass: HomeAssistant, hass_admin_user) -> None:
+    """The card's history shows who switched: the event must carry the caller's context."""
+    await add_device(hass)
+    events = async_capture_events(hass, EVENT_ROUTED)
+    ctx = Context(user_id=hass_admin_user.id)
+    await hass.services.async_call(
+        DOMAIN, "route", {"entity_id": "select.lobby_source", "source": "CAM (1)"}, blocking=True, context=ctx
+    )
+    await hass.services.async_call(
+        "select",
+        "select_option",
+        {"entity_id": "select.lobby_source", "option": "STUDIO-PC (Slides)"},
+        blocking=True,
+        context=Context(user_id=hass_admin_user.id),
+    )
+    await hass.services.async_call(
+        DOMAIN,
+        "salvo",
+        {"routes": [{"destination": "select.lobby_source", "source": "None"}]},
+        blocking=True,
+        context=Context(user_id=hass_admin_user.id),
+    )
+    await hass.services.async_call(
+        DOMAIN, "undo", {"entity_id": "select.lobby_source"}, blocking=True, context=Context(user_id=hass_admin_user.id)
+    )
+    await hass.async_block_till_done()
+    assert [e.data["origin"] for e in events] == ["service", "select", "salvo", "undo"]
+    assert all(e.context.user_id == hass_admin_user.id for e in events)
 
 
 async def test_lock_blocks_routing_and_persists(hass: HomeAssistant, hass_storage) -> None:

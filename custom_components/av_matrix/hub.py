@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
-from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
+from homeassistant.core import CALLBACK_TYPE, Context, HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.event import async_track_time_interval
@@ -273,14 +273,28 @@ class AvMatrixHub:
             )
 
     async def async_route(
-        self, uid: str, source: str | None, *, record_history: bool = True, origin: str = "service"
+        self,
+        uid: str,
+        source: str | None,
+        *,
+        record_history: bool = True,
+        origin: str = "service",
+        context: Context | None = None,
     ) -> None:
         """Route ``source`` (registry id, None = off) to destination ``uid``."""
         dest = self._get(uid)
         self._check_unlocked(dest)
-        await self._async_route(dest, source, record_history=record_history, origin=origin)
+        await self._async_route(dest, source, record_history=record_history, origin=origin, context=context)
 
-    async def _async_route(self, dest: Destination, source: str | None, *, record_history: bool, origin: str) -> None:
+    async def _async_route(
+        self,
+        dest: Destination,
+        source: str | None,
+        *,
+        record_history: bool,
+        origin: str,
+        context: Context | None = None,
+    ) -> None:
         coordinator = dest.coordinator
         registry = self.registries[dest.protocol]
         previous = self.current_source(dest)
@@ -310,6 +324,7 @@ class AvMatrixHub:
                 "previous_source": previous,
                 "origin": origin,
             },
+            context=context,
         )
         coordinator.async_refresh_after_route()
         cfg = self.display_config(dest)
@@ -323,7 +338,9 @@ class AvMatrixHub:
         dest.display_error = await async_drive_display(self.hass, cfg, source)
         self.async_notify()
 
-    async def async_salvo(self, routes: Iterable[tuple[str, str | None]]) -> None:
+    async def async_salvo(
+        self, routes: Iterable[tuple[str, str | None]], *, origin: str = "salvo", context: Context | None = None
+    ) -> None:
         """Validate all routes first (unknown/locked → nothing is switched), then execute.
 
         Destinations of different devices switch in parallel, same device sequentially.
@@ -339,7 +356,7 @@ class AvMatrixHub:
             errors = []
             for dest, source in items:
                 try:
-                    await self._async_route(dest, source, record_history=True, origin="salvo")
+                    await self._async_route(dest, source, record_history=True, origin=origin, context=context)
                 except HomeAssistantError as err:
                     errors.append(f"{dest.name}: {err}")
             return errors
@@ -353,7 +370,7 @@ class AvMatrixHub:
                 translation_placeholders={"errors": "; ".join(errors)},
             )
 
-    async def async_undo(self, uid: str) -> None:
+    async def async_undo(self, uid: str, *, context: Context | None = None) -> None:
         dest = self._get(uid)
         self._check_unlocked(dest)
         history = self.history.get(uid)
@@ -365,7 +382,7 @@ class AvMatrixHub:
             )
         previous = history.pop()
         try:
-            await self._async_route(dest, previous, record_history=False, origin="undo")
+            await self._async_route(dest, previous, record_history=False, origin="undo", context=context)
         except HomeAssistantError:
             history.append(previous)
             raise
