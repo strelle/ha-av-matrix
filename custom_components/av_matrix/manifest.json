@@ -1,14 +1,23 @@
 {
   "domain": "av_matrix",
   "name": "AV Matrix",
-  "codeowners": ["@strelle"],
+  "codeowners": [
+    "@strelle"
+  ],
   "config_flow": true,
-  "dependencies": ["frontend", "http", "websocket_api", "zeroconf"],
+  "dependencies": [
+    "frontend",
+    "http",
+    "websocket_api",
+    "zeroconf"
+  ],
   "documentation": "https://github.com/strelle/ha-av-matrix",
   "integration_type": "device",
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/strelle/ha-av-matrix/issues",
-  "loggers": ["custom_components.av_matrix"],
+  "loggers": [
+    "custom_components.av_matrix"
+  ],
   "requirements": [],
-  "version": "0.1.0"
+  "version": "0.2.0"
 }

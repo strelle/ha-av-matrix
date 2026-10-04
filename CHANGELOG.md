@@ -3,7 +3,7 @@
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions follow [SemVer](https://semver.org/).
 
-## [Unreleased]
+## [0.2.0] - 2026-10-04
 
 ### Added
 - Card `custom:av-matrix-card` rebuilt as a broadcast-style router panel: X-Y panel mode and matrix mode
@@ -17,6 +17,12 @@ All notable changes to this project are documented here. The format follows
 ### Changed
 - The `av_matrix_routed` event now carries the context of the service call (so `context.user_id` tells who
   switched), and `origin` is `service` for `av_matrix.route` (was reported as `salvo`).
+
+### Commits
+
+- docs: card screenshots, options and shortcuts; changelog [Unreleased] support in release workflow (9d147bc)
+- feat(card): broadcast-style router panel (1bc3b1f)
+- feat: routed event carries the caller's context (who switched) (696397e)
 
 ## [0.1.0] - 2026-10-04
 
