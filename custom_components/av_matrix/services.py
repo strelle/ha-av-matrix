@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import voluptuous as vol
-
 from homeassistant.const import ATTR_DEVICE_ID, ATTR_ENTITY_ID
 from homeassistant.core import HomeAssistant, ServiceCall, callback
 from homeassistant.exceptions import ServiceValidationError
@@ -108,7 +107,7 @@ def async_setup_services(hass: HomeAssistant) -> None:
             await hub().async_undo(dest.uid, context=call.context)
 
     async def refresh(call: ServiceCall) -> None:
-        from .button import async_refresh_device  # noqa: PLC0415
+        from .button import async_refresh_device
 
         done = set()
         for dest in _destinations(hass, hub(), call):

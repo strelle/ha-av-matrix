@@ -3,6 +3,22 @@
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+- Magewell: the *Resolution* sensor no longer stays `unknown` after switching. Follow-up polls (1.5 / 3 / 5 / 8 / 12 s)
+  run until the destination reports connected + resolution, independent of the polling interval; while the device
+  still decodes the previous stream (summary `ndi.name` ≠ routed source) it reports *connecting* without the old
+  resolution; `get-signal-info` is read whenever connected and only used if `signal-info-types` contains `video-info`.
+- Magewell: summary `ndi` block parsed with the real FW 1.3.24 keys (`video-scan` → interlaced, `video-drop-frames`).
+- Magewell: connection error texts can no longer contain the login query (user name / password hash).
+- A poll that started before a route can no longer flip the select back to the previous source.
+- Routes to the same destination are serialized (history/undo and BirdDog read-back stay consistent).
+- BirdDog: HTTP 404 on an API endpoint is a driver error (was an unhandled `FileNotFoundError`).
+- mDNS discovery is stopped again when the first device fails to set up.
+- CI: `ruff check` added (imports cleaned up); the WebSocket test no longer hard-codes the version (failed after
+  every release).
+
 ## [0.2.0] - 2026-10-04
 
 ### Added

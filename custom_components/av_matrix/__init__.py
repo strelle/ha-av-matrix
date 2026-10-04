@@ -48,8 +48,8 @@ async def _async_register_card(hass: HomeAssistant, version: str) -> None:
     """Serve the card from the integration and load it on every dashboard (no manual resource)."""
     if hass.http is None:  # e.g. in tests without the http component
         return
-    from homeassistant.components.frontend import add_extra_js_url  # noqa: PLC0415
-    from homeassistant.components.http import StaticPathConfig  # noqa: PLC0415
+    from homeassistant.components.frontend import add_extra_js_url
+    from homeassistant.components.http import StaticPathConfig
 
     await hass.http.async_register_static_paths(
         [StaticPathConfig(URL_BASE, str(Path(__file__).parent / "frontend"), cache_headers=False)]
@@ -64,7 +64,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: AvMatrixConfigEntry) -> 
     driver = driver_cls(async_get_clientsession(hass), entry.data, timeout=REQUEST_TIMEOUT)
     coordinator = AvMatrixCoordinator(hass, entry, driver, hub)
     await hub.async_start()
-    await coordinator.async_config_entry_first_refresh()
+    try:
+        await coordinator.async_config_entry_first_refresh()
+    except Exception:
+        if not hub.destinations:  # nothing else uses discovery → do not leave it running
+            await hub.async_stop()
+        raise
 
     runtime = AvMatrixRuntime(coordinator)
     for info in driver.destinations():

@@ -8,7 +8,6 @@ from homeassistant.components.select import SelectEntity
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-
 from .coordinator import AvMatrixConfigEntry
 from .entity import AvMatrixDestinationEntity
 from .hub import DATA_HUB, AvMatrixHub, Destination

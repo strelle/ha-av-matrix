@@ -90,6 +90,9 @@ class AvMatrixHub:
         self._unsubs: list[CALLBACK_TYPE] = []
         self._eval_pending = False
         self._browsers: list[Any] = []
+        # one route at a time per destination (double taps, salvo + service …): keeps "previous",
+        # the undo history and BirdDog's read-back verification consistent
+        self._route_locks: dict[str, asyncio.Lock] = {}
 
     # ---------------------------------------------------------------- lifecycle
     async def async_load(self) -> None:
@@ -101,7 +104,7 @@ class AvMatrixHub:
         """Start discovery and periodic liveness evaluation (first config entry)."""
         if self._unsubs:
             return
-        from .discovery import NdiMdnsBrowser  # noqa: PLC0415 - needs the zeroconf component
+        from .discovery import NdiMdnsBrowser
 
         browser = NdiMdnsBrowser(self.hass, self.registries["ndi"], self.schedule_evaluate)  # type: ignore[arg-type]
         try:
@@ -176,6 +179,7 @@ class AvMatrixHub:
     @callback
     def remove_destination(self, uid: str) -> None:
         self.destinations.pop(uid, None)
+        self._route_locks.pop(uid, None)
 
     def destination_for_entity(self, entity_id: str) -> Destination | None:
         return next((d for d in self.destinations.values() if d.entity_id == entity_id), None)
@@ -287,6 +291,18 @@ class AvMatrixHub:
         await self._async_route(dest, source, record_history=record_history, origin=origin, context=context)
 
     async def _async_route(
+        self,
+        dest: Destination,
+        source: str | None,
+        *,
+        record_history: bool,
+        origin: str,
+        context: Context | None = None,
+    ) -> None:
+        async with self._route_locks.setdefault(dest.uid, asyncio.Lock()):
+            await self._async_route_locked(dest, source, record_history=record_history, origin=origin, context=context)
+
+    async def _async_route_locked(
         self,
         dest: Destination,
         source: str | None,

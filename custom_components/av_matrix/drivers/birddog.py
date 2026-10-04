@@ -30,6 +30,10 @@ _LOGGER = logging.getLogger(__name__)
 NONE_NAMES = {"", "none", "None"}
 
 
+class EndpointNotFound(CannotConnect):
+    """HTTP 404 - the firmware does not have this endpoint (a DriverError, so callers handle it)."""
+
+
 def _ci(data: dict[str, Any], *keys: str) -> Any:
     """Case-insensitive lookup of the first present key."""
     lower = {str(k).lower(): v for k, v in data.items()}
@@ -112,7 +116,7 @@ class BirdDogDecoder(Driver):
                         return await self._request(method, path, body, params, _retry=False)
                     raise InvalidAuth(f"HTTP {resp.status}")
                 if resp.status == 404:
-                    raise FileNotFoundError(path)
+                    raise EndpointNotFound(f"{path}: HTTP 404")
                 if resp.status >= 400:
                     raise CannotConnect(f"{path}: HTTP {resp.status}")
                 text = await resp.text()
@@ -136,7 +140,7 @@ class BirdDogDecoder(Driver):
     async def async_get_info(self) -> DeviceInfo:
         try:
             data = await self._request("GET", "/about")
-        except FileNotFoundError as err:
+        except EndpointNotFound as err:
             raise CannotConnect("no BirdDog API on this port") from err
         if not isinstance(data, dict):
             raise CannotConnect("no BirdDog API on this port")
@@ -163,10 +167,10 @@ class BirdDogDecoder(Driver):
     async def async_refresh_sources(self) -> None:
         try:
             await self._request("POST", "/refresh")
-        except (FileNotFoundError, CannotConnect):
+        except CannotConnect:
             try:  # older firmware: GET /refresh
                 await self._request("GET", "/refresh")
-            except FileNotFoundError:
+            except EndpointNotFound:
                 pass
 
     async def async_get_current(self, destination: str) -> str | None:
@@ -190,7 +194,7 @@ class BirdDogDecoder(Driver):
             return DestinationStatus()
         try:
             data = await self._request("GET", "/decodestatus", params=self._ch(destination) or None)
-        except FileNotFoundError:
+        except EndpointNotFound:
             self._decodestatus_supported = False
             return DestinationStatus()
         if not isinstance(data, dict):

@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
+import json
 from datetime import timedelta
+from pathlib import Path
 from typing import Any, ClassVar
 from unittest.mock import AsyncMock, patch
 
@@ -72,10 +75,17 @@ class FakeDecoder(MagewellProConvert):
         return list(self._s()["sources"])
 
     async def async_get_current(self, destination):
-        return self._s()["current"]
+        s = self._s()
+        current = s["current"]
+        if s.get("gate") is not None:  # simulate a slow poll that started before a route
+            await s["gate"].wait()
+        return current
 
     async def async_get_status(self, destination):
         s = self._s()
+        if s.get("settling", 0) > 0:  # device still switching: connected, but no video yet
+            s["settling"] -= 1
+            return DestinationStatus(connected=True)
         return DestinationStatus(
             connected=s["connected"] if s["current"] else False, resolution="1920x1080p50" if s["connected"] else None
         )
@@ -84,6 +94,7 @@ class FakeDecoder(MagewellProConvert):
         s = self._s()
         s["routes"].append(source)
         s["current"] = source
+        s["settling"] = s.get("settle_polls", 0)
 
     async def async_poll(self):
         return await super(MagewellProConvert, self).async_poll()
@@ -332,6 +343,54 @@ async def test_offline_backoff_and_recovery(hass: HomeAssistant) -> None:
     assert hass.states.get("sensor.lobby_connection").state == "connected"
 
 
+async def test_resolution_follows_up_after_route(hass: HomeAssistant) -> None:
+    """Live-test regression: after switching the resolution must not stay unknown until the next
+    regular poll (here 60 s) - follow-up polls run until the device reports it."""
+    await add_device(hass, options={"scan_interval": 60})
+    state = FakeDecoder.state("192.0.2.20")
+    state["settle_polls"] = 2  # immediate poll + first follow-up see no video yet
+    assert hass.states.get("sensor.lobby_resolution").state == "1920x1080p50"
+    await hass.services.async_call(
+        DOMAIN, "route", {"entity_id": "select.lobby_source", "source": "CAM (1)"}, blocking=True
+    )
+    await hass.async_block_till_done()
+    assert hass.states.get("sensor.lobby_resolution").state == "unknown"  # not the old stream's value
+    now = dt_util.utcnow()
+    async_fire_time_changed(hass, now + timedelta(seconds=1.6))
+    await hass.async_block_till_done()
+    assert hass.states.get("sensor.lobby_resolution").state == "unknown"
+    async_fire_time_changed(hass, now + timedelta(seconds=3.1))
+    await hass.async_block_till_done()
+    assert hass.states.get("sensor.lobby_resolution").state == "1920x1080p50"
+    assert hass.states.get("sensor.lobby_connection").state == "connected"
+    coordinator = hass.config_entries.async_entries(DOMAIN)[0].runtime_data.coordinator
+    assert coordinator._followup is None  # settled → no more follow-ups
+
+
+async def test_poll_started_before_route_does_not_undo_it(hass: HomeAssistant) -> None:
+    entry = await add_device(hass, options={"scan_interval": 60})
+    coordinator = entry.runtime_data.coordinator
+    state = FakeDecoder.state("192.0.2.20")
+    gate = state["gate"] = asyncio.Event()
+    slow = asyncio.ensure_future(coordinator.async_refresh())  # reads "OLD-PC (Gone)", then waits
+    for _ in range(3):
+        await asyncio.sleep(0)
+    state["gate"] = None
+    await hass.services.async_call(
+        DOMAIN, "route", {"entity_id": "select.lobby_source", "source": "CAM (1)"}, blocking=True
+    )
+    await hass.async_block_till_done()
+    gate.set()  # the slow poll finishes after the route with the old answer
+    await slow
+    await hass.async_block_till_done()
+    assert hass.states.get("select.lobby_source").state == "CAM (1)"
+    await coordinator.async_refresh()  # a poll started after the route is the truth again
+    state["current"] = "STUDIO-PC (Slides)"
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+    assert hass.states.get("select.lobby_source").state == "STUDIO-PC (Slides)"
+
+
 async def test_auth_failure_starts_reauth(hass: HomeAssistant) -> None:
     entry = await add_device(hass)
     FakeDecoder.state("192.0.2.20")["fail"] = InvalidAuth("nope")
@@ -404,7 +463,8 @@ async def test_websocket_state_subscribe_label(hass: HomeAssistant, hass_ws_clie
     msg = await client.receive_json()
     assert msg["success"]
     ndi = msg["result"]["protocols"]["ndi"]
-    assert msg["result"]["version"] == "0.1.0"
+    manifest = json.loads((Path(__file__).parents[1] / "custom_components/av_matrix/manifest.json").read_text())
+    assert msg["result"]["version"] == manifest["version"]  # bumped by every release
     assert ndi["title"] == "NDI®"
     assert {s["id"]: s["live"] for s in ndi["sources"]} == {
         "CAM (1)": True,

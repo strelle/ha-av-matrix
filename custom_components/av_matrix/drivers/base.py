@@ -122,7 +122,7 @@ class Driver(ABC):
         """Return live status of ``destination``. Default: unknown."""
         return DestinationStatus()
 
-    async def async_refresh_sources(self) -> None:  # noqa: B027 - optional hook
+    async def async_refresh_sources(self) -> None:
         """Ask the device to rebuild its source list (no-op if unsupported)."""
 
     async def async_poll(self) -> DevicePoll:

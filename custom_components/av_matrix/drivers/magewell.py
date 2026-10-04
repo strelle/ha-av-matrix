@@ -93,7 +93,8 @@ class MagewellProConvert(Driver):
                     raise CannotConnect(f"HTTP {resp.status}")
                 text = await resp.text()
         except (aiohttp.ClientError, TimeoutError) as err:
-            raise CannotConnect(short(err) if str(err) else "timeout") from err
+            # never let the query (login: user name + password hash) end up in an error text / the log
+            raise CannotConnect(short(str(err).replace(query, "…")) if str(err) else "timeout") from None
         try:
             data = json.loads(text)
         except ValueError as err:
@@ -104,7 +105,7 @@ class MagewellProConvert(Driver):
 
     async def _login(self) -> None:
         user = str(self.config.get("username") or "Admin")
-        digest = hashlib.md5(str(self.config.get("password") or "").encode()).hexdigest()  # noqa: S324 - device protocol
+        digest = hashlib.md5(str(self.config.get("password") or "").encode()).hexdigest()
         self._sid = None
         data = await self._get("login", id=user, **{"pass": digest})
         status = data.get("status")
@@ -173,30 +174,55 @@ class MagewellProConvert(Driver):
             raise RouteFailed(f"device answered status {data.get('status')}")
 
     @staticmethod
-    def _status_from_summary(data: dict[str, Any]) -> DestinationStatus:
-        """Connection (+ resolution if the firmware has an ``ndi`` block) from ``get-summary-info``."""
-        ndi = data.get("ndi") or {}
+    def _status_from_summary(data: dict[str, Any], current: str | None = None) -> DestinationStatus:
+        """Connection (+ resolution if the firmware has an ``ndi`` block) from ``get-summary-info``.
+
+        FW 1.3.24 (verified live): ``ndi`` = ``{"name", "connected", "video-width", "video-height",
+        "video-scan", "video-field-rate", "video-bit-rate", "video-drop-frames", …}``. The block may be
+        missing (seen right after boot / switching); then ``device.output-state`` tells the connection.
+        """
+        ndi = data.get("ndi")
+        ndi = ndi if isinstance(ndi, dict) else {}
         connected = ndi.get("connected")
         if connected is None:
-            # verified on FW 1.3.24: device.output-state == "connected" while a stream is decoded
             state = str((data.get("device") or {}).get("output-state") or "").strip().lower()
             connected = None if not state else state == "connected"
-        res = format_resolution(
-            _first(ndi, "video-width", "width"),
-            _first(ndi, "video-height", "height"),
-            _first(ndi, "video-field-rate", "video-frame-rate", "frame-rate"),
-            _first(ndi, "video-interlaced", "interlaced"),
-        )
-        extra = {
-            k: ndi.get(src)
-            for k, src in (("bitrate_kbps", "video-bit-rate"), ("dropped_frames", "drop-frames"))
-            if ndi.get(src) is not None
-        }
-        return DestinationStatus(connected=None if connected is None else bool(connected), resolution=res, extra=extra)
+        else:
+            connected = bool(connected)
+        name = ndi.get("name")
+        if connected and current and name and str(name).casefold() != current.casefold():
+            # the device still decodes the previous source (switching takes ~2-5 s): its video
+            # values belong to the old stream, so report "connecting" without a resolution
+            return DestinationStatus(connected=False)
+        res = None
+        if connected is not False:
+            scan = str(_first(ndi, "video-scan", "scan") or "").lower()
+            res = format_resolution(
+                _first(ndi, "video-width", "width"),
+                _first(ndi, "video-height", "height"),
+                _first(ndi, "video-field-rate", "video-frame-rate", "frame-rate"),
+                scan.startswith("interl") or _first(ndi, "video-interlaced", "interlaced") in (True, 1, "1", "true"),
+            )
+        extra: dict[str, Any] = {}
+        for key, src in (
+            ("bitrate_kbps", "video-bit-rate"),
+            ("dropped_frames", "video-drop-frames"),
+            ("dropped_frames", "drop-frames"),
+        ):
+            if key not in extra and ndi.get(src) is not None:
+                extra[key] = ndi[src]
+        return DestinationStatus(connected=connected, resolution=res, extra=extra)
 
     @staticmethod
     def _video_from_signal_info(data: dict[str, Any]) -> tuple[str | None, dict[str, Any]]:
-        """``get-signal-info`` → ``{"video-info": {"width", "height", "scan", "field-rate", "codec", …}}``."""
+        """``get-signal-info`` → ``{"signal-info-types": ["video-info"], "video-info": {"width", …}}``.
+
+        Right after switching the device answers ``status 0`` with an empty ``signal-info-types``
+        (no video yet) → no resolution (not an error, the next polls pick it up).
+        """
+        types = data.get("signal-info-types")
+        if isinstance(types, list) and "video-info" not in types:
+            return None, {}
         video = data.get("video-info") or data.get("video") or {}
         if not isinstance(video, dict):
             return None, {}
@@ -204,6 +230,8 @@ class MagewellProConvert(Driver):
         res = format_resolution(
             video.get("width"), video.get("height"), video.get("field-rate"), scan.startswith("interl")
         )
+        if res is None:
+            return None, {}
         extra = {
             key.replace("-", "_"): video[key]
             for key in ("codec", "color-format", "sampling", "color-depth", "aspect-ratio", "quant-range")
@@ -211,20 +239,25 @@ class MagewellProConvert(Driver):
         }
         return res, extra
 
-    async def async_get_status(self, destination: str) -> DestinationStatus:
-        status = self._status_from_summary(await self._call("get-summary-info"))
-        if status.resolution is None and status.connected is not False:
-            try:
-                sig = await self._call("get-signal-info")
-            except CannotConnect:
-                return status
-            if sig.get("status") == STATUS_OK:
-                status.resolution, extra = self._video_from_signal_info(sig)
-                status.extra.update(extra)
+    async def async_get_status(self, destination: str, current: str | None = None) -> DestinationStatus:
+        """Live status. ``current`` (NDI name from ``get-channel``) detects a switch still in progress."""
+        status = self._status_from_summary(await self._call("get-summary-info"), current)
+        if status.connected is False:
+            return status  # no stream (or still switching) → no resolution, polls continue
+        try:
+            sig = await self._call("get-signal-info")
+        except CannotConnect:
+            return status
+        if sig.get("status") == STATUS_OK:
+            res, extra = self._video_from_signal_info(sig)
+            # get-signal-info describes the stream actually decoded → it wins over the summary
+            status.resolution = res or status.resolution
+            status.extra.update(extra)
         return status
 
     async def async_poll(self) -> DevicePoll:
         sources = await self.async_get_sources()
         current = await self.async_get_current("main")
-        status = await self.async_get_status("main")
+        # a channel preset is not an NDI name → cannot be compared with the summary's ndi.name
+        status = await self.async_get_status("main", None if current and current.startswith("[preset] ") else current)
         return DevicePoll(sources=sources, destinations={"main": DestinationState(current, status)})

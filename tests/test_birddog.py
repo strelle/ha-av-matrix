@@ -141,3 +141,10 @@ async def test_decodestatus_unsupported(session):
     assert status.connected is None
     status = await d.async_get_status("1")  # not asked again
     assert len(calls(session)) == 1
+
+
+async def test_missing_endpoint_is_a_driver_error(session):
+    """HTTP 404 on a core endpoint must surface as CannotConnect (handled by coordinator / route)."""
+    session.get_(f"{B}/List", status=404)
+    with pytest.raises(CannotConnect):
+        await driver(session).async_get_sources()

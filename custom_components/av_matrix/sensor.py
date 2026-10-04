@@ -8,7 +8,6 @@ from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-
 from .coordinator import AvMatrixConfigEntry
 from .entity import AvMatrixDestinationEntity
 from .hub import DATA_HUB, AvMatrixHub, Destination
@@ -31,10 +30,10 @@ class ConnectionSensor(AvMatrixDestinationEntity, SensorEntity):
     """connected / connecting / no_source / source_lost / offline."""
 
     _attr_device_class = SensorDeviceClass.ENUM
-    _attr_options = [s.value for s in ConnectionState]
 
     def __init__(self, hub: AvMatrixHub, dest: Destination) -> None:
         super().__init__(hub, dest, "connection")
+        self._attr_options = [s.value for s in ConnectionState]
 
     @property
     def available(self) -> bool:

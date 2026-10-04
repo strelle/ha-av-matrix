@@ -37,7 +37,7 @@ class NdiMdnsBrowser:
 
     def _handler(
         self,
-        zeroconf: object,  # noqa: ARG002 - name required by python-zeroconf
+        zeroconf: object,
         service_type: str,
         name: str,
         state_change: ServiceStateChange,
