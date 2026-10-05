@@ -3,7 +3,7 @@
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions follow [SemVer](https://semver.org/).
 
-## [Unreleased]
+## [0.3.1] - 2026-10-05
 
 ### Fixed
 - Dante: switching back to a source of an offline/unknown device failed (the option vanished from the select as soon
@@ -12,6 +12,10 @@ All notable changes to this project are documented here. The format follows
 - Dante: `av_matrix.route` / `salvo` accept any source in the form `channel@device`, also for devices that are offline
   or unknown (subscription "unresolved"); a malformed source is a translated validation error instead of a failed
   route. NDI behaviour is unchanged.
+
+### Commits
+
+- fix: Dante sources of offline devices stay selectable, route validates channel@device (0a12c21)
 
 ## [0.3.0] - 2026-10-05
 
