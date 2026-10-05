@@ -10,6 +10,7 @@
     python3 -m http.server 8765   →   http://localhost:8765/docs/demo/
   Query parameters: theme=light|dark  mode=panel|matrix  take=direct|preset  lang=en|de
                     scenario=preset|multi|history  compact=1  admin=0  still=1
+                    proto=dante (Dante® tab)  collapse=WING-FOH,…  srcdev=…  dstdev=…  (device groups / filters)
 -->
 <style>
   :root {
@@ -101,7 +102,55 @@
   // the offline device still reports a last known source, the green room shows a source that stopped sending
   dests[4].current_source_live = false;
   dests[5].available = false;
-  const snap = { version: "0.2.0", protocols: { ndi: { title: "NDI®", sources, destinations: dests } } };
+  /* ---------------- Dante®: 5 devices, 106 TX / 94 RX channels, one device offline */
+  const dSources = [];
+  const dDests = [];
+  const DANTE = [
+    // name, model, tx names, rx names, online
+    ["STAGEBOX-A", "Stagebox 32x16", ["Kick", "Snare Top", "Snare Bot", "Hi-Hat", "Tom 1", "Tom 2", "Floor Tom", "OH L", "OH R",
+      "Bass DI", "Bass Mic", "Gtr 1", "Gtr 2", "Keys L", "Keys R", "Synth L", "Synth R", "Acoustic", "Vox Lead", "Vox BV 1",
+      "Vox BV 2", "Vox BV 3", "Talkback", "Spare 24", "Amb L", "Amb R", "Click", "Track L", "Track R", "Spare 30", "Spare 31", "Spare 32"],
+      Array.from({ length: 16 }, (_, i) => `Mon ${String(i + 1).padStart(2, "0")}`), true],
+    ["WING-FOH", "WING Dante 64", ["Main L", "Main R", "Sub", "Fill L", "Fill R", ...Array.from({ length: 16 }, (_, i) => `Bus ${i + 1}`),
+      ...Array.from({ length: 43 }, (_, i) => `Card ${String(i + 22).padStart(2, "0")}`)],
+      Array.from({ length: 64 }, (_, i) => `Ch ${String(i + 1).padStart(2, "0")}`), true],
+    ["AVIO-AES3-LOBBY", "AVIO AES3", ["CH1", "CH2"], ["CH1", "CH2"], true],
+    ["AMP-HALL", "Amplifier 4ch", [], ["In A", "In B", "In C", "In D"], true],
+    ["DVS-STUDIO-MAC", "Dante Virtual Soundcard", Array.from({ length: 8 }, (_, i) => `0${i + 1}`), Array.from({ length: 8 }, (_, i) => `0${i + 1}`), false],
+  ];
+  for (const [dev, , tx, , online] of DANTE)
+    for (const ch of tx)
+      dSources.push({ id: `${ch}@${dev}`, group: dev, channel: ch, name: `${ch}@${dev}`, label: null, tags: [], live: online,
+        host: "192.0.2." + (100 + DANTE.findIndex((x) => x[0] === dev)), address: null,
+        last_seen: online ? iso(2) : iso(260), first_seen: iso(9000) });
+  const SUB = { subscribed: ["DYNAMIC", "Subscribed (unicast)"], none: ["NONE", "No subscription"],
+    unresolved: ["UNRESOLVED", "The transmitting device is not on the network"], error: ["CHANNEL_FORMAT", "Channel formats do not match"] };
+  const routing = {
+    "WING-FOH": (i) => (i < 32 ? `${DANTE[0][2][i]}@STAGEBOX-A` : i < 40 ? `0${i - 31}@DVS-STUDIO-MAC` : null),
+    "STAGEBOX-A": (i) => (i < 12 ? `Bus ${i + 1}@WING-FOH` : null),
+    "AVIO-AES3-LOBBY": (i) => [`Main L@WING-FOH`, `Main R@WING-FOH`][i],
+    "AMP-HALL": (i) => [`Fill L@WING-FOH`, `Fill R@WING-FOH`, `Sub@WING-FOH`, null][i],
+    "DVS-STUDIO-MAC": (i) => (i < 2 ? [`Main L@WING-FOH`, `Main R@WING-FOH`][i] : null),
+  };
+  for (const [dev, , , rx, online] of DANTE) {
+    rx.forEach((ch, i) => {
+      const cur = routing[dev](i);
+      const src = dSources.find((x) => x.id === cur);
+      let sub = !cur ? "none" : src && src.live ? "subscribed" : "unresolved";
+      if (dev === "AMP-HALL" && i === 2) sub = "error";
+      const status = !online ? "offline" : { subscribed: "connected", none: "no_source", unresolved: "source_lost", error: "error" }[sub];
+      const slug = `${dev}_${ch}`.toLowerCase().replace(/[^a-z0-9]+/g, "_");
+      dDests.push({ id: `dante-network_${dev}:${i + 1}`, entity_id: rx.length > 32 ? null : `select.${slug}_source`,
+        name: `${dev} · ${ch}`, channel: ch, group: dev, device_name: dev, device_id: "dev-" + dev, entry_id: "entry-dante",
+        driver: "dante", protocol: "dante", current_source: cur, current_source_live: !!(src && src.live), status,
+        resolution: "48 kHz", available: online, locked: dev === "AMP-HALL" && i === 3, can_undo: false, display: null,
+        subscription: { state: sub, code: null, status: SUB[sub][0], detail: SUB[sub][1] } });
+    });
+  }
+  const snap = { version: "0.3.0", protocols: { ndi: { title: "NDI®", sources, destinations: dests },
+    dante: { title: "Dante®", sources: dSources, destinations: dDests } } };
+  const allDests = () => [...dests, ...dDests];
+  const allSources = () => [...sources, ...dSources];
   const history = { }; // dest id → stack
   const states = { "media_player.foyer_tv": { state: "on" } };
 
@@ -116,7 +165,7 @@
   const users = [{ id: "u-daniel", name: "Daniel" }, { id: "u-tech", name: "Tech desk" }, { id: "u-auto", name: "Automation" }];
   const fire = (dest, source, previous, origin, userId) => {
     const ev = { event_type: "av_matrix_routed", time_fired: new Date().toISOString(), context: { user_id: userId },
-      data: { entity_id: dest.entity_id, destination: dest.id, destination_name: dest.name, protocol: "ndi",
+      data: { entity_id: dest.entity_id, destination: dest.id, destination_name: dest.name, protocol: dest.protocol,
         source, previous_source: previous, origin } };
     evSubs.forEach((cb) => cb(ev));
   };
@@ -127,20 +176,27 @@
     const sid = source === "None" ? null : source;
     if (record && prev !== sid) (history[dest.id] ||= []).push(prev);
     dest.current_source = sid;
-    const src = sources.find((s) => s.id === sid);
+    const src = allSources().find((s) => s.id === sid);
     dest.current_source_live = !sid || !!(src && src.live);
     dest.status = !sid ? "no_source" : "connecting";
+    if (dest.subscription) dest.subscription = !sid ? { state: "none", status: "NONE", detail: "No subscription" }
+      : { state: "in_progress", status: "IN_PROGRESS", detail: "Setting up the flow" };
     dest.can_undo = !!(history[dest.id] && history[dest.id].length);
     fire(dest, sid, prev, origin, userId);
     push();
     setTimeout(() => {
       if (dest.current_source !== sid) return;
       dest.status = !sid ? "no_source" : dest.current_source_live ? "connected" : "source_lost";
-      dest.resolution = dest.status === "connected" ? "1920x1080p50" : null;
+      if (dest.subscription) {
+        dest.subscription = !sid ? { state: "none", status: "NONE", detail: "No subscription" }
+          : dest.current_source_live ? { state: "subscribed", status: "DYNAMIC", detail: "Subscribed (unicast)" }
+          : { state: "unresolved", status: "UNRESOLVED", detail: "The transmitting device is not on the network" };
+      } else dest.resolution = dest.status === "connected" ? "1920x1080p50" : null;
       push();
     }, 1400);
   };
-  const byEntity = (eid) => dests.find((d) => d.entity_id === eid);
+  const byEntity = (eid) => allDests().find((d) => d.entity_id === eid || d.id === eid);
+  const target = (data) => byEntity(data.entity_id || (data.destination || [])[0]);
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
   const hass = {
@@ -163,7 +219,7 @@
       },
       async sendMessagePromise(msg) {
         if (msg.type === "av_matrix/label") {
-          const s = sources.find((x) => x.id === msg.source);
+          const s = allSources().find((x) => x.id === msg.source);
           s.label = msg.label || null;
           s.name = s.label || s.id;
           s.tags = msg.tags || [];
@@ -181,7 +237,7 @@
     async callService(domain, service, data) {
       await sleep(180);
       if (domain === "av_matrix") {
-        if (service === "route") return route(byEntity(data.entity_id), data.source, "service");
+        if (service === "route") return route(target(data), data.source, "service");
         if (service === "salvo") {
           const plan = data.routes.map((r) => [byEntity(r.destination), r.source]);
           const bad = plan.find(([d]) => d.locked || !d.available);
@@ -190,11 +246,11 @@
           return;
         }
         if (service === "lock" || service === "unlock") {
-          byEntity(data.entity_id).locked = service === "lock";
+          target(data).locked = service === "lock";
           return push();
         }
         if (service === "undo") {
-          const d = byEntity(data.entity_id);
+          const d = target(data);
           const prev = (history[d.id] || []).pop();
           route(d, prev === undefined ? d.current_source : prev ?? "None", "undo", "u-daniel", false);
           d.can_undo = !!(history[d.id] && history[d.id].length);
@@ -218,7 +274,17 @@
     mode: q.get("mode") || "panel",
     take_mode: q.get("take") || "direct",
     compact: q.get("compact") === "1",
+    ...(q.get("proto") ? { protocol: q.get("proto") } : {}),
   });
+  if (q.get("collapse")) {
+    card._collapsed = new Set(q.get("collapse").split(",").filter(Boolean));
+    card._expanded = new Set((q.get("expand") || "").split(",").filter(Boolean));
+  } else if (q.get("proto")) {
+    card._collapsed = new Set();
+    card._expanded = new Set((q.get("expand") || "").split(",").filter(Boolean));
+  }
+  if (q.get("srcdev")) card._srcGroup = q.get("srcdev");
+  if (q.get("dstdev")) card._dstGroup = q.get("dstdev");
   card.hass = hass;
   document.getElementById("main").appendChild(card);
   window.card = card;
@@ -260,8 +326,16 @@
       }
     } else if (scenario.includes("multi")) {
       click('[data-act="dest"][data-d="stage_left"]');
-    } else if ((q.get("mode") || "panel") === "panel") {
+    } else if ((q.get("mode") || "panel") === "panel" && !q.get("proto")) {
       click('[data-act="dest"][data-d="stage_left"]');
+    } else if (q.get("seldest")) {
+      click(`[data-act="dest"][data-d="${q.get("seldest")}"]`);
+    }
+    if (q.get("perf")) {
+      // perf=1: time a full re-render of the current view (e.g. the 94 x 106 Dante matrix)
+      const t0 = performance.now();
+      for (let i = 0; i < 5; i++) { card._lastHtml = ""; card._render(); }
+      document.title = `render ${((performance.now() - t0) / 5).toFixed(1)} ms, ${card.shadowRoot.querySelectorAll(".xp").length} crosspoints`;
     }
     if (q.get("hover")) {
       const [r, c] = q.get("hover").split(",");

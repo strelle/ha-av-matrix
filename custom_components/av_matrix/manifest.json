@@ -19,5 +19,8 @@
     "custom_components.av_matrix"
   ],
   "requirements": [],
-  "version": "0.2.1"
+  "version": "0.2.1",
+  "zeroconf": [
+    "_netaudio-arc._udp.local."
+  ]
 }

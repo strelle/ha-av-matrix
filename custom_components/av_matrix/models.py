@@ -19,6 +19,7 @@ class ConnectionState(StrEnum):
     NO_SOURCE = "no_source"
     SOURCE_LOST = "source_lost"
     OFFLINE = "offline"
+    ERROR = "error"  # the device reports an error for this destination (e.g. a Dante subscription error)
 
 
 class FieldType(StrEnum):
@@ -66,6 +67,7 @@ class DestinationInfo:
 
     id: str
     name: str | None = None  # None = the device's only destination
+    device: str | None = None  # sub-device (network drivers like Dante: the Dante device), None = the entry's device
 
 
 @dataclass(frozen=True, slots=True)
@@ -81,8 +83,9 @@ class DestinationStatus:
     """Live status of one destination as reported by the device."""
 
     connected: bool | None = None  # None = the device cannot tell
-    resolution: str | None = None
+    resolution: str | None = None  # video format (e.g. 1920x1080p50) or audio format (e.g. 48 kHz)
     extra: dict[str, Any] = field(default_factory=dict)
+    state: ConnectionState | None = None  # explicit state if the device reports one (overrides the derivation)
 
 
 @dataclass(slots=True)

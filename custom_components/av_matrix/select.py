@@ -9,7 +9,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .coordinator import AvMatrixConfigEntry
-from .entity import AvMatrixDestinationEntity
+from .entity import AvMatrixDestinationEntity, async_setup_destination_entities
 from .hub import DATA_HUB, AvMatrixHub, Destination
 
 PARALLEL_UPDATES = 0
@@ -19,7 +19,7 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: AvMatrixConfigEntry, async_add_entities: AddConfigEntryEntitiesCallback
 ) -> None:
     hub = hass.data[DATA_HUB]
-    async_add_entities(AvMatrixSourceSelect(hub, dest) for dest in entry.runtime_data.destinations)
+    async_setup_destination_entities(hass, entry, async_add_entities, lambda dest: [AvMatrixSourceSelect(hub, dest)])
 
 
 class AvMatrixSourceSelect(AvMatrixDestinationEntity, SelectEntity):

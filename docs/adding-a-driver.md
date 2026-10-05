@@ -51,55 +51,53 @@ Rules that keep the matrix honest:
 - If the device's own list may contain stale sources, set `TRUSTED_SOURCE_LIST = False`.
 - If a route is not reliably applied, read it back and retry once (see the BirdDog driver).
 
-## A new protocol — sketch for Dante
+## A new protocol — how Dante® was added
 
-Dante is not implemented. This is how it would fit:
+Dante shows the pieces a protocol needs; use it as the template.
 
-**Identity.** Source = `"<device>:<tx channel>"` (e.g. `"STAGEBOX-01:Mic 3"`); destination = one RX channel of a
-device (`"AMP-LOBBY:In 1"`). A Dante device usually has many RX channels → the driver returns one
-`DestinationInfo` per RX channel from `destinations()` (or a configurable subset, 64 selects per device are a lot).
+**Protocol module** `protocols/dante.py` — no Home Assistant imports:
 
-**Protocol module** `protocols/dante.py`:
+- `DanteSourceRegistry(SourceRegistry)` with `protocol = "dante"`, `grouped = True` (sources belong to devices:
+  the card groups them, lists are ordered by device) and `describe()` → `{"group": device, "channel": …}` for the
+  WebSocket snapshot, `sort_key()` for natural ordering (`CH2` before `CH10`).
+- Identity helpers (`"channel@device"`) and the wire format: request builders and response parsers for the ARC
+  protocol, tested against real packets (`tests/test_dante_protocol.py`).
+- Registered in `protocols/__init__.py`: `PROTOCOLS["dante"] = Protocol("dante", "Dante®", DanteSourceRegistry)`.
 
-```python
-class DanteSourceRegistry(SourceRegistry):
-    protocol = "dante"
-    placeholder_re = None   # Dante names are stable, no placeholders
-```
-
-and in `protocols/__init__.py`:
+**Network driver** `drivers/dante.py` — Dante has no "one device = one entry" shape, so the driver covers the
+whole network:
 
 ```python
-PROTOCOLS["dante"] = Protocol("dante", "Dante", DanteSourceRegistry)
-```
-
-**Discovery.** Dante devices announce `_netaudio-arc._udp.local.` (plus `_netaudio-cmc._udp`, `_netaudio-dbc._udp`,
-`_netaudio-chan._udp` per channel). A `DanteMdnsBrowser` (like `discovery.NdiMdnsBrowser`) feeds device names;
-TX channel names are read per device via ARC (UDP 4440) and registered with `set_discovered("<device>:<channel>", …)`.
-The open-source project [netaudio](https://github.com/chris-ritsen/network-audio-controller) (Unlicense) implements
-the ARC requests (list channels, add/remove subscription) in Python and is a good reference — either as a
-requirement in `manifest.json` or as a small vendored client.
-
-**Driver** `drivers/dante_arc.py`:
-
-```python
-class DanteDevice(Driver):
-    KEY = "dante_arc"
+class DanteNetwork(Driver):
+    KEY = "dante"
     PROTOCOL = "dante"
-    TITLE = "Dante device (ARC)"
-    MANUFACTURER = "Audinate"
-    CONFIG_FIELDS = (HOST, NAME)          # Dante control has no login (Dante Domain Manager aside)
+    NETWORK = True            # one config entry for the network; destinations may change after every poll
+    CONFIG_FIELDS = ()        # nothing to ask: devices come from mDNS (+ optional static hosts in the options)
 
-    def destinations(self):               # one per RX channel
-        return [DestinationInfo(str(n), name) for n, name in self._rx_channels]
+    def destinations(self):                       # one per RX channel of every visible device
+        return [DestinationInfo(f"{dev}:{n}", rx_name, device=dev), ...]
 
-    async def async_get_current(self, destination):   # subscription of the RX channel
-        return f"{tx_device}:{tx_channel}" or None
-
-    async def async_route(self, destination, source, address=None):
-        # "None" = remove subscription, else add subscription rx → tx_device@tx_channel
+    def destination_available(self, destination): # per-device online state
         ...
+    async def async_poll(self) -> DevicePoll: ... # all devices in parallel, TX channels as sources
+    async def async_route(self, destination, source, address=None): ...  # subscribe / clear, then read back
 ```
+
+What `NETWORK = True` changes in the integration (no driver code needed):
+
+- The config flow shows the driver as a network entry (no form fields, single instance, zeroconf discovery offers it).
+- After every poll, new destinations become hub destinations and their entities are added at runtime
+  (`entity.async_setup_destination_entities`); `DestinationInfo.device` makes them belong to a sub-device
+  (a Home Assistant device linked to the network device via `via_device_id`).
+- `async_remove_config_entry_device` lets users delete sub-devices that went offline.
+- Drivers can report an explicit state through `DestinationStatus.state` (e.g. `ConnectionState.ERROR` for a failed
+  subscription) instead of letting the hub derive it.
+
+**Discovery** `discovery.DanteMdnsBrowser` browses `_netaudio-arc._udp.local.` with Home Assistant's zeroconf
+instance and hands host, port and TXT record to the driver.
+
+**Tests:** `tests/dante_sim.py` simulates devices behind a fake UDP transport (answers built like the captured
+packets), `tests/test_dante.py` runs the whole integration against it.
 
 Everything else — select entities, services, salvo/lock/undo, WebSocket API, the matrix card (one tab per
 protocol) — works unchanged.

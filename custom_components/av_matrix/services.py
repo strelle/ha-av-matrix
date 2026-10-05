@@ -25,6 +25,8 @@ from .hub import DATA_HUB, AvMatrixHub, Destination
 TARGET_FIELDS = {
     vol.Optional(ATTR_ENTITY_ID): cv.comp_entity_ids,
     vol.Optional(ATTR_DEVICE_ID): vol.All(cv.ensure_list, [cv.string]),
+    # destination ids from the WebSocket snapshot (e.g. Dante RX channels whose entities are disabled)
+    vol.Optional(ATTR_DESTINATION): vol.All(cv.ensure_list, [cv.string]),
 }
 ROUTE_SCHEMA = vol.Schema({**TARGET_FIELDS, vol.Required(ATTR_SOURCE): vol.Any(None, cv.string)})
 TARGET_SCHEMA = vol.Schema(TARGET_FIELDS)
@@ -34,7 +36,7 @@ SALVO_SCHEMA = vol.Schema(
             cv.ensure_list,
             [
                 vol.Schema(
-                    {vol.Required(ATTR_DESTINATION): cv.entity_id, vol.Required(ATTR_SOURCE): vol.Any(None, cv.string)}
+                    {vol.Required(ATTR_DESTINATION): cv.string, vol.Required(ATTR_SOURCE): vol.Any(None, cv.string)}
                 )
             ],
         )
@@ -50,9 +52,10 @@ def _destinations(hass: HomeAssistant, hub: AvMatrixHub, call: ServiceCall) -> l
         ent_reg = er.async_get(hass)
         for device_id in device_ids:
             entity_ids.update(e.entity_id for e in er.async_entries_for_device(ent_reg, device_id))
+    uids: set[str] = set(call.data.get(ATTR_DESTINATION) or [])
     found: list[Destination] = []
     for dest in hub.destinations.values():
-        if dest.entity_id in entity_ids:
+        if dest.entity_id in entity_ids or dest.uid in uids:
             found.append(dest)
     if not found:
         raise ServiceValidationError(translation_domain=DOMAIN, translation_key="no_destination")
@@ -60,7 +63,8 @@ def _destinations(hass: HomeAssistant, hub: AvMatrixHub, call: ServiceCall) -> l
 
 
 def _dest_for_entity(hub: AvMatrixHub, entity_id: str) -> Destination:
-    dest = hub.destination_for_entity(entity_id)
+    """Salvo destination: a select entity id or a destination id."""
+    dest = hub.destination_for_entity(entity_id) or hub.destinations.get(entity_id)
     if dest is None:
         raise ServiceValidationError(
             translation_domain=DOMAIN,

@@ -1,0 +1,17 @@
+AV Matrix for Home Assistant
+Copyright (c) 2026 Strelle - MIT License (see LICENSE)
+
+Dante® support
+--------------
+The Dante control protocol ("ARC", UDP 4440) is not publicly documented. The packet layouts used in
+custom_components/av_matrix/protocols/dante.py follow the reverse-engineering work of the netaudio project
+(network-audio-controller) by Christopher Ritsen and contributors:
+
+    https://github.com/chris-ritsen/network-audio-controller
+
+netaudio is released into the public domain under the Unlicense. The logic was re-implemented in this project;
+no netaudio code is included. tests/dante_sim.py contains a few response packets from netaudio's test fixtures
+(tests/fixtures/issue_59/later_pages.json) and reference request bytes from its core_commands_golden.json.
+
+Dante® is a registered trademark of Audinate Group Pty Ltd. NDI® is a registered trademark of Vizrt NDI AB.
+This project is not affiliated with, endorsed or sponsored by Audinate or Vizrt.

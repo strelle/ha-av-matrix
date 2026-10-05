@@ -33,6 +33,7 @@ from .drivers import DriverError
 from .drivers.base import short
 from .models import ConnectionState
 from .protocols import PROTOCOLS, SourceRegistry, tcp_probe
+from .protocols.base import natural_key
 
 if TYPE_CHECKING:
     from .coordinator import AvMatrixCoordinator
@@ -51,6 +52,8 @@ class Destination:
     protocol: str
     coordinator: AvMatrixCoordinator
     channel_name: str | None = None
+    #: Sub-device of a network entry (Dante: the Dante device name), None = the entry's device.
+    device_key: str | None = None
     entity_id: str | None = None
     last_route: float = 0.0
     display_error: str | None = None
@@ -61,7 +64,12 @@ class Destination:
 
     @property
     def device_name(self) -> str:
-        return self.coordinator.device_name
+        return self.device_key or self.coordinator.device_name
+
+    @property
+    def available(self) -> bool:
+        """Device reachable (network entries: the sub-device of this destination)."""
+        return self.coordinator.last_update_success and self.coordinator.driver.destination_available(self.dest_id)
 
     @property
     def name(self) -> str:
@@ -227,26 +235,33 @@ class AvMatrixHub:
     def resolution(self, dest: Destination) -> str | None:
         data = dest.coordinator.data
         state = data.destinations.get(dest.dest_id) if data else None
-        return state.status.resolution if state and dest.coordinator.last_update_success else None
+        return state.status.resolution if state and dest.available else None
 
     def status_extra(self, dest: Destination) -> dict[str, Any]:
         data = dest.coordinator.data
         state = data.destinations.get(dest.dest_id) if data else None
-        return dict(state.status.extra) if state and dest.coordinator.last_update_success else {}
+        return dict(state.status.extra) if state and dest.available else {}
 
     def connection_state(self, dest: Destination) -> ConnectionState:
         coordinator = dest.coordinator
         data = coordinator.data
-        if not coordinator.last_update_success or data is None or dest.dest_id not in data.destinations:
+        if not dest.available or data is None or dest.dest_id not in data.destinations:
             return ConnectionState.OFFLINE
         current = self.current_source(dest)
         if current is None:
             return ConnectionState.NO_SOURCE
-        connected = data.destinations[dest.dest_id].status.connected
+        status = data.destinations[dest.dest_id].status
+        connected = status.connected
+        recent = time.monotonic() - dest.last_route < max(CONNECTING_GRACE, coordinator.driver.SETTLE_TIME)
+        if status.state is not None:  # the device tells us exactly (Dante subscription status)
+            if status.state in (ConnectionState.SOURCE_LOST, ConnectionState.ERROR) and recent:
+                return ConnectionState.CONNECTING
+            if status.state is ConnectionState.NO_SOURCE:  # poll predates the route
+                return ConnectionState.CONNECTING
+            return status.state
         if connected is True:
             return ConnectionState.CONNECTED
         live = self.registries[dest.protocol].is_live(current)
-        recent = time.monotonic() - dest.last_route < max(CONNECTING_GRACE, coordinator.driver.SETTLE_TIME)
         if connected is False:
             return ConnectionState.CONNECTING if live or recent else ConnectionState.SOURCE_LOST
         # device cannot tell (e.g. BirdDog without /decodestatus): derive from the registry
@@ -442,7 +457,7 @@ class AvMatrixHub:
             for rec in registry.sources:
                 sources[rec.id] = self._source_dict(key, rec.id, rec.live, rec.address, rec.last_seen, rec.first_seen)
             destinations = []
-            for dest in sorted(dests, key=lambda d: d.name.casefold()):
+            for dest in sorted(dests, key=lambda d: (natural_key(d.device_name), natural_key(d.name))):
                 current = self.current_source(dest)
                 if current is not None and current not in sources:
                     sources[current] = self._source_dict(key, current, False, None, None, None)
@@ -454,6 +469,7 @@ class AvMatrixHub:
                         "name": dest.name,
                         "channel": dest.channel_name,
                         "device_name": dest.device_name,
+                        "group": dest.device_key,
                         "device_id": ent.device_id if ent else None,
                         "entry_id": dest.entry_id,
                         "driver": dest.coordinator.driver.KEY,
@@ -462,7 +478,8 @@ class AvMatrixHub:
                         "current_source_live": registry.is_live(current),
                         "status": self.connection_state(dest).value,
                         "resolution": self.resolution(dest),
-                        "available": dest.coordinator.last_update_success,
+                        "subscription": self._subscription(dest),
+                        "available": dest.available,
                         "locked": dest.uid in self.locks,
                         "can_undo": bool(self.history.get(dest.uid)),
                         "display": display_state(self.hass, self.display_config(dest), dest.display_error),
@@ -471,10 +488,25 @@ class AvMatrixHub:
             if destinations or sources:
                 out["protocols"][key] = {
                     "title": proto.title,
-                    "sources": sorted(sources.values(), key=lambda s: s["name"].casefold()),
+                    "sources": sorted(
+                        sources.values(),
+                        key=lambda s: registry.sort_key(s["id"]) if registry.grouped else natural_key(s["name"]),
+                    ),
                     "destinations": destinations,
                 }
         return out
+
+    def _subscription(self, dest: Destination) -> dict[str, Any] | None:
+        """Dante: state/code/status/detail of the RX subscription; None for other protocols."""
+        extra = self.status_extra(dest)
+        if "subscription" not in extra:
+            return None
+        return {
+            "state": extra["subscription"],
+            "code": extra.get("subscription_code"),
+            "status": extra.get("subscription_status"),
+            "detail": extra.get("subscription_detail"),
+        }
 
     def _source_dict(
         self,
@@ -489,6 +521,7 @@ class AvMatrixHub:
         host = address.rsplit(":", 1)[0] if address and ":" in address else address
         return {
             "id": source_id,
+            **self.registries[protocol].describe(source_id),
             "name": lab.get("label") or source_id,
             "label": lab.get("label"),
             "tags": list(lab.get("tags", [])),

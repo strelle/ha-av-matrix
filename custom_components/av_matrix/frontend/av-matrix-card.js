@@ -46,6 +46,22 @@ const STRINGS = {
     status_no_source: "No source",
     status_source_lost: "Source lost",
     status_offline: "Device offline",
+    status_error: "Error",
+    off_sub_grouped: "no subscription",
+    all_devices: "All devices",
+    from_device: "Sources",
+    to_device: "Destinations",
+    group_count: "{n} ch",
+    expand: "Expand {g}",
+    collapse: "Collapse {g}",
+    sub_none: "Not subscribed",
+    sub_subscribed: "Subscribed",
+    sub_self: "Subscribed (own device)",
+    sub_in_progress: "Connecting",
+    sub_unresolved: "Unresolved",
+    sub_idle: "Idle",
+    sub_warning: "Warning",
+    sub_error: "Error",
     edit_labels: "Edit labels",
     edit_hint: "Edit mode: tap a source to rename it",
     label: "Label",
@@ -118,6 +134,22 @@ const STRINGS = {
     status_no_source: "Keine Quelle",
     status_source_lost: "Quelle verloren",
     status_offline: "Gerät offline",
+    status_error: "Fehler",
+    off_sub_grouped: "kein Abo",
+    all_devices: "Alle Geräte",
+    from_device: "Quellen",
+    to_device: "Ziele",
+    group_count: "{n} Kan.",
+    expand: "{g} aufklappen",
+    collapse: "{g} zuklappen",
+    sub_none: "Nicht abonniert",
+    sub_subscribed: "Abonniert",
+    sub_self: "Abonniert (eigenes Gerät)",
+    sub_in_progress: "Verbinde",
+    sub_unresolved: "Nicht aufgelöst",
+    sub_idle: "Inaktiv",
+    sub_warning: "Warnung",
+    sub_error: "Fehler",
     edit_labels: "Labels bearbeiten",
     edit_hint: "Bearbeiten: Quelle antippen, um sie umzubenennen",
     label: "Label",
@@ -175,6 +207,7 @@ const ICON_PATHS = {
   warn: '<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/>',
   x: '<path d="M18 6 6 18M6 6l12 12"/>',
   chevron: '<path d="m6 9 6 6 6-6"/>',
+  device: '<rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 10v4M11 10v4M15.5 12h2"/>',
   power: '<path d="M12 2.5v9"/><path d="M18.4 6.6a9 9 0 1 1-12.8 0"/>',
   bolt: '<path d="M13 2 4 14h7l-1 8 9-12h-7Z"/>',
   keyboard:
@@ -288,7 +321,8 @@ function historyFor(hass) {
 /* ------------------------------------------------------------------ the card */
 const LONG_PRESS_MS = 450;
 const PENDING_TIMEOUT = 8000;
-const STATUS_ORDER = ["connected", "connecting", "no_source", "source_lost", "offline"];
+const STATUS_ORDER = ["connected", "connecting", "no_source", "source_lost", "error", "offline"];
+
 
 class AvMatrixCard extends HTMLElement {
   constructor() {
@@ -313,8 +347,35 @@ class AvMatrixCard extends HTMLElement {
     this._prevCurrent = new Map(); // dest id → current source (diff history fallback)
     this._ownUndo = []; // dest ids routed from this card, newest last
     this._narrow = false;
+    this._collapsed = new Set(); // "s:<device>" / "d:<device>" (grouped protocols, e.g. Dante)
+    this._expanded = new Set(); // groups the user opened although they start closed (big groups in panel mode)
+    this._srcGroup = ""; // device filter of the sources ("" = all)
+    this._dstGroup = ""; // device filter of the destinations
     this._lastHtml = "";
     this._width = 0;
+  }
+
+  _storeKey() {
+    return `av-matrix-card:collapsed:${(this._config && this._config.title) || ""}`;
+  }
+
+  _saveCollapsed() {
+    try {
+      localStorage.setItem(this._storeKey(), JSON.stringify({ c: [...this._collapsed], e: [...this._expanded] }));
+    } catch (_e) {
+      /* storage unavailable */
+    }
+  }
+
+  _loadCollapsed() {
+    try {
+      const v = JSON.parse(localStorage.getItem(this._storeKey()) || "{}");
+      const strings = (a) => (Array.isArray(a) ? a.filter((x) => typeof x === "string") : []);
+      this._collapsed = new Set(strings(v.c));
+      this._expanded = new Set(strings(v.e));
+    } catch (_e) {
+      /* storage unavailable */
+    }
   }
 
   /* ---------------- Lovelace API */
@@ -336,6 +397,7 @@ class AvMatrixCard extends HTMLElement {
     this._take = this._config.take_mode;
     this._protocol = this._config.protocol || this._protocol;
     this._modeUser = null;
+    this._loadCollapsed();
     this._render();
   }
 
@@ -472,7 +534,7 @@ class AvMatrixCard extends HTMLElement {
       const entry = reg[eid];
       if (entry ? entry.platform !== "av_matrix" : !("source_live" in a && "protocol" in a)) continue;
       const key = a.protocol || "ndi";
-      const p = (out.protocols[key] ||= { title: key === "ndi" ? "NDI®" : key.toUpperCase(), _src: new Map(), destinations: [] });
+      const p = (out.protocols[key] ||= { title: key === "ndi" ? "NDI®" : key === "dante" ? "Dante®" : key.toUpperCase(), _src: new Map(), destinations: [] });
       for (const opt of a.options || []) {
         if (opt !== "None" && !p._src.has(opt))
           p._src.set(opt, { id: opt, name: opt, label: null, tags: [], live: true, host: null, last_seen: null });
@@ -517,15 +579,61 @@ class AvMatrixCard extends HTMLElement {
     return protos[this._protocol];
   }
 
-  _destinations(proto) {
+  _destinations(proto, ignoreGroup = false) {
     const wanted = this._config && Array.isArray(this._config.destinations) ? this._config.destinations : null;
-    if (!wanted || !wanted.length) return proto.destinations;
-    const out = [];
-    for (const id of wanted) {
-      const d = proto.destinations.find((x) => x.entity_id === id || x.id === id);
-      if (d) out.push(d);
+    let out = proto.destinations;
+    if (wanted && wanted.length) {
+      out = [];
+      for (const id of wanted) {
+        const d = proto.destinations.find((x) => x.entity_id === id || x.id === id);
+        if (d) out.push(d);
+      }
     }
+    if (this._dstGroup && !ignoreGroup) out = out.filter((d) => d.group === this._dstGroup);
     return out;
+  }
+
+  /** Protocols whose sources/destinations belong to devices (Dante) are shown grouped by device. */
+  _grouped(proto) {
+    return proto.sources.some((s) => s.group) || proto.destinations.some((d) => d.group);
+  }
+
+  /** [[group, items]] in order of appearance. */
+  _groups(items) {
+    const out = new Map();
+    for (const it of items) {
+      const g = it.group || "";
+      if (!out.has(g)) out.set(g, []);
+      out.get(g).push(it);
+    }
+    return [...out.entries()];
+  }
+
+  /** Big device groups (> 16 channels) start collapsed in panel mode, everything starts open in the matrix. */
+  _isClosed(key, n) {
+    if (this._collapsed.has(key)) return true;
+    if (this._expanded.has(key)) return false;
+    return this._mode() === "panel" && n > 16;
+  }
+
+  _toggleGroup(key, n) {
+    if (this._isClosed(key, n)) {
+      this._collapsed.delete(key);
+      this._expanded.add(key);
+    } else {
+      this._expanded.delete(key);
+      this._collapsed.add(key);
+    }
+    this._saveCollapsed();
+  }
+
+  _destName(d) {
+    return d.group && d.channel ? d.channel : d.name;
+  }
+
+  /** Target of a service call: the select entity, or the destination id (entities may be disabled). */
+  _tgt(d) {
+    return d.entity_id ? { entity_id: d.entity_id } : { destination: [d.id] };
   }
 
   _sources(proto) {
@@ -535,6 +643,7 @@ class AvMatrixCard extends HTMLElement {
     return proto.sources.filter((s) => {
       if (!showOffline && !s.live && !current.has(s.id)) return false;
       if (this._tags.size && !(s.tags || []).some((t) => this._tags.has(t))) return false;
+      if (this._srcGroup && s.group !== this._srcGroup) return false;
       if (!q) return true;
       return [s.name, s.id, s.host, ...(s.tags || [])].some((v) => v && String(v).toLowerCase().includes(q));
     });
@@ -571,8 +680,13 @@ class AvMatrixCard extends HTMLElement {
 
   /** [primary, secondary] text for a source: label over NDI name, else "Stream" over "MACHINE". */
   _names(src, id) {
-    if (!src) return id ? [id, ""] : [this._t("off"), ""];
+    if (!src) {
+      if (!id) return [this._t("off"), ""];
+      const at = id.lastIndexOf("@");
+      return at > 0 ? [id.slice(0, at), id.slice(at + 1)] : [id, ""];
+    }
     if (src.label) return [src.label, src.id];
+    if (src.group && src.channel) return [src.channel, src.group];
     const m = /^(.*?)\s*\((.+)\)$/.exec(src.id);
     if (m) return [m[2], m[1]];
     return [src.id, src.host || ""];
@@ -635,10 +749,10 @@ class AvMatrixCard extends HTMLElement {
     let success;
     try {
       if (ok.length === 1) {
-        await this._hass.callService("av_matrix", "route", { entity_id: ok[0][0].entity_id, source: src(ok[0][1]) });
+        await this._hass.callService("av_matrix", "route", { ...this._tgt(ok[0][0]), source: src(ok[0][1]) });
       } else {
         await this._hass.callService("av_matrix", "salvo", {
-          routes: ok.map(([d, s]) => ({ destination: d.entity_id, source: src(s) })),
+          routes: ok.map(([d, s]) => ({ destination: d.entity_id || d.id, source: src(s) })),
         });
       }
       success = true;
@@ -721,7 +835,7 @@ class AvMatrixCard extends HTMLElement {
   }
 
   _toggleLock(dests) {
-    for (const d of dests) this._call("av_matrix", d.locked ? "unlock" : "lock", { entity_id: d.entity_id });
+    for (const d of dests) this._call("av_matrix", d.locked ? "unlock" : "lock", this._tgt(d));
   }
 
   _undo(dests) {
@@ -738,7 +852,7 @@ class AvMatrixCard extends HTMLElement {
     for (const d of targets) {
       if (d.locked) continue;
       this._pending.set(d.id, { source: undefined, until: Date.now() + 1500 });
-      this._call("av_matrix", "undo", { entity_id: d.entity_id }).then(() => this._render());
+      this._call("av_matrix", "undo", this._tgt(d)).then(() => this._render());
     }
     this._render();
   }
@@ -982,11 +1096,44 @@ class AvMatrixCard extends HTMLElement {
           <input type="search" data-act="search" placeholder="${esc(this._t("search"))}" value="${esc(this._search)}" aria-label="${esc(this._t("search"))}" autocomplete="off" spellcheck="false">
           <kbd>/</kbd>
         </label>
+        ${this._htmlGroupFilters(proto)}
         <div class="chips">
           <button type="button" class="chip live ${this._liveOnly ? "on" : ""}" aria-pressed="${this._liveOnly}" data-act="liveonly" data-k="liveonly"><i class="led connected"></i>${esc(this._t("live_only"))}</button>
           ${tagChips}
         </div>
       </div>`;
+  }
+
+  _htmlGroupFilters(proto) {
+    if (!this._grouped(proto)) return "";
+    const srcGroups = [...new Set(proto.sources.map((x) => x.group).filter(Boolean))];
+    const dstGroups = [...new Set(this._destinations(proto, true).map((x) => x.group).filter(Boolean))];
+    if (this._srcGroup && !srcGroups.includes(this._srcGroup)) this._srcGroup = "";
+    if (this._dstGroup && !dstGroups.includes(this._dstGroup)) this._dstGroup = "";
+    const sel = (act, label, groups, value) =>
+      `<label class="gsel ${value ? "on" : ""}" title="${esc(label)}">${icon("device")}<span class="gl">${esc(label)}</span>
+        <select data-act="${act}" aria-label="${esc(label)}">
+          <option value="" ${value ? "" : "selected"}>${esc(this._t("all_devices"))}</option>
+          ${groups.map((g) => `<option value="${esc(g)}" ${g === value ? "selected" : ""}>${esc(g)}</option>`).join("")}
+        </select>${icon("chevron", "chev")}</label>`;
+    return `<div class="gsels" data-k="gsels">${sel("srcgrp", this._t("from_device"), srcGroups, this._srcGroup)}${sel(
+      "dstgrp",
+      this._t("to_device"),
+      dstGroups,
+      this._dstGroup
+    )}</div>`;
+  }
+
+  /** Collapsible device header (panel tiles and matrix rows/columns). */
+  _htmlGroupToggle(kind, group, items, extra = "") {
+    const key = `${kind}:${group}`;
+    const closed = this._isClosed(key, items.length);
+    const live =
+      kind === "s"
+        ? items.some((x) => x.live)
+        : items.some((x) => x.available !== false && x.status !== "offline");
+    const label = this._t(closed ? "expand" : "collapse", { g: group });
+    return `<button type="button" class="gtog ${closed ? "closed" : ""}" data-act="grp" data-v="${esc(key)}" data-n="${items.length}" aria-expanded="${!closed}" title="${esc(label)}" aria-label="${esc(label)}">${icon("chevron", "chev")}<i class="led ${live ? "connected" : "offline"}"></i><span class="gname">${esc(group)}</span><span class="gcount">${esc(this._t("group_count", { n: items.length }))}</span>${extra}</button>`;
   }
 
   _destState(d) {
@@ -996,6 +1143,18 @@ class AvMatrixCard extends HTMLElement {
       preset: this._preset.has(d.id) ? this._preset.get(d.id) : undefined,
       status: d.available === false ? "offline" : STATUS_ORDER.includes(d.status) ? d.status : "no_source",
     };
+  }
+
+  /** Warning chip: source not sending, or (Dante) the subscription state with its explanation. */
+  _htmlSubChip(d, status, warn) {
+    const sub = d.subscription;
+    if (sub && ["error", "warning", "unresolved", "idle"].includes(sub.state) && status !== "offline") {
+      const text = this._t("sub_" + sub.state);
+      const tip = [sub.status, sub.detail].filter(Boolean).join(" · ");
+      return `<span class="chip warnchip ${sub.state === "error" ? "errchip" : ""}" title="${esc(tip)}">${icon("warn")}${esc(text)}</span>`;
+    }
+    if (warn) return `<span class="chip warnchip" title="${esc(this._t("not_sending"))}">${icon("warn")}${esc(this._t("not_sending"))}</span>`;
+    return "";
   }
 
   _htmlDestTools(d, compact = false) {
@@ -1022,10 +1181,17 @@ class AvMatrixCard extends HTMLElement {
   }
 
   _htmlPanel(proto, dests, sources) {
-    const destKeys = dests.map((d) => d.id);
-    if (!destKeys.includes(this._navKey.d)) this._navKey.d = this._sel[0] || destKeys[0];
-    const destHtml = dests
-      .map((d) => {
+    const grouped = this._grouped(proto);
+    const groupSize = (list) => {
+      const m = new Map();
+      for (const x of list) m.set(x.group || "", (m.get(x.group || "") || 0) + 1);
+      return m;
+    };
+    const dSize = groupSize(dests);
+    const sSize = groupSize(sources);
+    const destKeys = dests.filter((d) => !(grouped && this._isClosed(`d:${d.group || ""}`, dSize.get(d.group || "")))).map((d) => d.id);
+    if (!destKeys.includes(this._navKey.d)) this._navKey.d = destKeys.find((id) => this._sel.includes(id)) || destKeys[0];
+    const destTile = (d) => {
         const { pend, preset, status } = this._destState(d);
         const sel = this._sel.includes(d.id);
         const [cur, curSub] = this._names(this._srcById(proto, d.current_source), d.current_source);
@@ -1035,20 +1201,30 @@ class AvMatrixCard extends HTMLElement {
         return `
         <div class="dest st-${status} ${sel ? "sel" : ""} ${d.locked ? "locked" : ""} ${pend ? "pending" : ""} ${preset !== undefined ? "armed" : ""}" data-k="d-${esc(d.id)}" data-shake="${esc(d.id)}">
           <button type="button" class="dest-main" data-act="dest" data-d="${esc(d.id)}" data-nav="d" data-key="${esc(d.id)}" tabindex="${d.id === this._navKey.d ? "0" : "-1"}" aria-pressed="${sel}" aria-label="${esc(this._t("dest_label"))} ${esc(d.name)}: ${esc(cur)}">
-            <span class="dtop"><i class="led ${status}" title="${esc(this._t("status_" + status))}"></i><span class="dname">${esc(d.name)}</span>${multi ? `<span class="selno">${this._sel.indexOf(d.id) + 1}</span>` : ""}</span>
+            <span class="dtop"><i class="led ${status}" title="${esc(this._t("status_" + status))}"></i><span class="dname">${esc(this._destName(d))}</span>${multi ? `<span class="selno">${this._sel.indexOf(d.id) + 1}</span>` : ""}</span>
             <span class="dsrc ${d.current_source ? "" : "none"}">${pend ? `<span class="spinner sm"></span><span class="ell">${esc(this._t("switching"))}</span>` : `<span class="ell">${esc(cur)}</span>`}</span>
             <span class="dsub mono">${esc(pend ? this._srcName(proto, pend.source) : curSub)}</span>
             <span class="dmeta">
               ${res ? `<span class="chip res mono">${esc(res)}</span>` : `<span class="chip res mono dim">${esc(this._t("status_" + status))}</span>`}
               ${d.locked ? `<span class="chip lockchip">${icon("lock")}${esc(this._t("locked"))}</span>` : ""}
-              ${warn ? `<span class="chip warnchip" title="${esc(this._t("not_sending"))}">${icon("warn")}${esc(this._t("not_sending"))}</span>` : ""}
+              ${this._htmlSubChip(d, status, warn)}
             </span>
             ${preset !== undefined ? `<span class="armline"><b>PST</b><span class="ell">→ ${esc(this._srcName(proto, preset))}</span></span>` : ""}
           </button>
           <div class="dtools">${this._htmlDestTools(d)}</div>
         </div>`;
-      })
-      .join("");
+    };
+    const destHtml = grouped
+      ? this._groups(dests)
+          .map(([g, items]) => {
+            const closed = this._isClosed(`d:${g}`, items.length);
+            const armed = items.filter((d) => this._preset.has(d.id)).length;
+            return `<div class="ghead" data-k="dg-${esc(g)}">${this._htmlGroupToggle("d", g, items, armed ? `<span class="garm">${armed} PST</span>` : "")}</div>${
+              closed ? "" : items.map(destTile).join("")
+            }`;
+          })
+          .join("")
+      : dests.map(destTile).join("");
 
     // sources for the selected destinations
     const selDests = dests.filter((d) => this._sel.includes(d.id));
@@ -1057,7 +1233,8 @@ class AvMatrixCard extends HTMLElement {
     const pendSrc = new Set(selDests.filter((d) => this._pending.has(d.id)).map((d) => this._pending.get(d.id).source || ""));
     const usage = new Map();
     for (const d of proto.destinations) usage.set(d.current_source || "", (usage.get(d.current_source || "") || 0) + 1);
-    const srcKeys = ["", ...sources.map((s) => s.id)];
+    const visibleSources = grouped ? sources.filter((x) => !this._isClosed(`s:${x.group || ""}`, sSize.get(x.group || ""))) : sources;
+    const srcKeys = ["", ...visibleSources.map((x) => x.id)];
     if (!srcKeys.includes(this._navKey.s)) this._navKey.s = srcKeys[0];
     const flashKey = (id) => selDests.map((d) => `${d.id}|${id}`)[0] || "";
     const tile = (id, s) => {
@@ -1065,7 +1242,7 @@ class AvMatrixCard extends HTMLElement {
       const isPst = pst.has(id);
       const isPend = pendSrc.has(id);
       const live = id === "" ? true : s.live;
-      const [primary, secondary] = id === "" ? [this._t("off"), this._t("off_sub")] : this._names(s, id);
+      const [primary, secondary] = id === "" ? [this._t("off"), this._t(grouped ? "off_sub_grouped" : "off_sub")] : this._names(s, id);
       const used = usage.get(id) || 0;
       const tags = id && s.tags && s.tags.length ? s.tags.map((t) => `<span class="tag">#${esc(t)}</span>`).join("") : "";
       const foot = !live
@@ -1085,64 +1262,121 @@ class AvMatrixCard extends HTMLElement {
     };
     const cols = parseInt(this._config.columns, 10);
     const style = cols > 0 && !this._narrow ? ` style="grid-template-columns:repeat(${cols},minmax(0,1fr))"` : "";
-    const srcHtml = [tile("", null), ...sources.map((s) => tile(s.id, s))].join("");
+    const srcHtml = grouped
+      ? [
+          tile("", null),
+          ...this._groups(sources).map(([g, items]) => {
+            const closed = this._isClosed(`s:${g}`, items.length);
+            const pgmHere = items.filter((x) => pgm.has(x.id)).length;
+            return `<div class="ghead" data-k="sg-${esc(g)}">${this._htmlGroupToggle("s", g, items, pgmHere ? `<span class="gpgm"></span>` : "")}</div>${
+              closed ? "" : items.map((x) => tile(x.id, x)).join("")
+            }`;
+          }),
+        ].join("")
+      : [tile("", null), ...sources.map((x) => tile(x.id, x))].join("");
     return `
       <section class="panel" data-k="panel">
-        <div class="dests" role="toolbar" aria-label="${esc(this._t("dest_label"))}" data-shake="__dests">${destHtml}</div>
+        <div class="dests ${grouped ? "grouped" : ""}" role="toolbar" aria-label="${esc(this._t("dest_label"))}" data-shake="__dests">${destHtml}</div>
         <div class="srcs-wrap">
-          <div class="srcs" role="group" aria-label="${esc(this._t("source_label"))}"${style}>${srcHtml}</div>
+          <div class="srcs ${grouped ? "grouped" : ""}" role="group" aria-label="${esc(this._t("source_label"))}"${style}>${srcHtml}</div>
           ${sources.length ? "" : `<div class="msg small">${esc(this._t("no_match"))}</div>`}
         </div>
       </section>`;
   }
 
   _htmlMatrix(proto, dests, sources) {
-    const cols = [{ id: "", s: null }, ...sources.map((s) => ({ id: s.id, s }))];
+    const grouped = this._grouped(proto);
+    // columns: Off, then sources (grouped protocols: per device, a collapsed device = one summary column)
+    const cols = [{ id: "", s: null }];
+    const colGroups = []; // [{ g, span, items, closed }]
+    if (grouped) {
+      for (const [g, items] of this._groups(sources)) {
+        const closed = this._isClosed(`s:${g}`, items.length);
+        colGroups.push({ g, span: closed ? 1 : items.length, items, closed });
+        if (closed) cols.push({ id: null, group: g, items });
+        else for (const x of items) cols.push({ id: x.id, s: x, group: g });
+      }
+    } else {
+      for (const x of sources) cols.push({ id: x.id, s: x });
+    }
     const keyOf = (r, c) => `${r}:${c}`;
     if (!this._navKey.x || !/^\d+:\d+$/.test(this._navKey.x)) this._navKey.x = "0:0";
-    const head = cols
-      .map(({ id, s }, c) => {
-        const [primary, secondary] = id === "" ? [this._t("off"), ""] : this._names(s, id);
+    const groupStart = new Set();
+    {
+      let c = 1;
+      for (const cg of colGroups) {
+        groupStart.add(c);
+        c += cg.span;
+      }
+    }
+    const heads = cols.map((col, c) => {
+        const { id, s } = col;
+        const gs = groupStart.has(c) ? "gs" : "";
+        if (id === null) {
+          const used = col.items.some((x) => proto.destinations.some((d) => d.current_source === x.id));
+          return `<th scope="col" class="ch sum ${gs} ${used ? "used" : ""}" data-c="${c}" data-k="ch-g-${esc(col.group)}" title="${esc(col.group)}">
+            <div class="chw"><span class="chl"><span class="chn">${esc(this._t("group_count", { n: col.items.length }))}</span></span></div></th>`;
+        }
+        const [primary] = id === "" ? [this._t("off"), ""] : this._names(s, id);
         const live = id === "" || s.live;
         const used = proto.destinations.some((d) => (d.current_source || "") === id);
         const tip = id === "" ? primary : `${primary}\n${id}${s.host ? " · " + s.host : ""}${live ? "" : "\n" + this._t("offline_since", { t: this._ago(s.last_seen) })}`;
-        return `<th scope="col" class="ch ${live ? "" : "dead"} ${used ? "used" : ""} ${id === "" ? "black" : ""}" data-c="${c}" data-k="ch-${esc(id)}" title="${esc(tip)}" ${this._isAdmin() && id ? `data-act="label" data-s="${esc(id)}"` : ""}>
+        return `<th scope="col" class="ch ${gs} ${live ? "" : "dead"} ${used ? "used" : ""} ${id === "" ? "black" : ""}" data-c="${c}" data-k="ch-${esc(id)}" title="${esc(tip)}" ${this._isAdmin() && id ? `data-act="label" data-s="${esc(id)}"` : ""} ${grouped && id === "" ? 'rowspan="2"' : ""}>
           <div class="chw"><span class="chl"><i class="led ${live ? (used ? "pgm" : "connected") : "no_source"}"></i><span class="chn">${esc(primary)}</span></span></div>
         </th>`;
-      })
+      });
+    const groupHead = colGroups
+      .map(
+        (cg) =>
+          `<th scope="colgroup" colspan="${cg.span}" class="cgh ${cg.closed ? "closed" : ""}" data-k="cg-${esc(cg.g)}">${this._htmlGroupToggle("s", cg.g, cg.items)}</th>`
+      )
       .join("");
-    const rows = dests
-      .map((d, r) => {
-        const { pend, preset, status } = this._destState(d);
-        const cur = d.current_source || "";
-        const warn = d.current_source && !d.current_source_live && status !== "offline";
-        const res = this._res(d.resolution);
-        const cells = cols
-          .map(({ id, s }, c) => {
-            const on = cur === id;
-            const isPst = preset !== undefined && preset === id;
-            const isPend = pend && (pend.source || "") === id;
-            const live = id === "" || s.live;
-            const name = id === "" ? this._t("off") : this._names(s, id)[0];
-            const k = keyOf(r, c);
-            const cls = ["xp", on ? "pgm" : "", on && warn ? "lost" : "", isPst ? "pst" : "", isPend ? "pend" : "", live ? "" : "dead"]
-              .filter(Boolean)
-              .join(" ");
-            return `<td role="gridcell" data-r="${r}" data-c="${c}"><button type="button" class="${cls}" data-act="xp" data-d="${esc(d.id)}" data-s="${esc(id)}" data-nav="x" data-key="${k}" data-r="${r}" data-c="${c}" data-flash="${esc(d.id)}|${esc(id)}" tabindex="${this._navKey.x === k ? "0" : "-1"}" aria-pressed="${on}" aria-label="${esc(name)} → ${esc(d.name)}" ${d.locked ? 'aria-disabled="true"' : ""}><i></i></button></td>`;
-          })
-          .join("");
-        return `<tr role="row" data-r="${r}" data-k="r-${esc(d.id)}" class="${d.locked ? "locked" : ""} ${preset !== undefined ? "armed" : ""}" data-shake="${esc(d.id)}">
-          <th scope="row" class="rh" data-r="${r}">
+    const ncols = cols.length + 1;
+    const corner = `<div class="cornerw"><span class="cs">${esc(this._t("source_label"))} →</span><span class="cd">${esc(this._t("dest_label"))} ↓</span></div>`;
+    let r = 0;
+    const row = (d) => {
+      const rr = r++;
+      const { pend, preset, status } = this._destState(d);
+      const cur = d.current_source || "";
+      const warn = d.current_source && !d.current_source_live && status !== "offline";
+      const res = this._res(d.resolution);
+      const cells = cols
+        .map((col, c) => {
+          const k = keyOf(rr, c);
+          const gs = groupStart.has(c) ? "gs" : "";
+          if (col.id === null) {
+            // collapsed device: one summary crosspoint, lit if this row listens to that device
+            const hit = col.items.find((x) => x.id === cur);
+            const isPst = preset !== undefined && col.items.some((x) => x.id === preset);
+            const label = hit ? this._names(hit, hit.id)[0] : col.group;
+            return `<td role="gridcell" class="${gs}" data-r="${rr}" data-c="${c}"><button type="button" class="xp sum ${hit ? "pgm" : ""} ${hit && warn ? "lost" : ""} ${isPst ? "pst" : ""}" data-act="grp" data-v="${esc(`s:${col.group}`)}" data-n="${col.items.length}" data-nav="x" data-key="${k}" data-r="${rr}" data-c="${c}" tabindex="${this._navKey.x === k ? "0" : "-1"}" title="${esc(this._t("expand", { g: col.group }))}" aria-label="${esc(label)} → ${esc(d.name)}"><i></i>${hit ? `<b class="sumn">${esc(label)}</b>` : ""}</button></td>`;
+          }
+          const { id, s } = col;
+          const on = cur === id;
+          const isPst = preset !== undefined && preset === id;
+          const isPend = pend && (pend.source || "") === id;
+          const live = id === "" || s.live;
+          const name = id === "" ? this._t("off") : this._names(s, id)[0];
+          const cls = ["xp", on ? "pgm" : "", on && warn ? "lost" : "", isPst ? "pst" : "", isPend ? "pend" : "", live ? "" : "dead"]
+            .filter(Boolean)
+            .join(" ");
+          return `<td role="gridcell" class="${gs}" data-r="${rr}" data-c="${c}"><button type="button" class="${cls}" data-act="xp" data-d="${esc(d.id)}" data-s="${esc(id)}" data-nav="x" data-key="${k}" data-r="${rr}" data-c="${c}" data-flash="${esc(d.id)}|${esc(id)}" tabindex="${this._navKey.x === k ? "0" : "-1"}" aria-pressed="${on}" aria-label="${esc(name)} → ${esc(d.name)}" ${d.locked ? 'aria-disabled="true"' : ""}><i></i></button></td>`;
+        })
+        .join("");
+      const sub = d.subscription && ["error", "warning", "unresolved", "idle"].includes(d.subscription.state) && status !== "offline";
+      const subTip = sub ? [this._t("sub_" + d.subscription.state), d.subscription.detail].filter(Boolean).join(" · ") : this._t("not_sending");
+      return `<tr role="row" data-r="${rr}" data-k="r-${esc(d.id)}" class="${d.locked ? "locked" : ""} ${preset !== undefined ? "armed" : ""}" data-shake="${esc(d.id)}">
+          <th scope="row" class="rh" data-r="${rr}">
             <div class="rhw">
               <i class="led ${status}" title="${esc(this._t("status_" + status))}"></i>
               <div class="rht">
-                <div class="rhn">${esc(d.name)}</div>
+                <div class="rhn" title="${esc(d.name)}">${esc(this._destName(d))}</div>
                 <div class="rhs ${pend ? "pending" : ""}">${
                   pend
                     ? `<span class="spinner sm"></span>${esc(this._t("switching"))}`
                     : preset !== undefined
                       ? `<span class="pstx">PST → ${esc(this._srcName(proto, preset))}</span>`
-                      : `<span class="cur">${esc(this._srcName(proto, d.current_source))}</span>${res ? `<span class="chip res mono">${esc(res)}</span>` : ""}${warn ? `<span class="warnico" title="${esc(this._t("not_sending"))}">${icon("warn")}</span>` : ""}`
+                      : `<span class="cur">${esc(this._srcName(proto, d.current_source))}</span>${res ? `<span class="chip res mono">${esc(res)}</span>` : ""}${warn || sub ? `<span class="warnico" title="${esc(subTip)}">${icon("warn")}</span>` : ""}`
                 }</div>
               </div>
               <div class="rtools">${this._htmlDestTools(d, true)}</div>
@@ -1150,13 +1384,30 @@ class AvMatrixCard extends HTMLElement {
           </th>
           ${cells}
         </tr>`;
-      })
-      .join("");
+    };
+    const rows = grouped
+      ? this._groups(dests)
+          .map(([g, items]) => {
+            const closed = this._isClosed(`d:${g}`, items.length);
+            const routed = items.filter((d) => d.current_source).length;
+            return `<tr class="rgr ${closed ? "closed" : ""}" data-k="rg-${esc(g)}"><th scope="rowgroup" class="rgh" colspan="${ncols}"><div class="rghw">${this._htmlGroupToggle(
+              "d",
+              g,
+              items,
+              `<span class="gsub">${routed}/${items.length}</span>`
+            )}</div></th></tr>${closed ? "" : items.map(row).join("")}`;
+          })
+          .join("")
+      : dests.map(row).join("");
     return `
-      <section class="mxwrap" data-k="matrix">
+      <section class="mxwrap ${grouped ? "grouped" : ""}" data-k="matrix">
         <div class="mxscroll">
-          <table class="mx" role="grid" aria-label="${esc(proto.title)} matrix" aria-rowcount="${dests.length + 1}" aria-colcount="${cols.length + 1}">
-            <thead><tr role="row"><th class="corner"><div class="cornerw"><span class="cs">${esc(this._t("source_label"))} →</span><span class="cd">${esc(this._t("dest_label"))} ↓</span></div></th>${head}</tr></thead>
+          <table class="mx" role="grid" aria-label="${esc(proto.title)} matrix" aria-rowcount="${r + 1}" aria-colcount="${cols.length + 1}">
+            <thead>${
+              grouped
+                ? `<tr role="row" class="ghr"><th class="corner" rowspan="2">${corner}</th>${heads[0]}${groupHead}</tr><tr role="row" class="chr">${heads.slice(1).join("")}</tr>`
+                : `<tr role="row"><th class="corner">${corner}</th>${heads.join("")}</tr>`
+            }</thead>
             <tbody>${rows}</tbody>
           </table>
         </div>
@@ -1256,6 +1507,8 @@ class AvMatrixCard extends HTMLElement {
       switch (act) {
         case "proto":
           this._protocol = el.dataset.v;
+          this._srcGroup = "";
+          this._dstGroup = "";
           this._sel = [];
           this._preset.clear();
           this._tags.clear();
@@ -1340,8 +1593,21 @@ class AvMatrixCard extends HTMLElement {
           this._historyOpen = !this._historyOpen;
           this._render();
           break;
+        case "grp":
+          this._toggleGroup(el.dataset.v, parseInt(el.dataset.n || "0", 10));
+          this._render();
+          break;
         default:
           break;
+      }
+    });
+
+    sr.addEventListener("change", (e) => {
+      const act = e.target.dataset && e.target.dataset.act;
+      if (act === "srcgrp" || act === "dstgrp") {
+        if (act === "srcgrp") this._srcGroup = e.target.value;
+        else this._dstGroup = e.target.value;
+        this._render();
       }
     });
 
@@ -1937,6 +2203,80 @@ dialog::backdrop { background: rgba(0,0,0,.45); -webkit-backdrop-filter: blur(3p
 
 /* animations */
 @keyframes amx-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+/* grouped protocols (Dante®): device filters, collapsible device groups */
+.led.error { background: var(--amx-err); box-shadow: 0 0 0 2px color-mix(in srgb, var(--amx-err) 25%, transparent), 0 0 8px color-mix(in srgb, var(--amx-err) 55%, transparent); }
+.dest.st-error::before { background: var(--amx-err); }
+.chip.warnchip.errchip { color: var(--amx-err); }
+.gsels { display: flex; gap: 6px; flex-wrap: wrap; }
+.gsel { position: relative; display: inline-flex; align-items: center; gap: 6px; height: var(--amx-hit); padding: 0 8px 0 10px;
+  border-radius: 10px; background: var(--amx-sunk); border: 1px solid var(--amx-line); color: var(--amx-fg2); font-size: 12px; }
+.gsel.on { color: var(--amx-fg); border-color: color-mix(in srgb, var(--amx-accent) 55%, transparent);
+  background: color-mix(in srgb, var(--amx-accent) 12%, transparent); }
+.gsel .ic { width: 15px; height: 15px; flex: none; }
+.gsel .gl { white-space: nowrap; }
+.gsel select { appearance: none; -webkit-appearance: none; border: 0; outline: 0; background: none; color: var(--amx-fg); font: inherit;
+  font-size: 13px; font-weight: 600; padding: 0 18px 0 2px; margin-right: -16px; max-width: 190px; cursor: pointer; text-overflow: ellipsis; }
+.gsel select option { color: initial; }
+.gsel .chev { width: 13px; height: 13px; pointer-events: none; }
+.gsel:focus-within { border-color: color-mix(in srgb, var(--amx-accent) 60%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--amx-accent) 18%, transparent); }
+.narrow .gsels { width: 100%; }
+.narrow .gsel { flex: 1 1 0; min-width: 0; }
+.narrow .gsel .ic:first-child { display: none; }
+.narrow .gsel select { max-width: none; flex: 1; min-width: 0; }
+.gtog { display: inline-flex; align-items: center; gap: 8px; border: 0; background: none; color: var(--amx-fg); cursor: pointer;
+  font: inherit; padding: 4px 8px 4px 4px; border-radius: 8px; min-height: 30px; max-width: 100%; text-align: left; }
+.gtog:hover { background: color-mix(in srgb, var(--amx-fg) 7%, transparent); }
+.gtog:focus-visible { outline: 2px solid var(--amx-accent); outline-offset: 1px; }
+.gtog .chev { width: 15px; height: 15px; flex: none; transition: transform .18s; color: var(--amx-fg2); }
+.gtog.closed .chev { transform: rotate(-90deg); }
+.gtog .led { width: 7px; height: 7px; }
+.gtog .gname { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; }
+.gtog .gcount, .gtog .gsub { font-family: var(--amx-mono); font-size: 10.5px; color: var(--amx-fg2); white-space: nowrap; }
+.gtog .gsub { padding: 2px 6px; border-radius: 99px; background: var(--amx-sunk); }
+.gtog .garm { font-size: 10px; font-weight: 700; color: var(--amx-preset); }
+.gtog .gpgm { width: 8px; height: 8px; border-radius: 50%; background: var(--amx-tally); box-shadow: 0 0 6px var(--amx-tally); }
+.dests.grouped > .ghead, .srcs.grouped > .ghead { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px;
+  margin-top: 2px; border-bottom: 1px solid var(--amx-line); padding-bottom: 2px; }
+.dests.grouped > .ghead:first-child, .srcs.grouped > .src.black + .ghead { margin-top: 0; }
+.srcs.grouped > .src.black { grid-column: 1 / -1; max-width: 220px; }
+.mx thead tr.ghr > th { height: 38px; }
+.mx thead tr.ghr > th.cgh { vertical-align: middle; text-align: left; padding: 0 2px; border-bottom: 1px solid var(--amx-line);
+  border-left: 1px solid var(--amx-line2); }
+.mx thead tr.ghr > th.cgh .gtog { position: sticky; left: 270px; }
+.narrow .mx thead tr.ghr > th.cgh .gtog { left: 190px; }
+.mx thead tr.chr > th { top: 39px; }
+.mxwrap.grouped .chw { height: 112px; }
+.mxwrap.grouped .chl { max-height: 96px; }
+.mxwrap.grouped .cornerw { height: 151px; }
+.mx th.ch.gs, .mx td.gs { border-left: 1px solid var(--amx-line2) !important; }
+.mx th.ch.sum .chn { font-family: var(--amx-mono); font-size: 10.5px; font-weight: 500; color: var(--amx-fg2); }
+.mx th.ch.sum, .mx td.gs:has(> .xp.sum) { background: repeating-linear-gradient(135deg, transparent 0 6px, color-mix(in srgb, var(--amx-fg) 3%, transparent) 6px 12px); }
+.xp.sum { width: auto; min-width: var(--amx-hit); padding: 0 8px; gap: 6px; display: inline-flex; align-items: center; }
+.xp.sum i { border-style: dotted; }
+.xp.sum .sumn { font-size: 11px; font-weight: 600; color: var(--amx-fg); white-space: nowrap; max-width: 90px; overflow: hidden; text-overflow: ellipsis; }
+.xp.sum.pgm i { width: 14px; height: 14px; }
+.mx tbody tr.rgr > th { text-align: left; padding: 0; background: var(--amx-sunk); border-top: 1px solid var(--amx-line2);
+  border-bottom: 1px solid var(--amx-line); }
+.mx tbody tr.rgr + tr > * { border-top: 0; }
+.rghw { position: sticky; left: 0; display: inline-flex; align-items: center; padding: 3px 6px; }
+.dests.grouped { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }
+.narrow .dests.grouped { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.dests.grouped .dest { flex-direction: row; align-items: stretch; }
+.dests.grouped .dest-main { min-height: 0; padding: 8px 6px 8px 10px; gap: 1px; flex: 1; min-width: 0;
+  border-radius: var(--amx-r) 0 0 var(--amx-r); }
+.dests.grouped .dname { font-size: 11px; }
+.dests.grouped .dsrc { font-size: 15px; margin-top: 2px; }
+.dests.grouped .dsub { font-size: 10px; min-height: 12px; }
+.dests.grouped .dmeta { padding-top: 4px; }
+.dests.grouped .dmeta:not(:has(.warnchip, .lockchip)) { display: none; }
+.dests.grouped .dmeta .chip.res { display: none; }
+.dests.grouped .armline { margin-top: 4px; padding: 3px 6px; font-size: 12px; }
+.dests.grouped .dtools { flex-direction: column; justify-content: flex-start; padding: 4px 3px; border-top: 0;
+  border-left: 1px solid var(--amx-line); gap: 0; }
+.dests.grouped .dtools .ibtn.sm { width: 26px; height: 26px; }
+@media (pointer: coarse) { .dests.grouped .dtools .ibtn.sm { width: 34px; height: 34px; } }
 @keyframes amx-blink { 0% { opacity: 1; } 50% { opacity: .45; } 100% { opacity: 1; } }
 @keyframes amx-pend { from { box-shadow: 0 0 0 0 color-mix(in srgb, var(--amx-tally) 0%, transparent); }
   to { box-shadow: 0 0 0 3px color-mix(in srgb, var(--amx-tally) 55%, transparent), 0 0 18px color-mix(in srgb, var(--amx-tally) 45%, transparent); } }

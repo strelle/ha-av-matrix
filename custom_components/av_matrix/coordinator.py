@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from datetime import timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
@@ -34,6 +34,12 @@ class AvMatrixRuntime:
 
     coordinator: AvMatrixCoordinator
     destinations: list[Destination] = field(default_factory=list)
+    #: network entries (Dante): sub-devices that already have a device + entities
+    devices: set[str] = field(default_factory=set)
+    #: network entries: discovery browser (stopped on unload)
+    browser: Any = None
+    #: network entries: device registry id of the network device (parent of the sub-devices)
+    hub_device_id: str | None = None
 
 
 type AvMatrixConfigEntry = ConfigEntry[AvMatrixRuntime]

@@ -23,7 +23,13 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: AvMatri
     redact = ALWAYS_REDACT | driver_cls.secret_keys()
     data = coordinator.data
     registry = hub.registry(driver_cls.PROTOCOL)
+    network = (
+        {"dante_devices": [d.as_dict() for d in coordinator.driver.devices.values()]}  # type: ignore[attr-defined]
+        if coordinator.driver.NETWORK
+        else {}
+    )
     return {
+        **network,
         "entry": {"data": async_redact_data(dict(entry.data), redact), "options": dict(entry.options)},
         "device": async_redact_data(asdict(coordinator.info), redact),
         "last_update_success": coordinator.last_update_success,

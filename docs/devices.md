@@ -85,3 +85,38 @@ Everything marked *untested* comes from documentation, other projects or older f
   [mtcdtech/ha-birddog-ndi](https://github.com/mtcdtech/ha-birddog-ndi).
 - **Multi-channel devices:** `ChNum` (1–4) in the `/connectTo` body and query — *untested*. Set "Number of decoder
   channels" in the config flow to get one destination per channel.
+
+## Dante® (any device with the Dante control protocol)
+
+| | |
+|---|---|
+| Verified (read-only) | October 2026, studio network: **Audinate AVIO AES3** adapter and an **HDCVT ULTIMOX2**-based Dante interface, both ARC `2.8.9`, router `4.3.0`, 2×2 channels, 48 kHz: discovery, names, channel counts, TX/RX names, sample rate, subscriptions and subscription status |
+| Not verified on hardware | **switching** (setting / clearing subscriptions) - checked against netaudio's reference packets and the test simulator only |
+| Control | ARC, UDP 4440 (port from mDNS), no login |
+| Integration | one config entry for the whole network (*Dante® network*) |
+
+- **Discovery:** each device announces `_netaudio-arc._udp` (control, port 4440), `_netaudio-cmc._udp` (port 8800,
+  TXT `id=` = hardware id), `_netaudio-dbc._udp` (4455). The ARC TXT record has `arcp_vers` (e.g. `2.8.9`), `mf`,
+  `model` (some OEM devices send a cryptic `_0000000020240403` - `router_info` is used instead, e.g. `ULTIMOX2`),
+  `router_vers`. `_netaudio-chan._udp` (per channel) was not announced by these devices and is not needed.
+- **Requests** (all with protocol id `0x27FF`): header `protocol, length, sequence, opcode` + body; answers carry the
+  same sequence number (used to match answers) and a result code after the opcode (`0x0001` ok, `0x8112` ok + more
+  pages). Strings are zero-terminated and referenced by absolute offsets into the packet.
+  - `0x1002` device name, `0x1000` channel counts (TX at offset 12, RX at 14),
+  - `0x2000` TX channels (32 per page: number, flags, format pointer → sample rate, name pointer),
+    `0x2010` TX labels (only channels with a label),
+  - `0x3000` RX channels (16 per page, 20-byte records: number, flags, format, TX channel, TX device, RX name,
+    receiver status, subscription status).
+- **Answers may come with a different protocol id** than requested (a `0x2809` request was answered with `0x2801`),
+  so the integration matches by sequence number and opcode only.
+- **Writes:** devices with ARC 2.8.9 or newer (`arcp_vers`) need the paged subscription command `0x3410` with
+  protocol id `0x2809`/`0x280C`/`0x280F`; older ones the classic `0x3010` (add) / `0x3014` (remove). Static hosts
+  without mDNS data: classic first, paged if the read-back shows no change.
+- **Subscription status:** code `1` with receiver status `0x0101` = subscribed, with `0` = *unresolved* (the
+  transmitting device is not on the network) - both studio devices showed this for their stored subscriptions to
+  devices that were switched off. `9` dynamic (unicast), `10` static (multicast), `4` own device, `2`/`8` resolving /
+  setting up, `5` source channel does not exist, `0x10`+ errors (format, latency, clock domain, flows …).
+- A subscription stays stored on the receiver when the transmitter disappears and resolves again when it returns -
+  the integration keeps such a source as the current option (marked not live).
+- Renaming a device in Dante Controller changes its identity (also for Dante itself: subscriptions use names) -
+  the integration creates a new device; the old one can be deleted in Home Assistant once it is offline.

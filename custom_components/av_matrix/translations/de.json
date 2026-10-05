@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Gerät hinzufügen",
-        "description": "Protokoll und Gerätetyp wählen. Jedes Gerät (Decoder, Empfänger) wird ein Eintrag; seine Ausgänge werden Ziele der Kreuzschiene.",
+        "description": "Protokoll und Gerätetyp wählen. Jedes NDI®-Gerät (Decoder) wird ein Eintrag; seine Ausgänge werden Ziele der Kreuzschiene. „Dante®-Netzwerk“ übernimmt alle Dante-Geräte im Netz auf einmal.",
         "data": {
           "driver": "Gerätetyp"
         }
@@ -53,6 +53,16 @@
           "password": "Magewell-Werkseinstellung: Admin (bitte ändern!). BirdDog: nur nötig, wenn die API eine Anmeldung verlangt.",
           "channels": "Nur für mehrkanalige BirdDog-Geräte (1-4)."
         }
+      },
+      "network": {
+        "title": "Dante®-Netzwerk",
+        "description": "Alle Dante®-Geräte im Netz werden automatisch per mDNS gefunden (ohne Zugangsdaten) und erscheinen als Geräte: TX-Kanäle werden Quellen, RX-Kanäle Ziele. Inoffizielles Protokoll – nicht mit Audinate verbunden. Nicht unterstützt: Dante Domain Manager, reine AES67-Geräte, Multicast-Flows.",
+        "data": {
+          "static_hosts": "Zusätzliche Geräteadressen (optional)"
+        },
+        "data_description": {
+          "static_hosts": "Nur nötig, wenn mDNS Home Assistant nicht erreicht (anderes VLAN): IP-Adressen von Dante-Geräten, durch Komma getrennt."
+        }
       }
     },
     "error": {
@@ -64,8 +74,10 @@
       "already_configured": "Dieses Gerät ist bereits eingerichtet.",
       "reauth_successful": "Neu-Anmeldung erfolgreich.",
       "reconfigure_successful": "Neukonfiguration erfolgreich.",
-      "unique_id_mismatch": "Diese Adresse gehört zu einem anderen Gerät."
-    }
+      "unique_id_mismatch": "Diese Adresse gehört zu einem anderen Gerät.",
+      "network_reconfigure": "Nichts neu zu konfigurieren: Dante-Geräte werden automatisch gefunden. Bitte die Optionen verwenden."
+    },
+    "flow_title": "{name}"
   },
   "options": {
     "step": {
@@ -93,6 +105,29 @@
         "data": {
           "input": "Eingang"
         }
+      },
+      "network": {
+        "title": "Dante®-Netzwerk",
+        "description": "{count} Dante-Geräte bekannt.",
+        "data": {
+          "scan_interval": "Abfrageintervall",
+          "devices": "Angezeigte Geräte",
+          "only_selected": "Entitäten nur für ausgewählte RX-Kanäle anlegen",
+          "static_hosts": "Zusätzliche Geräteadressen"
+        },
+        "data_description": {
+          "scan_interval": "Sekunden zwischen zwei Abfragen der Subscriptions.",
+          "devices": "Nicht angehakte Geräte werden komplett ignoriert (kein Gerät, keine Quellen, keine Ziele).",
+          "only_selected": "Standard: Entitäten für jeden RX-Kanal (Geräte mit mehr als 32 RX-Kanälen starten mit deaktivierten Entitäten). Die Matrix-Karte zeigt immer alle Kanäle.",
+          "static_hosts": "IP-Adressen von Dante-Geräten, die mDNS nicht erreicht, durch Komma getrennt."
+        }
+      },
+      "rx_channels": {
+        "title": "RX-Kanäle mit Entitäten",
+        "description": "RX-Kanäle wählen, die eine Quellen-Auswahl und einen Subscription-Sensor bekommen.",
+        "data": {
+          "rx_selected": "RX-Kanäle"
+        }
       }
     }
   },
@@ -113,7 +148,8 @@
           "connecting": "Verbinde",
           "no_source": "Keine Quelle",
           "source_lost": "Quelle sendet nicht",
-          "offline": "Offline"
+          "offline": "Offline",
+          "error": "Fehler"
         }
       },
       "connection_channel": {
@@ -123,7 +159,8 @@
           "connecting": "Verbinde",
           "no_source": "Keine Quelle",
           "source_lost": "Quelle sendet nicht",
-          "offline": "Offline"
+          "offline": "Offline",
+          "error": "Fehler"
         }
       },
       "resolution": {
@@ -131,6 +168,44 @@
       },
       "resolution_channel": {
         "name": "{channel} Auflösung"
+      },
+      "subscription": {
+        "name": "Subscription",
+        "state": {
+          "none": "Nicht abonniert",
+          "subscribed": "Abonniert",
+          "self": "Abonniert (eigenes Gerät)",
+          "in_progress": "Verbinde",
+          "unresolved": "Nicht aufgelöst",
+          "idle": "Inaktiv",
+          "warning": "Warnung",
+          "error": "Fehler"
+        }
+      },
+      "subscription_channel": {
+        "name": "{channel} Subscription",
+        "state": {
+          "none": "Nicht abonniert",
+          "subscribed": "Abonniert",
+          "self": "Abonniert (eigenes Gerät)",
+          "in_progress": "Verbinde",
+          "unresolved": "Nicht aufgelöst",
+          "idle": "Inaktiv",
+          "warning": "Warnung",
+          "error": "Fehler"
+        }
+      },
+      "tx_channels": {
+        "name": "TX-Kanäle"
+      },
+      "rx_channels": {
+        "name": "RX-Kanäle"
+      },
+      "sample_rate": {
+        "name": "Abtastrate"
+      },
+      "devices_online": {
+        "name": "Dante-Geräte online"
       }
     },
     "binary_sensor": {
@@ -139,6 +214,9 @@
       },
       "connected_channel": {
         "name": "{channel} verbunden"
+      },
+      "online": {
+        "name": "Online"
       }
     },
     "button": {
@@ -189,6 +267,10 @@
         "source": {
           "name": "Quelle",
           "description": "Quellname (NDI®: der volle NDI-Name) oder sein Label. „None“ schaltet das Ziel aus."
+        },
+        "destination": {
+          "name": "Ziel-IDs",
+          "description": "Ziel-IDs aus dem WebSocket-Snapshot (Alternative zum Entitäts-Ziel, z. B. für Dante-RX-Kanäle mit deaktivierten Entitäten)."
         }
       }
     },
@@ -204,19 +286,43 @@
     },
     "lock": {
       "name": "Sperren",
-      "description": "Ziele gegen Umschalten sperren."
+      "description": "Ziele gegen Umschalten sperren.",
+      "fields": {
+        "destination": {
+          "name": "Ziel-IDs",
+          "description": "Ziel-IDs aus dem WebSocket-Snapshot (Alternative zum Entitäts-Ziel, z. B. für Dante-RX-Kanäle mit deaktivierten Entitäten)."
+        }
+      }
     },
     "unlock": {
       "name": "Entsperren",
-      "description": "Umschalten wieder erlauben."
+      "description": "Umschalten wieder erlauben.",
+      "fields": {
+        "destination": {
+          "name": "Ziel-IDs",
+          "description": "Ziel-IDs aus dem WebSocket-Snapshot (Alternative zum Entitäts-Ziel, z. B. für Dante-RX-Kanäle mit deaktivierten Entitäten)."
+        }
+      }
     },
     "undo": {
       "name": "Rückgängig",
-      "description": "Die vorherige Quelle der Ziele wiederherstellen."
+      "description": "Die vorherige Quelle der Ziele wiederherstellen.",
+      "fields": {
+        "destination": {
+          "name": "Ziel-IDs",
+          "description": "Ziel-IDs aus dem WebSocket-Snapshot (Alternative zum Entitäts-Ziel, z. B. für Dante-RX-Kanäle mit deaktivierten Entitäten)."
+        }
+      }
     },
     "refresh_sources": {
       "name": "Quellen aktualisieren",
-      "description": "Die Geräte ihre Quellenlisten neu aufbauen lassen."
+      "description": "Die Geräte ihre Quellenlisten neu aufbauen lassen.",
+      "fields": {
+        "destination": {
+          "name": "Ziel-IDs",
+          "description": "Ziel-IDs aus dem WebSocket-Snapshot (Alternative zum Entitäts-Ziel, z. B. für Dante-RX-Kanäle mit deaktivierten Entitäten)."
+        }
+      }
     }
   }
 }

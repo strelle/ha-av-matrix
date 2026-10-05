@@ -21,6 +21,7 @@ import re
 import time
 from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass, field
+from typing import Any
 
 from ..models import SourceSighting
 
@@ -28,6 +29,11 @@ ProbeFunc = Callable[[str], Awaitable[bool]]
 
 HOLD_TIME = 120.0
 PROBE_TTL = 8.0
+
+
+def natural_key(text: str) -> list[tuple[int, Any]]:
+    """Sort "CH2" before "CH10"."""
+    return [(0, int(p)) if p.isdigit() else (1, p.casefold()) for p in re.split(r"(\d+)", text) if p]
 
 
 @dataclass(slots=True)
@@ -52,6 +58,8 @@ class SourceRegistry:
     """Source registry of one protocol."""
 
     protocol: str = "generic"
+    #: Sources belong to devices (Dante): the frontend groups them, lists are ordered by device.
+    grouped: bool = False
     #: Device-specific placeholder names that must be mapped to a real name by address.
     placeholder_re: re.Pattern[str] | None = None
 
@@ -98,12 +106,20 @@ class SourceRegistry:
         self._records = {k: r for k, r in self._records.items() if r.live}
 
     # --------------------------------------------------------------- queries
+    def describe(self, source_id: str) -> dict[str, str]:
+        """Extra fields for the frontend (Dante: ``group`` = device, ``channel``). Default: none."""
+        return {}
+
     def is_placeholder(self, name: str) -> bool:
         return bool(self.placeholder_re and self.placeholder_re.match(name))
 
+    def sort_key(self, source_id: str) -> Any:
+        """Order of the source lists (select options). Default: by name."""
+        return source_id.casefold()
+
     @property
     def sources(self) -> list[SourceRecord]:
-        return sorted(self._records.values(), key=lambda r: r.id.casefold())
+        return sorted(self._records.values(), key=lambda r: self.sort_key(r.id))
 
     def get(self, source_id: str) -> SourceRecord | None:
         return self._records.get(source_id)

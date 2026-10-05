@@ -1,4 +1,4 @@
-"""Protocols (NDI®, later Dante …). Each protocol has its own source registry.
+"""Protocols (NDI®, Dante® …). Each protocol has its own source registry.
 
 Sources of one protocol can only be routed to destinations of the same protocol.
 """
@@ -8,6 +8,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .base import SourceRecord, SourceRegistry, tcp_probe
+from .dante import DanteSourceRegistry
 from .ndi import NdiSourceRegistry
 
 
@@ -22,7 +23,7 @@ class Protocol:
 
 PROTOCOLS: dict[str, Protocol] = {
     "ndi": Protocol("ndi", "NDI®", NdiSourceRegistry),
-    # "dante": Protocol("dante", "Dante", DanteSourceRegistry),  - see docs/adding-a-driver.md
+    "dante": Protocol("dante", "Dante®", DanteSourceRegistry),
 }
 
 __all__ = ["PROTOCOLS", "Protocol", "SourceRecord", "SourceRegistry", "tcp_probe"]

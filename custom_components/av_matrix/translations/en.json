@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Add a device",
-        "description": "Choose the protocol and device type. Each device (decoder, receiver) becomes one entry; its outputs become destinations of the matrix.",
+        "description": "Choose the protocol and device type. Each NDI® device (decoder) becomes one entry; its outputs become destinations of the matrix. Dante® network adds all Dante devices of the network at once.",
         "data": {
           "driver": "Device type"
         }
@@ -53,6 +53,16 @@
           "password": "Magewell factory default: Admin (change it!). BirdDog: only needed if the API requires a login.",
           "channels": "Multi-channel BirdDog devices only (1-4)."
         }
+      },
+      "network": {
+        "title": "Dante® network",
+        "description": "All Dante® devices on the network are found automatically via mDNS (no login needed) and appear as devices: TX channels become sources, RX channels destinations. Unofficial protocol - not affiliated with Audinate. Dante Domain Manager, AES67-only devices and multicast flows are not supported.",
+        "data": {
+          "static_hosts": "Additional device addresses (optional)"
+        },
+        "data_description": {
+          "static_hosts": "Only needed if mDNS does not reach Home Assistant (other VLAN): IP addresses of Dante devices, comma separated."
+        }
       }
     },
     "error": {
@@ -64,8 +74,10 @@
       "already_configured": "This device is already configured.",
       "reauth_successful": "Re-authentication was successful.",
       "reconfigure_successful": "Reconfiguration was successful.",
-      "unique_id_mismatch": "This address belongs to a different device."
-    }
+      "unique_id_mismatch": "This address belongs to a different device.",
+      "network_reconfigure": "Nothing to reconfigure: Dante devices are found automatically. Use the options instead."
+    },
+    "flow_title": "{name}"
   },
   "options": {
     "step": {
@@ -93,6 +105,29 @@
         "data": {
           "input": "Input"
         }
+      },
+      "network": {
+        "title": "Dante® network",
+        "description": "{count} Dante devices known.",
+        "data": {
+          "scan_interval": "Polling interval",
+          "devices": "Devices shown",
+          "only_selected": "Create entities only for selected RX channels",
+          "static_hosts": "Additional device addresses"
+        },
+        "data_description": {
+          "scan_interval": "Seconds between two polls of the subscriptions.",
+          "devices": "Unticked devices are ignored completely (no device, no sources, no destinations).",
+          "only_selected": "Default: entities for every RX channel (devices with more than 32 RX channels start with disabled entities). The matrix card always shows all channels.",
+          "static_hosts": "IP addresses of Dante devices mDNS does not reach, comma separated."
+        }
+      },
+      "rx_channels": {
+        "title": "RX channels with entities",
+        "description": "Pick the RX channels that get a source selector and a subscription sensor.",
+        "data": {
+          "rx_selected": "RX channels"
+        }
       }
     }
   },
@@ -113,7 +148,8 @@
           "connecting": "Connecting",
           "no_source": "No source",
           "source_lost": "Source not sending",
-          "offline": "Offline"
+          "offline": "Offline",
+          "error": "Error"
         }
       },
       "connection_channel": {
@@ -123,7 +159,8 @@
           "connecting": "Connecting",
           "no_source": "No source",
           "source_lost": "Source not sending",
-          "offline": "Offline"
+          "offline": "Offline",
+          "error": "Error"
         }
       },
       "resolution": {
@@ -131,6 +168,44 @@
       },
       "resolution_channel": {
         "name": "{channel} resolution"
+      },
+      "subscription": {
+        "name": "Subscription",
+        "state": {
+          "none": "Not subscribed",
+          "subscribed": "Subscribed",
+          "self": "Subscribed (own device)",
+          "in_progress": "Connecting",
+          "unresolved": "Unresolved",
+          "idle": "Idle",
+          "warning": "Warning",
+          "error": "Error"
+        }
+      },
+      "subscription_channel": {
+        "name": "{channel} subscription",
+        "state": {
+          "none": "Not subscribed",
+          "subscribed": "Subscribed",
+          "self": "Subscribed (own device)",
+          "in_progress": "Connecting",
+          "unresolved": "Unresolved",
+          "idle": "Idle",
+          "warning": "Warning",
+          "error": "Error"
+        }
+      },
+      "tx_channels": {
+        "name": "TX channels"
+      },
+      "rx_channels": {
+        "name": "RX channels"
+      },
+      "sample_rate": {
+        "name": "Sample rate"
+      },
+      "devices_online": {
+        "name": "Dante devices online"
       }
     },
     "binary_sensor": {
@@ -139,6 +214,9 @@
       },
       "connected_channel": {
         "name": "{channel} connected"
+      },
+      "online": {
+        "name": "Online"
       }
     },
     "button": {
@@ -189,6 +267,10 @@
         "source": {
           "name": "Source",
           "description": "Source name (NDI®: the full NDI name) or its label. \"None\" switches the destination off."
+        },
+        "destination": {
+          "name": "Destination ids",
+          "description": "Destination ids from the WebSocket snapshot (alternative to the entity target, e.g. for Dante RX channels whose entities are disabled)."
         }
       }
     },
@@ -204,19 +286,43 @@
     },
     "lock": {
       "name": "Lock",
-      "description": "Protect destinations against switching."
+      "description": "Protect destinations against switching.",
+      "fields": {
+        "destination": {
+          "name": "Destination ids",
+          "description": "Destination ids from the WebSocket snapshot (alternative to the entity target, e.g. for Dante RX channels whose entities are disabled)."
+        }
+      }
     },
     "unlock": {
       "name": "Unlock",
-      "description": "Allow switching again."
+      "description": "Allow switching again.",
+      "fields": {
+        "destination": {
+          "name": "Destination ids",
+          "description": "Destination ids from the WebSocket snapshot (alternative to the entity target, e.g. for Dante RX channels whose entities are disabled)."
+        }
+      }
     },
     "undo": {
       "name": "Undo",
-      "description": "Restore the previous source of destinations."
+      "description": "Restore the previous source of destinations.",
+      "fields": {
+        "destination": {
+          "name": "Destination ids",
+          "description": "Destination ids from the WebSocket snapshot (alternative to the entity target, e.g. for Dante RX channels whose entities are disabled)."
+        }
+      }
     },
     "refresh_sources": {
       "name": "Refresh sources",
-      "description": "Let the devices rebuild their source lists."
+      "description": "Let the devices rebuild their source lists.",
+      "fields": {
+        "destination": {
+          "name": "Destination ids",
+          "description": "Destination ids from the WebSocket snapshot (alternative to the entity target, e.g. for Dante RX channels whose entities are disabled)."
+        }
+      }
     }
   }
 }

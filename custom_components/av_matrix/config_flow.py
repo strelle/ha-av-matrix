@@ -29,6 +29,7 @@ from homeassistant.helpers.selector import (
     TextSelectorConfig,
     TextSelectorType,
 )
+from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 
 from .const import (
     CONF_DISPLAY_AUTO_ON,
@@ -45,6 +46,7 @@ from .const import (
     REQUEST_TIMEOUT,
 )
 from .drivers import DRIVERS, CannotConnect, Driver, InvalidAuth
+from .drivers.dante import CONF_HIDDEN_DEVICES, CONF_ONLY_SELECTED, CONF_RX_SELECTED, CONF_STATIC_HOSTS
 from .models import ConfigField, DeviceInfo, FieldType
 from .protocols import PROTOCOLS
 
@@ -99,6 +101,18 @@ def clean_input(fields: tuple[ConfigField, ...], user_input: Mapping[str, Any]) 
     return data
 
 
+CONF_SHOWN_DEVICES = "devices"
+
+
+def parse_hosts(text: Any) -> list[str]:
+    """``"192.0.2.10, 192.0.2.11"`` → list (also accepts spaces / new lines)."""
+    if not text:
+        return []
+    if isinstance(text, list):
+        return [str(t).strip() for t in text if str(t).strip()]
+    return [h for h in (p.strip() for p in str(text).replace("\n", ",").replace(" ", ",").split(",")) if h]
+
+
 def unique_id_for(driver_key: str, info: DeviceInfo, host: str) -> str:
     if info.serial:
         return f"{driver_key}-{str(info.serial).strip().lower()}"
@@ -139,10 +153,17 @@ class AvMatrixConfigFlow(ConfigFlow, domain=DOMAIN):
         """Choose protocol + device type."""
         if user_input is not None:
             self._driver_key = user_input[CONF_DRIVER]
+            if DRIVERS[self._driver_key].NETWORK:
+                return await self.async_step_network()
             return await self.async_step_device()
         options = [
-            SelectOptionDict(value=key, label=f"{PROTOCOLS[cls.PROTOCOL].title} · {cls.TITLE}")
-            for key, cls in sorted(DRIVERS.items(), key=lambda kv: (kv[1].PROTOCOL, kv[1].TITLE))
+            SelectOptionDict(
+                value=key,
+                label=f"{PROTOCOLS[cls.PROTOCOL].title} {cls.TITLE}"
+                if cls.NETWORK
+                else f"{PROTOCOLS[cls.PROTOCOL].title} · {cls.TITLE}",
+            )
+            for key, cls in sorted(DRIVERS.items(), key=lambda kv: (kv[1].PROTOCOL, not kv[1].NETWORK, kv[1].TITLE))
         ]
         return self.async_show_form(
             step_id="user",
@@ -175,6 +196,32 @@ class AvMatrixConfigFlow(ConfigFlow, domain=DOMAIN):
             description_placeholders={"device": driver_cls.TITLE},
         )
 
+    async def async_step_network(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Network drivers (Dante): one entry for the whole network, devices are found automatically."""
+        assert self._driver_key is not None
+        driver_cls = DRIVERS[self._driver_key]
+        await self.async_set_unique_id(f"{driver_cls.KEY}-network")
+        self._abort_if_unique_id_configured()
+        if user_input is not None:
+            hosts = parse_hosts(user_input.get(CONF_STATIC_HOSTS))
+            return self.async_create_entry(
+                title=f"{PROTOCOLS[driver_cls.PROTOCOL].title.rstrip('®')} network",
+                data={CONF_DRIVER: driver_cls.KEY},
+                options={CONF_STATIC_HOSTS: hosts} if hosts else {},
+            )
+        return self.async_show_form(
+            step_id="network",
+            data_schema=vol.Schema({vol.Optional(CONF_STATIC_HOSTS): TextSelector()}),
+        )
+
+    async def async_step_zeroconf(self, discovery_info: ZeroconfServiceInfo) -> ConfigFlowResult:
+        """A Dante device announced itself: offer the Dante network (once)."""
+        self._driver_key = "dante"
+        await self.async_set_unique_id("dante-network")
+        self._abort_if_unique_id_configured()
+        self.context["title_placeholders"] = {"name": "Dante network"}
+        return await self.async_step_network()
+
     async def async_step_reauth(self, entry_data: Mapping[str, Any]) -> ConfigFlowResult:
         return await self.async_step_reauth_confirm()
 
@@ -198,6 +245,8 @@ class AvMatrixConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_reconfigure(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         entry = self._get_reconfigure_entry()
         driver_cls = DRIVERS[entry.data[CONF_DRIVER]]
+        if driver_cls.NETWORK:
+            return self.async_abort(reason="network_reconfigure")
         fields = tuple(f for f in driver_cls.CONFIG_FIELDS if f.key != "name")
         errors: dict[str, str] = {}
         if user_input is not None:
@@ -224,6 +273,8 @@ class AvMatrixOptionsFlow(OptionsFlow):
         self._current: tuple[str, str] | None = None
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        if DRIVERS[self.config_entry.data[CONF_DRIVER]].NETWORK:
+            return await self.async_step_network(user_input)
         if user_input is not None:
             self._options = {
                 **self.config_entry.options,
@@ -249,6 +300,82 @@ class AvMatrixOptionsFlow(OptionsFlow):
                             mode=NumberSelectorMode.BOX,
                             unit_of_measurement="s",
                         )
+                    )
+                }
+            ),
+        )
+
+    def _network_driver(self) -> Any:
+        runtime = getattr(self.config_entry, "runtime_data", None)
+        return runtime.coordinator.driver if runtime is not None else None
+
+    async def async_step_network(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Dante: polling, static hosts, hidden devices, which RX channels get entities."""
+        opts = self.config_entry.options
+        driver = self._network_driver()
+        known = {d.name for d in driver.devices.values()} if driver is not None else set()
+        devices = sorted(known | set(opts.get(CONF_HIDDEN_DEVICES, [])), key=str.casefold)
+        if user_input is not None:
+            self._options = {
+                **opts,
+                CONF_SCAN_INTERVAL: int(user_input[CONF_SCAN_INTERVAL]),
+                CONF_STATIC_HOSTS: parse_hosts(user_input.get(CONF_STATIC_HOSTS)),
+                CONF_HIDDEN_DEVICES: [d for d in devices if d not in user_input.get(CONF_SHOWN_DEVICES, devices)],
+                CONF_ONLY_SELECTED: bool(user_input.get(CONF_ONLY_SELECTED, False)),
+            }
+            if self._options[CONF_ONLY_SELECTED]:
+                return await self.async_step_rx_channels()
+            return self.async_create_entry(data=self._options)
+        hidden = set(opts.get(CONF_HIDDEN_DEVICES, []))
+        schema: dict[Any, Any] = {
+            vol.Required(
+                CONF_SCAN_INTERVAL, default=opts.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
+            ): NumberSelector(
+                NumberSelectorConfig(
+                    min=MIN_SCAN_INTERVAL,
+                    max=MAX_SCAN_INTERVAL,
+                    step=1,
+                    mode=NumberSelectorMode.BOX,
+                    unit_of_measurement="s",
+                )
+            ),
+        }
+        if devices:
+            schema[vol.Optional(CONF_SHOWN_DEVICES, default=[d for d in devices if d not in hidden])] = SelectSelector(
+                SelectSelectorConfig(options=devices, multiple=True, mode=SelectSelectorMode.LIST)
+            )
+        schema[vol.Optional(CONF_ONLY_SELECTED, default=bool(opts.get(CONF_ONLY_SELECTED, False)))] = BooleanSelector()
+        schema[
+            vol.Optional(CONF_STATIC_HOSTS, description={"suggested_value": ", ".join(opts.get(CONF_STATIC_HOSTS, []))})
+        ] = TextSelector()
+        return self.async_show_form(
+            step_id="network",
+            data_schema=vol.Schema(schema),
+            description_placeholders={"count": str(len(devices))},
+        )
+
+    async def async_step_rx_channels(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Dante: RX channels that get entities (the matrix card always shows all)."""
+        if user_input is not None:
+            self._options[CONF_RX_SELECTED] = list(user_input.get(CONF_RX_SELECTED, []))
+            return self.async_create_entry(data=self._options)
+        driver = self._network_driver()
+        hidden = set(self._options.get(CONF_HIDDEN_DEVICES, []))
+        options = []
+        if driver is not None:
+            for dev in sorted(driver.devices.values(), key=lambda d: d.name.casefold()):
+                if dev.name in hidden:
+                    continue
+                for ch in dev.rx:
+                    options.append(SelectOptionDict(value=f"{dev.name}:{ch.number}", label=f"{dev.name} · {ch.name}"))
+        known = {o["value"] for o in options}
+        selected = [v for v in self.config_entry.options.get(CONF_RX_SELECTED, []) if v in known]
+        return self.async_show_form(
+            step_id="rx_channels",
+            data_schema=vol.Schema(
+                {
+                    vol.Optional(CONF_RX_SELECTED, default=selected): SelectSelector(
+                        SelectSelectorConfig(options=options, multiple=True, mode=SelectSelectorMode.DROPDOWN)
                     )
                 }
             ),

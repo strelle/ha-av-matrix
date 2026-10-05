@@ -3,6 +3,27 @@
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- **Dante®** as a second protocol (*experimental*): one *Dante® network* config entry covers all Dante devices,
+  found via mDNS (`_netaudio-arc._udp`, also offered by zeroconf discovery) or static addresses; TX channels are
+  sources (`channel@device`), RX channels destinations, routing sets/clears subscriptions (ARC over UDP, paged
+  `0x3410` writes for ARC 2.8.9+, classic `0x3010/0x3014` otherwise) with read-back. Pure Python, no new
+  requirements. Protocol knowledge from the public-domain netaudio project (see NOTICE).
+- Dante entities: source `select` + *Subscription* sensor (status code and explanation) + route lock per RX channel;
+  TX/RX channel counts, sample rate and online state per device; devices online for the network. Devices and
+  channels that appear later are added at runtime; devices with more than 32 RX channels start with disabled
+  entities; options to hide devices or create entities only for selected RX channels; offline devices can be deleted.
+- Card: protocol tab for Dante; sources and destinations grouped by device, collapsible (collapsed source devices
+  become one summary column), device filters, dense tiles for big devices, subscription warnings; tested with a
+  94 × 106 matrix in the demo (`docs/demo/?proto=dante`).
+- Services accept destination ids (`destination`) besides entities; connection state `error`.
+
+### Changed
+- Snapshot sources/destinations are sorted naturally (`CH2` before `CH10`); new snapshot fields `group`, `channel`,
+  `subscription`.
+
 ## [0.2.1] - 2026-10-04
 
 ### Fixed

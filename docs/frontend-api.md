@@ -40,6 +40,9 @@ const unsub = await hass.connection.subscribeMessage(
           "label": "Slides",                   // user label or null
           "tags": ["presentation"],            // user tags (categories), may be []
           "live": true,                        // sending right now
+          // grouped protocols (Dante®) only:
+          "group": "STAGEBOX-A",               // device of the source (Dante: TX device)
+          "channel": "Kick",                   // channel on that device
           "host": "192.0.2.40",                // informational, may be null
           "address": "192.0.2.40:5961",        // informational, may be null — never an identity
           "last_seen": "2026-10-04T12:00:05+00:00",   // last time it was live (null if never)
@@ -49,18 +52,20 @@ const unsub = await hass.connection.subscribeMessage(
       "destinations": [                        // sorted by name
         {
           "id": "magewell-a123456789_main",    // stable destination id
-          "entity_id": "select.lobby_source",  // use this for service calls
+          "entity_id": "select.lobby_source",  // use this for service calls (null if the entity is disabled → use "id")
           "name": "Lobby",                     // device name, plus " · Channel n" on multi-channel devices
           "channel": null,                     // channel name or null
           "device_name": "Lobby",
+          "group": null,                       // Dante®: the device of the RX channel (sub-device), else null
           "device_id": "4f1c…",                // HA device registry id
           "entry_id": "01J…",
           "driver": "magewell",
           "protocol": "ndi",
           "current_source": "STUDIO-PC (Slides)",   // source id or null (= None/off)
           "current_source_live": true,
-          "status": "connected",               // connected | connecting | no_source | source_lost | offline
-          "resolution": "1920x1080p50",        // or null
+          "status": "connected",               // connected | connecting | no_source | source_lost | error | offline
+          "resolution": "1920x1080p50",        // video format, Dante®: sample rate ("48 kHz"), or null
+          "subscription": null,                // Dante®: {"state", "code", "status", "detail"} of the RX subscription
           "available": true,                   // false while the device is unreachable
           "locked": false,
           "can_undo": true,
@@ -85,9 +90,12 @@ Notes:
 - The current source of a destination is always in `sources`, even if it is not live (`live: false`,
   `last_seen: null` if the registry never saw it).
 - Sources stay in the list for 2 minutes after they stopped sending (`live: false`), then disappear.
+- Dante®: sources are ordered by device and channel; `entity_id` is `null` for RX channels whose entities are
+  disabled (devices with > 32 RX channels by default) - route them with `destination: [id]`.
 - `status` meanings: `connected` = decoding; `connecting` = just routed / device still connecting;
   `no_source` = routed to None; `source_lost` = routed source is not sending (BirdDog shows its logo);
-  `offline` = device unreachable.
+  `offline` = device unreachable; `error` = the device reports an error (Dante: subscription error, see
+  `subscription.status` / `detail`).
 
 ## `av_matrix/label` (admin only)
 
@@ -110,10 +118,10 @@ Labels are also accepted by the services and appear as `select` options.
 
 | Service | Data | Notes |
 |---|---|---|
-| `av_matrix.route` | `entity_id` and/or `device_id` (one or many), `source` | `source`: id, label, or `"None"` (off). Unknown names are passed through (the source may not be discovered yet). |
-| `av_matrix.salvo` | `routes: [{destination: <select entity_id>, source}]` | All destinations validated first (unknown/locked → nothing switches). Different devices switch in parallel. |
-| `av_matrix.lock` / `av_matrix.unlock` | `entity_id` / `device_id` | Persistent. Locked destinations reject route/salvo/undo/select. |
-| `av_matrix.undo` | `entity_id` / `device_id` | Restores the previous source (history of 10 per destination, in memory). |
+| `av_matrix.route` | `entity_id` and/or `device_id` and/or `destination` (destination ids, one or many), `source` | `source`: id, label, or `"None"` (off). Unknown names are passed through (the source may not be discovered yet). |
+| `av_matrix.salvo` | `routes: [{destination: <select entity_id or destination id>, source}]` | All destinations validated first (unknown/locked → nothing switches). Different devices switch in parallel. |
+| `av_matrix.lock` / `av_matrix.unlock` | `entity_id` / `device_id` / `destination` | Persistent. Locked destinations reject route/salvo/undo/select. |
+| `av_matrix.undo` | `entity_id` / `device_id` / `destination` | Restores the previous source (history of 10 per destination, in memory). |
 | `av_matrix.refresh_sources` | `entity_id` / `device_id` | Device rebuilds its source list; cached liveness is dropped. |
 | `media_player.turn_on` / `turn_off` | `entity_id: display.entity_id` | For a power button of a linked display. |
 

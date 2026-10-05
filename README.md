@@ -1,6 +1,6 @@
 # AV Matrix for Home Assistant
 
-**Smart crosspoint router for NDI® decoders – BirdDog, Magewell – extensible for Dante and more.**
+**Smart crosspoint router for NDI® decoders (BirdDog, Magewell) and Dante® audio networks.**
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://hacs.xyz/docs/faq/custom_repositories)
 [![Validate](https://github.com/strelle/ha-av-matrix/actions/workflows/validate.yml/badge.svg)](https://github.com/strelle/ha-av-matrix/actions/workflows/validate.yml)
@@ -8,7 +8,8 @@
 
 Turn the NDI® decoders behind your screens into a video router you control from Home Assistant: a source selector
 per screen, automatic discovery of every NDI source on the network, a matrix card for the dashboard, automations,
-HomeKit, and optional TV power/input control.
+HomeKit, and optional TV power/input control. The same matrix routes **Dante® audio**: every TX channel of every
+Dante device on the network is a source, every RX channel a destination – found automatically, no login needed.
 
 > Deutsch: [siehe unten](#deutsch).
 
@@ -43,7 +44,9 @@ HomeKit, and optional TV power/input control.
   X-Y panel and matrix view, direct or preset + TAKE (salvo), lock, undo, labels, history, keyboard control.
 - **HomeKit-ready:** the source selects work with the HomeKit Bridge (one switch per source).
 - Config flow with connection test, re-authentication, reconfigure, options, diagnostics (passwords redacted).
-- Protocol-independent core: NDI® today, Dante on the roadmap.
+- **Dante® network** (*experimental*): one entry for the whole network, devices found via mDNS; TX channels =
+  sources, RX channels = destinations, routing = subscriptions. See [Dante](#dante).
+- Protocol-independent core: one tab per protocol in the card, sources only route within their protocol.
 
 ## Supported devices
 
@@ -52,6 +55,7 @@ HomeKit, and optional TV power/input control.
 | Magewell Pro Convert NDI to AIO | NDI® | ✅ verified (login, sources, routing, status) | 1.3.24 | other Pro Convert NDI decoders (to HDMI / SDI / 12G) use the same API — *untested* |
 | BirdDog PLAY | NDI® | ⚠️ *untested with this integration* | (1.0.14 in an earlier project) | API on port 8080 |
 | BirdDog Mini / Flex / Studio NDI / multi-channel | NDI® | ⚠️ *untested* | – | multi-channel via `ChNum` is *untested* |
+| Dante® devices (ARC protocol) | Dante® | 🧪 *experimental*: discovery, names, channels, subscriptions read live; **switching untested on hardware** | ARC 2.8.9, router 4.3.0 (Audinate AVIO AES3, HDCVT ULTIMOX2) | one entry for the whole network, see [Dante](#dante) |
 
 Details and API notes: [docs/devices.md](docs/devices.md). Want another device? Open a
 [device request](https://github.com/strelle/ha-av-matrix/issues/new?template=device_request.yml) or
@@ -87,6 +91,44 @@ Add one entry per device:
 
 Sources need no configuration: everything that sends NDI on the network shows up within seconds.
 
+## Dante
+
+![Dante matrix grouped by device: stagebox channels on the mixer inputs, other devices collapsed](docs/screenshots/dante-matrix.png)
+
+*Settings → Devices & services → Add integration → AV Matrix → **Dante® network*** (Home Assistant also offers it
+as soon as a Dante device announces itself). That single entry covers the whole network:
+
+- **Discovery:** every device that announces `_netaudio-arc._udp` via mDNS is added automatically and becomes a
+  Home Assistant device (manufacturer/model from mDNS); new devices appear while running. If mDNS does not reach
+  Home Assistant (other VLAN), add the device IPs as *additional device addresses*.
+- **Sources** = TX channels, named like in Dante Controller: `channel@device`, e.g. `Kick@STAGEBOX-A` (the channel
+  label if one is set). They disappear 2 minutes after their device went offline. Labels/tags work as for NDI.
+- **Destinations** = RX channels. Routing sets the subscription of the RX channel, `None` removes it. The subscription
+  is read back after writing; a refused or not applied subscription fails the route.
+- **Entities per RX channel:** `select` *Source*, `sensor` *Subscription* (`subscribed`, `self`, `in_progress`,
+  `unresolved`, `none`, `idle`, `warning`, `error`; attributes with Dante's status name and explanation, e.g.
+  `UNRESOLVED – the transmitting device is not on the network`), `switch` *Route lock*.
+  **Per device:** *TX channels*, *RX channels*, *Sample rate*, *Online*. **Network:** *Dante devices online*, *Refresh*.
+- **Big devices:** devices with more than 32 RX channels (e.g. a 64×64 console card) get their entities **disabled by
+  default** – enable the ones you need. The card routes all channels anyway (by destination id, see
+  [frontend API](docs/frontend-api.md)). Options: hide devices completely, or create entities only for selected RX
+  channels.
+- **Card:** Dante is a second tab. Sources and destinations are grouped by device; each device can be collapsed
+  (a collapsed source device becomes one summary column that lights up on the rows listening to it) and filtered
+  (*Sources: device*, *Destinations: device*). Big devices start collapsed in panel mode.
+- **Actions** work unchanged: `av_matrix.route` (`source: "Kick@STAGEBOX-A"`), `salvo`, `lock`, `undo` … plus an
+  optional `destination` field with destination ids for RX channels without enabled entities.
+
+**Limits** – this is an **unofficial implementation of a reverse-engineered protocol** (based on the public-domain
+[netaudio](https://github.com/chris-ritsen/network-audio-controller) project), not affiliated with Audinate:
+
+- Networks managed by **Dante Domain Manager** (authenticated control) are not supported.
+- **AES67-only** devices (no Dante control protocol) and **multicast flows** (creating/choosing them) are not
+  supported; subscriptions are made the normal way (the devices pick unicast/multicast themselves).
+- No device settings (sample rate, latency, clocking, gain, channel names) – routing only.
+- Switching has been verified against reference packets and a simulator, **not yet on real hardware** – test on
+  channels that are not in use.
+
 ## Dashboard card
 
 The card is loaded automatically. Add it via *Add card → AV Matrix* (visual editor) or YAML. In a sections
@@ -111,7 +153,7 @@ take_mode: preset      # direct | preset (arm + TAKE)
 | `title` | `AV Matrix` | Card title (empty = none). |
 | `mode` | `panel` | `panel`: destinations on top, sources below (X-Y panel). `matrix`: destinations × sources grid. Narrow cards (< 640 px) start in panel mode. |
 | `take_mode` | `direct` | `direct`: tapping a source switches immediately. `preset`: tapping arms the route (amber), **TAKE** switches all armed routes at once (salvo). |
-| `protocol` | first | Protocol tab to start on (`ndi`, later `dante`). Only sources of the same protocol can be routed. |
+| `protocol` | first | Protocol tab to start on (`ndi`, `dante`). Only sources of the same protocol can be routed. |
 | `show_offline` | `true` | Show sources that stopped sending (greyed, "offline · 6 min"). |
 | `compact` | `false` | Smaller tiles. |
 | `columns` | auto | Number of source columns in panel mode. |
@@ -289,8 +331,8 @@ automation:
 
 ## Roadmap
 
-- **Dante** (Audinate) as a second protocol: devices via `_netaudio-arc._udp` and the ARC protocol
-  (see [docs/adding-a-driver.md](docs/adding-a-driver.md)).
+- Dante®: verify switching on more hardware, optional channel-label display from `_netaudio-chan`, stable device
+  identity across renames.
 - More NDI® decoders: Kiloview, NewTek/Vizrt Connect Spark, Teradek, …
 - **HDMI-CEC via decoder APIs** (if supported by the device) as an alternative to linked displays.
 - NDI port-5960 queries as an extra source of truth, Discovery Server support.
@@ -324,6 +366,13 @@ linked displays, config flow, services, WebSocket API).
   Benutzer, Tastatur (`/` Suche, Enter TAKE, Esc verwerfen, U Undo, L Sperre). Optionen siehe Tabelle oben.
 - **HomeKit:** die Quellen-Auswahl über die HomeKit-Bridge freigeben (ein Schalter pro Quelle; neue Quellen erst nach Neuladen der Bridge).
 - **Updates** kommen über HACS (Update-Entität), danach Home Assistant neu starten.
+- **Dante®** (*experimentell*): Eintrag „Dante®-Netzwerk“ übernimmt alle Dante-Geräte im Netz automatisch (mDNS,
+  ohne Zugangsdaten). TX-Kanäle sind Quellen (`Kanal@Gerät`), RX-Kanäle Ziele; Schalten setzt bzw. löscht die
+  Subscription. Pro RX-Kanal: Quelle (`select`), Subscription-Sensor, Schaltsperre; pro Gerät Kanalzahlen,
+  Abtastrate, Online. Geräte mit mehr als 32 RX-Kanälen: Entitäten standardmäßig deaktiviert, die Karte schaltet
+  trotzdem alle. Karte: eigener Tab, nach Gerät gruppiert, einklappbar, Gerätefilter. Nicht unterstützt: Dante
+  Domain Manager, reine AES67-Geräte, Multicast-Flows. Inoffizielles, nachgebautes Protokoll – das Schalten ist
+  noch nicht auf echter Hardware getestet.
 - **Keine Quellen sichtbar?** mDNS muss HA erreichen (Host-Netzwerk, Multicast zwischen VLANs). Mit NDI Discovery
   Server sieht AV Matrix nur, was die Decoder melden.
 
@@ -332,7 +381,8 @@ oder manuell nach `<config>/custom_components/av_matrix`, danach Neustart.
 
 ---
 
-NDI® is a registered trademark of Vizrt NDI AB. Dante is a trademark of Audinate. This project is not affiliated
-with, endorsed or sponsored by Vizrt, Audinate, BirdDog or Magewell.
+NDI® is a registered trademark of Vizrt NDI AB. Dante® is a registered trademark of Audinate Group Pty Ltd; the Dante
+support uses an unofficial, reverse-engineered protocol. This project is not affiliated with, endorsed or sponsored
+by Vizrt, Audinate, BirdDog or Magewell. Protocol knowledge from netaudio (public domain), see [NOTICE](NOTICE).
 
 License: [MIT](LICENSE) · © 2026 Strelle

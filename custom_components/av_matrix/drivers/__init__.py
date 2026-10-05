@@ -7,12 +7,14 @@ from __future__ import annotations
 
 from .base import CannotConnect, Driver, DriverError, InvalidAuth, RouteFailed
 from .birddog import BirdDogDecoder
+from .dante import DanteNetwork
 from .magewell import MagewellProConvert
 
 DRIVERS: dict[str, type[Driver]] = {
     driver.KEY: driver
     for driver in (
         BirdDogDecoder,
+        DanteNetwork,
         MagewellProConvert,
     )
 }

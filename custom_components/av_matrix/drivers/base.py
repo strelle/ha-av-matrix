@@ -69,6 +69,9 @@ class Driver(ABC):
     TRUSTED_SOURCE_LIST: ClassVar[bool] = True
     #: Seconds a destination needs after a route before it reports "connected".
     SETTLE_TIME: ClassVar[float] = 3.0
+    #: True for drivers that cover a whole network (e.g. Dante): one config entry, many devices that
+    #: appear and disappear at runtime; ``destinations()`` may change after every poll.
+    NETWORK: ClassVar[bool] = False
 
     def __init__(
         self,
@@ -121,6 +124,13 @@ class Driver(ABC):
     async def async_get_status(self, destination: str) -> DestinationStatus:
         """Return live status of ``destination``. Default: unknown."""
         return DestinationStatus()
+
+    def destination_available(self, destination: str) -> bool:
+        """False while the (sub-)device of ``destination`` is unreachable. Network drivers override this."""
+        return True
+
+    def close(self) -> None:
+        """Release resources (sockets) when the config entry is unloaded."""
 
     async def async_refresh_sources(self) -> None:
         """Ask the device to rebuild its source list (no-op if unsupported)."""

@@ -25,9 +25,10 @@ custom_components/av_matrix/
 ├── drivers/           one class per device family  ← add new devices here
 │   ├── base.py        Driver interface + errors
 │   ├── birddog.py
+│   ├── dante.py       network driver: all Dante® devices of the network (NETWORK = True)
 │   └── magewell.py
-├── protocols/         one source registry per protocol (NDI®, later Dante)
-├── discovery.py       mDNS browser feeding the NDI® registry
+├── protocols/         one source registry per protocol (NDI®, Dante® incl. the ARC wire format)
+├── discovery.py       mDNS browsers (NDI® sources, Dante® devices)
 ├── hub.py             integration-wide state: routing, salvo, lock, undo, labels, snapshot
 ├── coordinator.py     polling per device (backoff while offline)
 ├── select.py …        entities
@@ -40,7 +41,7 @@ custom_components/av_matrix/
 
 ## Adding a new decoder / receiver
 
-The short version (details and a Dante sketch in [docs/adding-a-driver.md](docs/adding-a-driver.md)):
+The short version (details and how the Dante® network driver works in [docs/adding-a-driver.md](docs/adding-a-driver.md)):
 
 1. Subclass `Driver` in `drivers/<vendor>.py` and implement
 

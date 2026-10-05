@@ -4,6 +4,13 @@ route:
       integration: av_matrix
       domain: select
   fields:
+    destination:
+      required: false
+      advanced: true
+      example: "dante-network_STAGEBOX:1"
+      selector:
+        text:
+          multiple: true
     source:
       required: true
       example: "STUDIO-PC (Slides)"
@@ -23,21 +30,53 @@ lock:
     entity:
       integration: av_matrix
       domain: select
+  fields:
+    destination:
+      required: false
+      advanced: true
+      example: "dante-network_STAGEBOX:1"
+      selector:
+        text:
+          multiple: true
 
 unlock:
   target:
     entity:
       integration: av_matrix
       domain: select
+  fields:
+    destination:
+      required: false
+      advanced: true
+      example: "dante-network_STAGEBOX:1"
+      selector:
+        text:
+          multiple: true
 
 undo:
   target:
     entity:
       integration: av_matrix
       domain: select
+  fields:
+    destination:
+      required: false
+      advanced: true
+      example: "dante-network_STAGEBOX:1"
+      selector:
+        text:
+          multiple: true
 
 refresh_sources:
   target:
     entity:
       integration: av_matrix
       domain: select
+  fields:
+    destination:
+      required: false
+      advanced: true
+      example: "dante-network_STAGEBOX:1"
+      selector:
+        text:
+          multiple: true
