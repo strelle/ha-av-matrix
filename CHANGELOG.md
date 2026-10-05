@@ -3,7 +3,7 @@
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions follow [SemVer](https://semver.org/).
 
-## [Unreleased]
+## [0.3.0] - 2026-10-05
 
 ### Added
 - **Dante®** as a second protocol (*experimental*): one *Dante® network* config entry covers all Dante devices,
@@ -23,6 +23,10 @@ All notable changes to this project are documented here. The format follows
 ### Changed
 - Snapshot sources/destinations are sorted naturally (`CH2` before `CH10`); new snapshot fields `group`, `channel`,
   `subscription`.
+
+### Commits
+
+- feat: Dante® network as second protocol (experimental) (8423846)
 
 ## [0.2.1] - 2026-10-04
 
