@@ -59,6 +59,12 @@ class AvMatrixSourceSelect(AvMatrixDestinationEntity, SelectEntity):
             "protocol": self.dest.protocol,
             "source_id": current,
             "source_live": registry.is_live(current),
+            # options that only come from the history (e.g. a Dante device that is offline right now)
+            "offline_options": [
+                self.hub.display_name(self.dest.protocol, s)
+                for s in self.hub.recent_sources(self.dest)
+                if not registry.is_live(s)
+            ],
             "source_address": record.address if record else None,
             "locked": self.dest.uid in self.hub.locks,
             "can_undo": bool(self.hub.history.get(self.dest.uid)),

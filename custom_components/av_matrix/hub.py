@@ -25,6 +25,8 @@ from .const import (
     EVENT_ROUTED,
     HISTORY_SIZE,
     NONE_OPTION,
+    PROTOCOL_DANTE,
+    RECENT_SIZE,
     STORAGE_KEY,
     STORAGE_VERSION,
 )
@@ -93,6 +95,8 @@ class AvMatrixHub:
         self.locks: set[str] = set()
         self.labels: dict[str, dict[str, dict[str, Any]]] = {}
         self.history: dict[str, deque[str | None]] = {}
+        #: recently seen/assigned sources per destination (Dante: offline sources stay selectable)
+        self.recent: dict[str, deque[str]] = {}
         self._store: Store[dict[str, Any]] = Store(hass, STORAGE_VERSION, STORAGE_KEY)
         self._listeners: list[Callable[[], None]] = []
         self._unsubs: list[CALLBACK_TYPE] = []
@@ -188,6 +192,7 @@ class AvMatrixHub:
     def remove_destination(self, uid: str) -> None:
         self.destinations.pop(uid, None)
         self._route_locks.pop(uid, None)
+        self.recent.pop(uid, None)
 
     def destination_for_entity(self, entity_id: str) -> Destination | None:
         return next((d for d in self.destinations.values() if d.entity_id == entity_id), None)
@@ -213,14 +218,43 @@ class AvMatrixHub:
         for source_id, lab in self.labels.get(protocol, {}).items():
             if lab.get("label") == text:
                 return source_id
-        return text  # unknown names are allowed (source may not be discovered yet)
+        text = text.strip()
+        if protocol == PROTOCOL_DANTE:
+            # Dante subscribes to unknown/offline devices too (state "unresolved"), but the format must fit
+            channel, sep, device = text.rpartition("@")
+            if not sep or not channel.strip() or not device.strip() or "@" in channel:
+                raise ServiceValidationError(
+                    translation_domain=DOMAIN,
+                    translation_key="invalid_dante_source",
+                    translation_placeholders={"source": text},
+                )
+        return text  # unknown names are allowed (source may not be discovered yet / offline)
+
+    def remember(self, dest: Destination, source: str | None) -> None:
+        """Keep ``source`` selectable for ``dest`` even after it left the registry."""
+        if source is None:
+            return
+        recent = self.recent.setdefault(dest.uid, deque(maxlen=RECENT_SIZE))
+        if source in recent:
+            recent.remove(source)
+        recent.append(source)
+
+    def recent_sources(self, dest: Destination) -> list[str]:
+        """Sources offered for ``dest`` beyond the registry: current, recently seen/assigned, undo history."""
+        known = {r.id for r in self.registries[dest.protocol].sources}
+        current = self.current_source(dest)
+        extra = [current] if current is not None else []
+        if dest.protocol == PROTOCOL_DANTE:
+            self.remember(dest, current)
+            extra += reversed(self.recent.get(dest.uid, ()))
+            extra += [s for s in reversed(self.history.get(dest.uid, ())) if s is not None]
+        seen: set[str] = set()
+        return [s for s in extra if s not in known and not (s in seen or seen.add(s))]
 
     def options(self, dest: Destination) -> list[str]:
         registry = self.registries[dest.protocol]
         names = [self.display_name(dest.protocol, r.id) for r in registry.sources]
-        current = self.current_source(dest)
-        if current is not None and current not in {r.id for r in registry.sources}:
-            names.append(self.display_name(dest.protocol, current))
+        names += [self.display_name(dest.protocol, s) for s in self.recent_sources(dest)]
         seen: set[str] = set()
         return [NONE_OPTION] + [n for n in names if not (n in seen or seen.add(n))]
 
@@ -343,6 +377,9 @@ class AvMatrixHub:
         coordinator.set_current(dest.dest_id, device_source)
         if record_history and previous != source:
             self.history[dest.uid].append(previous)
+        if dest.protocol == PROTOCOL_DANTE:
+            self.remember(dest, previous)
+            self.remember(dest, source)
         _LOGGER.debug("Routed %s → %s (%s)", source, dest.name, origin)
         self.hass.bus.async_fire(
             EVENT_ROUTED,

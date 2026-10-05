@@ -26,6 +26,9 @@ DISPLAY_ON_TIMEOUT: Final = 10.0
 
 NONE_OPTION: Final = "None"
 HISTORY_SIZE: Final = 10
+#: sources kept selectable per destination after they went offline (Dante)
+RECENT_SIZE: Final = 5
+PROTOCOL_DANTE: Final = "dante"
 CONNECTING_GRACE: Final = 10.0  # seconds after a route in which "not connected" means "connecting"
 
 EVENT_ROUTED: Final = "av_matrix_routed"

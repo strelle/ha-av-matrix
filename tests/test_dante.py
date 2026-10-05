@@ -10,7 +10,7 @@ from homeassistant import config_entries
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
-from homeassistant.exceptions import HomeAssistantError
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -205,10 +205,41 @@ async def test_route_errors(hass: HomeAssistant, dante_env) -> None:
         await hass.services.async_call(
             DOMAIN, "route", {"entity_id": "select.avioaes3_0d0e0f_ch1_source", "source": f"CH1@{DA}"}, blocking=True
         )
-    with pytest.raises(HomeAssistantError, match="not a Dante source"):
+    for bad in ("CAM (1)", "@DEV", "CH1@", "a@b@c"):
+        with pytest.raises(ServiceValidationError) as exc:
+            await hass.services.async_call(
+                DOMAIN, "route", {"entity_id": "select.avioaes3_0d0e0f_ch1_source", "source": bad}, blocking=True
+            )
+        assert exc.value.translation_key == "invalid_dante_source"
+
+
+async def test_offline_source_stays_selectable(hass: HomeAssistant, dante_env) -> None:
+    """Live finding: switching away from a source of an offline device must allow switching back via the select."""
+    await add_network(hass)
+    entity = "select.avioaes3_0d0e0f_ch1_source"
+    gone = "CH1@DA11AEN-85b9d9"  # device not on the network (unresolved subscription)
+    await hass.services.async_call(DOMAIN, "route", {"entity_id": entity, "source": gone}, blocking=True)
+    assert (dante_env[AVIO].rx[0].tx_channel, dante_env[AVIO].rx[0].tx_device) == ("CH1", "DA11AEN-85b9d9")
+    await hass.services.async_call(
+        "select", "select_option", {"entity_id": entity, "option": f"CH2@{DA}"}, blocking=True
+    )
+    await hass.data[DATA_HUB].async_evaluate()
+    await hass.async_block_till_done()
+    state = hass.states.get(entity)
+    assert state.state == f"CH2@{DA}"
+    assert gone in state.attributes["options"]  # history keeps it selectable …
+    offline = state.attributes["offline_options"]  # … marked offline for the card
+    assert gone in offline and f"CH2@{DA}" not in offline
+    await hass.services.async_call("select", "select_option", {"entity_id": entity, "option": gone}, blocking=True)
+    assert dante_env[AVIO].rx[0].tx_device == "DA11AEN-85b9d9"
+    # an option that was never seen is still a clean validation error, not a server error
+    with pytest.raises(ServiceValidationError):
         await hass.services.async_call(
-            DOMAIN, "route", {"entity_id": "select.avioaes3_0d0e0f_ch1_source", "source": "CAM (1)"}, blocking=True
+            "select", "select_option", {"entity_id": entity, "option": "CH9@NEVER-SEEN"}, blocking=True
         )
+    # … while the service accepts any well-formed Dante source
+    await hass.services.async_call(DOMAIN, "route", {"entity_id": entity, "source": "CH9@NEVER-SEEN"}, blocking=True)
+    assert dante_env[AVIO].rx[0].tx_device == "NEVER-SEEN"
 
 
 async def test_static_host_learns_protocol(hass: HomeAssistant, dante_env) -> None:

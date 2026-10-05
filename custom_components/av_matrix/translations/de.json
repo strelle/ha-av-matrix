@@ -257,6 +257,9 @@
     },
     "unknown_protocol": {
       "message": "Unbekanntes Protokoll."
+    },
+    "invalid_dante_source": {
+      "message": "Keine Dante-Quelle: „{source}“. Erwartet wird Kanal@Gerät, z. B. CH1@AVIOAES3-05b2c4."
     }
   },
   "services": {

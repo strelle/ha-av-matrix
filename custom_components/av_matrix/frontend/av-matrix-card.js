@@ -535,9 +535,10 @@ class AvMatrixCard extends HTMLElement {
       if (entry ? entry.platform !== "av_matrix" : !("source_live" in a && "protocol" in a)) continue;
       const key = a.protocol || "ndi";
       const p = (out.protocols[key] ||= { title: key === "ndi" ? "NDI®" : key === "dante" ? "Dante®" : key.toUpperCase(), _src: new Map(), destinations: [] });
+      const offl = new Set(a.offline_options || []);
       for (const opt of a.options || []) {
         if (opt !== "None" && !p._src.has(opt))
-          p._src.set(opt, { id: opt, name: opt, label: null, tags: [], live: true, host: null, last_seen: null });
+          p._src.set(opt, { id: opt, name: opt, label: null, tags: [], live: !offl.has(opt), host: null, last_seen: null });
       }
       const unavailable = st.state === "unavailable" || st.state === "unknown";
       const cur = unavailable || st.state === "None" ? null : st.state;
