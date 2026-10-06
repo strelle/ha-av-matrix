@@ -3,7 +3,7 @@
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions follow [SemVer](https://semver.org/).
 
-## [Unreleased]
+## [0.4.0] - 2026-10-06
 
 ### Added
 - **Device illustrations** in the card: own, stylised SVG drawings of the devices (Magewell Pro Convert NDI to AIO
@@ -18,6 +18,10 @@ All notable changes to this project are documented here. The format follows
   (backwards compatible), snapshot fields `label`, `original_name`, `tags` for destinations and `original_name` for
   sources; label editor in the card for destinations. Entity names are not changed.
 - Integration icon and logo (`brand/`), README header.
+
+### Commits
+
+- feat: device illustrations, Label/Original/Both names, destination labels, integration icon (effa53a)
 
 ## [0.3.1] - 2026-10-05
 
