@@ -510,6 +510,62 @@ async def test_websocket_state_subscribe_label(hass: HomeAssistant, hass_ws_clie
     assert FakeDecoder.state("192.0.2.20")["routes"] == ["CAM (1)"]
 
 
+async def test_websocket_destination_label_and_icons(hass: HomeAssistant, hass_ws_client, hass_storage) -> None:
+    await add_device(hass)
+    hub = hass.data[DATA_HUB]
+    await hub.async_evaluate()
+    uid = next(iter(hub.destinations))
+    client = await hass_ws_client(hass)
+    await client.send_json({"id": 1, "type": "av_matrix/state"})
+    ndi = (await client.receive_json())["result"]["protocols"]["ndi"]
+    dest = ndi["destinations"][0]
+    assert dest["label"] is None and dest["name"] == dest["original_name"] == "Lobby"
+    assert dest["icon_key"] == "magewell_ndi_aio" and dest["model"] == "Pro Convert NDI to AIO"
+    icons = {s["id"]: s["icon_key"] for s in ndi["sources"]}
+    assert icons["CAM (1)"] == "ndi_camera" and icons["STUDIO-PC (Slides)"] == "ndi_computer"
+    assert all(s["original_name"] == s["id"] for s in ndi["sources"])
+
+    await client.send_json(
+        {"id": 2, "type": "av_matrix/label", "kind": "destination", "destination": uid, "label": " Foyer left "}
+    )
+    msg = await client.receive_json()
+    assert msg["success"] and msg["result"] == {"label": "Foyer left"}
+    await client.send_json({"id": 3, "type": "av_matrix/state"})
+    dest = (await client.receive_json())["result"]["protocols"]["ndi"]["destinations"][0]
+    assert dest["name"] == dest["label"] == "Foyer left" and dest["original_name"] == "Lobby"
+    # entity names are not touched
+    assert hass.states.get("select.lobby_source") is not None
+
+    await client.send_json({"id": 4, "type": "av_matrix/label", "kind": "destination", "destination": "nope"})
+    msg = await client.receive_json()
+    assert not msg["success"] and msg["error"]["code"] == "unknown_destination"
+    await client.send_json({"id": 5, "type": "av_matrix/label", "protocol": "ndi"})  # source missing
+    msg = await client.receive_json()
+    assert not msg["success"] and msg["error"]["code"] == "invalid_format"
+
+    # persisted next to the source labels
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=5))
+    await hass.async_block_till_done()
+    assert hass_storage["av_matrix"]["data"]["destination_labels"] == {uid: {"label": "Foyer left"}}
+
+    # clearing
+    await client.send_json({"id": 6, "type": "av_matrix/label", "kind": "destination", "destination": uid, "label": ""})
+    msg = await client.receive_json()
+    assert msg["success"] and msg["result"] == {}
+    assert hub.destination_labels == {}
+
+
+async def test_websocket_label_requires_admin(hass: HomeAssistant, hass_ws_client, hass_read_only_access_token) -> None:
+    await add_device(hass)
+    uid = next(iter(hass.data[DATA_HUB].destinations))
+    client = await hass_ws_client(hass, hass_read_only_access_token)
+    await client.send_json(
+        {"id": 1, "type": "av_matrix/label", "kind": "destination", "destination": uid, "label": "X"}
+    )
+    msg = await client.receive_json()
+    assert not msg["success"] and msg["error"]["code"] == "unauthorized"
+
+
 async def test_diagnostics_redacts_password(hass: HomeAssistant) -> None:
     entry = await add_device(hass)
     diag = await async_get_config_entry_diagnostics(hass, entry)

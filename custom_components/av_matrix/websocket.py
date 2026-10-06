@@ -68,8 +68,10 @@ def ws_subscribe(hass: HomeAssistant, connection: websocket_api.ActiveConnection
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "av_matrix/label",
-        vol.Required("protocol"): str,
-        vol.Required("source"): str,
+        vol.Optional("kind", default="source"): vol.In(["source", "destination"]),
+        vol.Optional("protocol"): str,
+        vol.Optional("source"): str,
+        vol.Optional("destination"): str,
         vol.Optional("label"): vol.Any(None, str),
         vol.Optional("tags"): vol.Any(None, [str]),
     }
@@ -77,10 +79,22 @@ def ws_subscribe(hass: HomeAssistant, connection: websocket_api.ActiveConnection
 @websocket_api.require_admin
 @callback
 def ws_label(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
-    """Set (or clear) a display label and tags of a source."""
+    """Set (or clear) the display label and tags of a source or a destination."""
     hub = hass.data[DATA_HUB]
-    if msg["protocol"] not in hub.registries:
-        connection.send_error(msg["id"], "unknown_protocol", f"Unknown protocol {msg['protocol']}")
+    if msg["kind"] == "destination":
+        uid = msg.get("destination")
+        if not uid or uid not in hub.destinations:
+            connection.send_error(msg["id"], "unknown_destination", f"Unknown destination {uid}")
+            return
+        hub.async_set_destination_label(uid, msg.get("label"), msg.get("tags"))
+        connection.send_result(msg["id"], hub.destination_label(uid))
         return
-    hub.async_set_label(msg["protocol"], msg["source"], msg.get("label"), msg.get("tags"))
-    connection.send_result(msg["id"], hub.label(msg["protocol"], msg["source"]))
+    protocol, source = msg.get("protocol"), msg.get("source")
+    if protocol not in hub.registries:
+        connection.send_error(msg["id"], "unknown_protocol", f"Unknown protocol {protocol}")
+        return
+    if not source:
+        connection.send_error(msg["id"], "invalid_format", "source is required")
+        return
+    hub.async_set_label(protocol, source, msg.get("label"), msg.get("tags"))
+    connection.send_result(msg["id"], hub.label(protocol, source))

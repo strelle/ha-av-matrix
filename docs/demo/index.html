@@ -11,6 +11,9 @@
   Query parameters: theme=light|dark  mode=panel|matrix  take=direct|preset  lang=en|de
                     scenario=preset|multi|history  compact=1  admin=0  still=1
                     proto=dante (Dante® tab)  collapse=WING-FOH,…  srcdev=…  dstdev=…  (device groups / filters)
+                    names=label|original|both (name display; overrides the choice stored in the browser)
+                    edit=1 (label edit mode)  dlabel=<destination id> / slabel=<source id> (open the label editor)
+                    frame=390 (phone-wide frame)
 -->
 <style>
   :root {
@@ -67,7 +70,8 @@
   const iso = (secAgo) => new Date(Date.now() - secAgo * 1000).toISOString();
 
   /* ---------------- fake data: 12 sources (2 offline), 6 destinations */
-  const S = (id, opts = {}) => ({ id, name: opts.label || id, label: opts.label || null, tags: opts.tags || [],
+  const S = (id, opts = {}) => ({ id, name: opts.label || id, label: opts.label || null, original_name: id,
+    icon_key: opts.icon || (/CAM|PTZ/.test(id) ? "ndi_camera" : "ndi_computer"), tags: opts.tags || [],
     live: opts.live !== false, host: opts.host || "192.0.2." + (40 + Math.floor(Math.random() * 40)),
     address: null, last_seen: opts.live === false ? iso(opts.ago || 420) : iso(2), first_seen: iso(7200) });
   const sources = [
@@ -80,24 +84,31 @@
     S("TRICASTER (PGM 1)", { label: "Program mix", tags: ["mix"] }),
     S("TRICASTER (Multiview)", { label: "Multiview", tags: ["mix"] }),
     S("SIGNAGE-NUC (Loop)", { tags: ["signage"] }),
+    S("BIRDDOG-P200 (CAM)", { tags: ["camera"] }),
     S("LAPTOP-GUEST (Display 1)", { tags: ["presentation"] }),
     S("NDI_0A1B2C3D4E", { live: false, ago: 5400 }),
     S("REPLAY (Out A)", { label: "Replay", tags: ["mix"] }),
   ];
-  const D = (id, name, cur, status, extra = {}) => ({ id, entity_id: `select.${id}_source`, name, channel: null,
+  const D = (id, name, cur, status, extra = {}) => ({ id, entity_id: `select.${id}_source`, name: extra.label || name,
+    label: extra.label || null, original_name: name, tags: [], channel: null,
+    manufacturer: extra.manufacturer || "Magewell", model: extra.model || "Pro Convert NDI to AIO", icon_key: extra.icon || "magewell_ndi_aio",
     device_name: name, device_id: "dev-" + id, entry_id: "entry-" + id, driver: extra.driver || "magewell", protocol: "ndi",
     current_source: cur, current_source_live: true, status, resolution: extra.resolution === undefined ? "1920x1080p50" : extra.resolution,
     available: status !== "offline", locked: !!extra.locked, can_undo: !!extra.can_undo, display: extra.display || null });
   const dests = [
-    D("foyer", "Foyer", "SIGNAGE-NUC (Loop)", "connected", {
-      resolution: "1920x1080p30",
+    D("foyer", "AIO-0A1B2C", "SIGNAGE-NUC (Loop)", "connected", {
+      resolution: "1920x1080p30", label: "Foyer left",
       display: { entity_id: "media_player.foyer_tv", state: "on", source: "HDMI 2", source_list: ["HDMI 1", "HDMI 2"],
         configured_input: "HDMI 2", auto_on: true, off_on_none: false, error: null } }),
     D("stage_left", "Stage Left", "TRICASTER (PGM 1)", "connected", { can_undo: true, resolution: "3840x2160p50" }),
-    D("stage_right", "Stage Right", "STUDIO-PC (Slides)", "connecting", { resolution: null }),
-    D("confidence", "Confidence", "STUDIO-PC (Notes)", "connected", { locked: true, resolution: "1280x720p50" }),
-    D("green_room", "Green Room", "CAM-3 (Program)", "source_lost", { resolution: null, driver: "birddog" }),
-    D("lobby_bar", "Lobby Bar", null, "offline", { resolution: null }),
+    D("stage_right", "Stage Right", "STUDIO-PC (Slides)", "connecting", { resolution: null,
+      model: "Pro Convert NDI to HDMI", icon: "magewell_pro_convert" }),
+    D("confidence", "PRO-CONVERT-3D4E", "STUDIO-PC (Notes)", "connected", { locked: true, resolution: "1280x720p50",
+      label: "Confidence", model: "Pro Convert NDI to HDMI", icon: "magewell_pro_convert" }),
+    D("green_room", "PLAY-5F6A", "CAM-3 (Program)", "source_lost", { resolution: null, driver: "birddog",
+      label: "Green Room", manufacturer: "BirdDog", model: "PLAY", icon: "birddog_play" }),
+    D("lobby_bar", "Lobby Bar", null, "offline", { resolution: null, driver: "birddog", manufacturer: null, model: null,
+      icon: "ndi_decoder" }),
   ];
   // the offline device still reports a last known source, the green room shows a source that stopped sending
   dests[4].current_source_live = false;
@@ -106,44 +117,60 @@
   const dSources = [];
   const dDests = [];
   const DANTE = [
-    // name, model, tx names, rx names, online
+    // name, model, tx names, rx names, online, icon_key
     ["STAGEBOX-A", "Stagebox 32x16", ["Kick", "Snare Top", "Snare Bot", "Hi-Hat", "Tom 1", "Tom 2", "Floor Tom", "OH L", "OH R",
       "Bass DI", "Bass Mic", "Gtr 1", "Gtr 2", "Keys L", "Keys R", "Synth L", "Synth R", "Acoustic", "Vox Lead", "Vox BV 1",
       "Vox BV 2", "Vox BV 3", "Talkback", "Spare 24", "Amb L", "Amb R", "Click", "Track L", "Track R", "Spare 30", "Spare 31", "Spare 32"],
-      Array.from({ length: 16 }, (_, i) => `Mon ${String(i + 1).padStart(2, "0")}`), true],
+      Array.from({ length: 16 }, (_, i) => `Mon ${String(i + 1).padStart(2, "0")}`), true, "dante_device"],
     ["WING-FOH", "WING Dante 64", ["Main L", "Main R", "Sub", "Fill L", "Fill R", ...Array.from({ length: 16 }, (_, i) => `Bus ${i + 1}`),
       ...Array.from({ length: 43 }, (_, i) => `Card ${String(i + 22).padStart(2, "0")}`)],
-      Array.from({ length: 64 }, (_, i) => `Ch ${String(i + 1).padStart(2, "0")}`), true],
-    ["AVIO-AES3-LOBBY", "AVIO AES3", ["CH1", "CH2"], ["CH1", "CH2"], true],
-    ["AMP-HALL", "Amplifier 4ch", [], ["In A", "In B", "In C", "In D"], true],
-    ["DVS-STUDIO-MAC", "Dante Virtual Soundcard", Array.from({ length: 8 }, (_, i) => `0${i + 1}`), Array.from({ length: 8 }, (_, i) => `0${i + 1}`), false],
+      Array.from({ length: 64 }, (_, i) => `Ch ${String(i + 1).padStart(2, "0")}`), true, "wing"],
+    ["AVIOAES3-0a1b2c", "AVIO AES3", ["CH1", "CH2"], ["CH1", "CH2"], true, "avio_aes3"],
+    ["DA-22UC-6f7a8b", "DA-22UC", ["L", "R"], ["CH1", "CH2"], true, "dante_converter"],
+    ["AVIOAI2-4c5d6e", "AVIO Analog In 2ch", ["CH1", "CH2"], [], true, "avio_analog_in"],
+    ["AVIOAO2-7e8f90", "AVIO Analog Out 2ch", [], ["CH1", "CH2"], true, "avio_analog_out"],
+    ["AVIOUSBC-3d4e5f", "AVIO USB-C", ["CH1", "CH2"], ["CH1", "CH2"], false, "avio_usb"],
   ];
+  const DEV = Object.fromEntries(DANTE.map((x, i) => [x[0], { model: x[1], online: x[4], icon: x[5], host: "192.0.2." + (100 + i) }]));
+  // some channel labels
+  const SRC_LABELS = { "Vox Lead@STAGEBOX-A": "Lead vocal", "Kick@STAGEBOX-A": "Kick in", "Main L@WING-FOH": "PA left",
+    "Main R@WING-FOH": "PA right", "CH1@AVIOAI2-4c5d6e": "Lectern mic", "CH2@AVIOAI2-4c5d6e": "Wireless 1" };
+  const DST_LABELS = { "AVIOAES3-0a1b2c:1": "Lobby L", "AVIOAES3-0a1b2c:2": "Lobby R",
+    "DA-22UC-6f7a8b:1": "Hall fill L", "DA-22UC-6f7a8b:2": "Hall fill R", "AVIOAO2-7e8f90:1": "Sub amp" };
   for (const [dev, , tx, , online] of DANTE)
-    for (const ch of tx)
-      dSources.push({ id: `${ch}@${dev}`, group: dev, channel: ch, name: `${ch}@${dev}`, label: null, tags: [], live: online,
-        host: "192.0.2." + (100 + DANTE.findIndex((x) => x[0] === dev)), address: null,
+    for (const ch of tx) {
+      const id = `${ch}@${dev}`;
+      const label = SRC_LABELS[id] || null;
+      dSources.push({ id, group: dev, channel: ch, name: label || id, label, original_name: id, icon_key: DEV[dev].icon,
+        tags: [], live: online, host: DEV[dev].host, address: null,
         last_seen: online ? iso(2) : iso(260), first_seen: iso(9000) });
+    }
   const SUB = { subscribed: ["DYNAMIC", "Subscribed (unicast)"], none: ["NONE", "No subscription"],
     unresolved: ["UNRESOLVED", "The transmitting device is not on the network"], error: ["CHANNEL_FORMAT", "Channel formats do not match"] };
   const routing = {
-    "WING-FOH": (i) => (i < 32 ? `${DANTE[0][2][i]}@STAGEBOX-A` : i < 40 ? `0${i - 31}@DVS-STUDIO-MAC` : null),
+    "WING-FOH": (i) => (i < 32 ? `${DANTE[0][2][i]}@STAGEBOX-A` : i < 34 ? `CH${i - 31}@AVIOUSBC-3d4e5f`
+      : i < 36 ? `CH${i - 33}@AVIOAI2-4c5d6e` : null),
     "STAGEBOX-A": (i) => (i < 12 ? `Bus ${i + 1}@WING-FOH` : null),
-    "AVIO-AES3-LOBBY": (i) => [`Main L@WING-FOH`, `Main R@WING-FOH`][i],
-    "AMP-HALL": (i) => [`Fill L@WING-FOH`, `Fill R@WING-FOH`, `Sub@WING-FOH`, null][i],
-    "DVS-STUDIO-MAC": (i) => (i < 2 ? [`Main L@WING-FOH`, `Main R@WING-FOH`][i] : null),
+    "AVIOAES3-0a1b2c": (i) => [`Main L@WING-FOH`, `Main R@WING-FOH`][i],
+    "DA-22UC-6f7a8b": (i) => [`Fill L@WING-FOH`, `Fill R@WING-FOH`][i],
+    "AVIOAO2-7e8f90": (i) => [`Sub@WING-FOH`, null][i],
+    "AVIOUSBC-3d4e5f": (i) => [`Main L@WING-FOH`, `Main R@WING-FOH`][i],
   };
   for (const [dev, , , rx, online] of DANTE) {
     rx.forEach((ch, i) => {
       const cur = routing[dev](i);
       const src = dSources.find((x) => x.id === cur);
       let sub = !cur ? "none" : src && src.live ? "subscribed" : "unresolved";
-      if (dev === "AMP-HALL" && i === 2) sub = "error";
+      if (dev === "AVIOAO2-7e8f90" && i === 0) sub = "error";
       const status = !online ? "offline" : { subscribed: "connected", none: "no_source", unresolved: "source_lost", error: "error" }[sub];
       const slug = `${dev}_${ch}`.toLowerCase().replace(/[^a-z0-9]+/g, "_");
+      const label = DST_LABELS[`${dev}:${i + 1}`] || null;
       dDests.push({ id: `dante-network_${dev}:${i + 1}`, entity_id: rx.length > 32 ? null : `select.${slug}_source`,
-        name: `${dev} · ${ch}`, channel: ch, group: dev, device_name: dev, device_id: "dev-" + dev, entry_id: "entry-dante",
+        name: label || `${dev} · ${ch}`, label, original_name: `${dev} · ${ch}`, tags: [],
+        manufacturer: dev.startsWith("WING") ? "Behringer" : dev.startsWith("AVIO") ? "Audinate" : null, model: DEV[dev].model,
+        icon_key: DEV[dev].icon, channel: ch, group: dev, device_name: dev, device_id: "dev-" + dev, entry_id: "entry-dante",
         driver: "dante", protocol: "dante", current_source: cur, current_source_live: !!(src && src.live), status,
-        resolution: "48 kHz", available: online, locked: dev === "AMP-HALL" && i === 3, can_undo: false, display: null,
+        resolution: "48 kHz", available: online, locked: dev === "AVIOAO2-7e8f90" && i === 1, can_undo: false, display: null,
         subscription: { state: sub, code: null, status: SUB[sub][0], detail: SUB[sub][1] } });
     });
   }
@@ -218,6 +245,16 @@
         return Promise.resolve(() => evSubs.delete(cb));
       },
       async sendMessagePromise(msg) {
+        if (msg.type === "av_matrix/label" && msg.kind === "destination") {
+          if (!admin) throw new Error("Unauthorized");
+          const d = allDests().find((x) => x.id === msg.destination);
+          if (!d) throw new Error(`Unknown destination ${msg.destination}`);
+          d.label = (msg.label || "").trim() || null;
+          d.name = d.label || d.original_name;
+          d.tags = msg.tags || [];
+          push();
+          return d.label || d.tags.length ? { ...(d.label ? { label: d.label } : {}), ...(d.tags.length ? { tags: d.tags } : {}) } : {};
+        }
         if (msg.type === "av_matrix/label") {
           const s = allSources().find((x) => x.id === msg.source);
           s.label = msg.label || null;
@@ -276,6 +313,10 @@
     compact: q.get("compact") === "1",
     ...(q.get("proto") ? { protocol: q.get("proto") } : {}),
   });
+  if (["label", "original", "both"].includes(q.get("names"))) card._nameMode = q.get("names");
+  if (q.get("edit") === "1") card._editMode = true;
+  // phone frame + mode=matrix: open the matrix although narrow cards start in panel mode
+  if (q.get("frame") && q.get("mode")) card._modeUser = q.get("mode");
   if (q.get("collapse")) {
     card._collapsed = new Set(q.get("collapse").split(",").filter(Boolean));
     card._expanded = new Set((q.get("expand") || "").split(",").filter(Boolean));
@@ -337,6 +378,8 @@
       for (let i = 0; i < 5; i++) { card._lastHtml = ""; card._render(); }
       document.title = `render ${((performance.now() - t0) / 5).toFixed(1)} ms, ${card.shadowRoot.querySelectorAll(".xp").length} crosspoints`;
     }
+    if (q.get("dlabel")) card._openLabel("destination", q.get("dlabel"));
+    if (q.get("slabel")) card._openLabel("source", q.get("slabel"));
     if (q.get("hover")) {
       const [r, c] = q.get("hover").split(",");
       card._setCross(r, c);

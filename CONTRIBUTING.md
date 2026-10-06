@@ -29,6 +29,7 @@ custom_components/av_matrix/
 │   └── magewell.py
 ├── protocols/         one source registry per protocol (NDI®, Dante® incl. the ARC wire format)
 ├── discovery.py       mDNS browsers (NDI® sources, Dante® devices)
+├── device_icons.py    which device illustration (frontend/devices/*.svg) a device gets
 ├── hub.py             integration-wide state: routing, salvo, lock, undo, labels, snapshot
 ├── coordinator.py     polling per device (backoff while offline)
 ├── select.py …        entities
@@ -64,6 +65,19 @@ The short version (details and how the Dante® network driver works in [docs/add
 
 Please never commit real IP addresses, serial numbers, MAC addresses or passwords. Use `192.0.2.x` (TEST-NET-1)
 in examples.
+
+## Adding a device illustration (icon)
+
+The card shows a small drawing of each device (`icon_key` in the [frontend API](docs/frontend-api.md)).
+
+1. Draw `custom_components/av_matrix/frontend/devices/<key>.svg`: **your own artwork, no manufacturer photos or
+   logos**. `viewBox="0 0 96 64"`, no text, no scripts, < 6 KB, colours only through the CSS variables
+   `--avm-dev-body`, `--avm-dev-top`, `--avm-dev-side`, `--avm-dev-line`, `--avm-dev-metal`, `--avm-dev-screen`
+   (with fallbacks) and at least one status LED `class="led" fill="var(--avm-led, #3ddc84)"`. IDs (gradients)
+   must be prefixed with the key. Look at it at 28 px and 72 px, dark and light.
+2. Add a rule to `ICON_RULES` in `custom_components/av_matrix/device_icons.py` (regex on model / device name,
+   optionally restricted to a driver, protocol or manufacturer; first match wins - specific rules first).
+3. Add cases to `tests/test_device_icons.py` (the test also checks that every key has a valid SVG).
 
 ## Releases
 

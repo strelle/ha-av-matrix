@@ -30,6 +30,7 @@ from .const import (
     STORAGE_KEY,
     STORAGE_VERSION,
 )
+from .device_icons import icon_key
 from .display import async_drive_display, display_state
 from .drivers import DriverError
 from .drivers.base import short
@@ -94,6 +95,8 @@ class AvMatrixHub:
         self.destinations: dict[str, Destination] = {}
         self.locks: set[str] = set()
         self.labels: dict[str, dict[str, dict[str, Any]]] = {}
+        #: user labels of destinations, by destination id
+        self.destination_labels: dict[str, dict[str, Any]] = {}
         self.history: dict[str, deque[str | None]] = {}
         #: recently seen/assigned sources per destination (Dante: offline sources stay selectable)
         self.recent: dict[str, deque[str]] = {}
@@ -111,6 +114,7 @@ class AvMatrixHub:
         data = await self._store.async_load() or {}
         self.locks = set(data.get("locks", []))
         self.labels = data.get("labels", {})
+        self.destination_labels = data.get("destination_labels", {})
 
     async def async_start(self) -> None:
         """Start discovery and periodic liveness evaluation (first config entry)."""
@@ -138,7 +142,14 @@ class AvMatrixHub:
         self._browsers.clear()
 
     def _save(self) -> None:
-        self._store.async_delay_save(lambda: {"locks": sorted(self.locks), "labels": self.labels}, 1)
+        self._store.async_delay_save(
+            lambda: {
+                "locks": sorted(self.locks),
+                "labels": self.labels,
+                "destination_labels": self.destination_labels,
+            },
+            1,
+        )
 
     # ---------------------------------------------------------- notifications
     @callback
@@ -465,15 +476,20 @@ class AvMatrixHub:
         self._save()
         self.async_notify()
 
-    @callback
-    def async_set_label(self, protocol: str, source_id: str, label: str | None, tags: list[str] | None) -> None:
-        if protocol not in self.registries:
-            raise ServiceValidationError(translation_domain=DOMAIN, translation_key="unknown_protocol")
+    @staticmethod
+    def _label_entry(label: str | None, tags: list[str] | None) -> dict[str, Any]:
         entry: dict[str, Any] = {}
         if label and label.strip():
             entry["label"] = label.strip()
         if tags:
             entry["tags"] = sorted({t.strip() for t in tags if t and t.strip()})
+        return entry
+
+    @callback
+    def async_set_label(self, protocol: str, source_id: str, label: str | None, tags: list[str] | None) -> None:
+        if protocol not in self.registries:
+            raise ServiceValidationError(translation_domain=DOMAIN, translation_key="unknown_protocol")
+        entry = self._label_entry(label, tags)
         labels = self.labels.setdefault(protocol, {})
         if entry:
             labels[source_id] = entry
@@ -481,6 +497,57 @@ class AvMatrixHub:
             labels.pop(source_id, None)
         self._save()
         self.async_notify()
+
+    def destination_label(self, uid: str) -> dict[str, Any]:
+        return self.destination_labels.get(uid, {})
+
+    @callback
+    def async_set_destination_label(self, uid: str, label: str | None, tags: list[str] | None) -> None:
+        """Set (or clear) the user label of a destination. Entity names are not touched."""
+        self._get(uid)
+        entry = self._label_entry(label, tags)
+        if entry:
+            self.destination_labels[uid] = entry
+        else:
+            self.destination_labels.pop(uid, None)
+        self._save()
+        self.async_notify()
+
+    def destination_icon(self, dest: Destination) -> str:
+        """Illustration key of the device behind ``dest`` (see device_icons.py)."""
+        manufacturer, model = self._device_model(dest.coordinator, dest.device_key)
+        return icon_key(
+            protocol=dest.protocol,
+            driver=dest.coordinator.driver.KEY,
+            manufacturer=manufacturer,
+            model=model,
+            name=dest.device_name,
+        )
+
+    def source_icon(self, protocol: str, source_id: str, group: str | None) -> str:
+        """Illustration key of a source (Dante: its TX device; NDI: guessed from the name)."""
+        manufacturer = model = None
+        if group:
+            for dest in self.destinations.values():
+                if dest.protocol == protocol and hasattr(dest.coordinator.driver, "device_for"):
+                    manufacturer, model = self._device_model(dest.coordinator, group)
+                    break
+        return icon_key(
+            protocol=protocol,
+            manufacturer=manufacturer,
+            model=model,
+            name=group or source_id,
+            role="source",
+        )
+
+    @staticmethod
+    def _device_model(coordinator: AvMatrixCoordinator, device_key: str | None) -> tuple[str | None, str | None]:
+        if device_key is not None:
+            driver = coordinator.driver
+            dev = driver.device_for(device_key) if hasattr(driver, "device_for") else None
+            return (dev.manufacturer, dev.model) if dev else (None, None)
+        info = coordinator.info
+        return info.manufacturer, info.model
 
     # --------------------------------------------------------------- snapshot
     def snapshot(self) -> dict[str, Any]:
@@ -499,17 +566,25 @@ class AvMatrixHub:
                 if current is not None and current not in sources:
                     sources[current] = self._source_dict(key, current, False, None, None, None)
                 ent = ent_reg.async_get(dest.entity_id) if dest.entity_id else None
+                lab = self.destination_label(dest.uid)
+                manufacturer, model = self._device_model(dest.coordinator, dest.device_key)
                 destinations.append(
                     {
                         "id": dest.uid,
                         "entity_id": dest.entity_id,
-                        "name": dest.name,
+                        "name": lab.get("label") or dest.name,
+                        "label": lab.get("label"),
+                        "original_name": dest.name,
+                        "tags": list(lab.get("tags", [])),
                         "channel": dest.channel_name,
                         "device_name": dest.device_name,
                         "group": dest.device_key,
                         "device_id": ent.device_id if ent else None,
                         "entry_id": dest.entry_id,
                         "driver": dest.coordinator.driver.KEY,
+                        "manufacturer": manufacturer,
+                        "model": model,
+                        "icon_key": self.destination_icon(dest),
                         "protocol": key,
                         "current_source": current,
                         "current_source_live": registry.is_live(current),
@@ -556,11 +631,14 @@ class AvMatrixHub:
     ) -> dict[str, Any]:
         lab = self.label(protocol, source_id)
         host = address.rsplit(":", 1)[0] if address and ":" in address else address
+        described = self.registries[protocol].describe(source_id)
         return {
             "id": source_id,
-            **self.registries[protocol].describe(source_id),
+            **described,
             "name": lab.get("label") or source_id,
             "label": lab.get("label"),
+            "original_name": source_id,
+            "icon_key": self.source_icon(protocol, source_id, described.get("group")),
             "tags": list(lab.get("tags", [])),
             "live": live,
             "host": host,

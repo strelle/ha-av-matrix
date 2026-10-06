@@ -63,9 +63,17 @@ const STRINGS = {
     sub_warning: "Warning",
     sub_error: "Error",
     edit_labels: "Edit labels",
-    edit_hint: "Edit mode: tap a source to rename it",
+    edit_hint: "Edit mode: tap a source or destination to rename it",
     label: "Label",
     label_ph: "Friendly name, e.g. Slides",
+    label_ph_dest: "Friendly name, e.g. Foyer left",
+    names: "Names",
+    names_label: "Label",
+    names_original: "Original",
+    names_both: "Both",
+    names_tip_label: "Show labels (original name where there is none) · N",
+    names_tip_original: "Show the original names (device / network) · N",
+    names_tip_both: "Label with the original name underneath · N",
     tags: "Tags",
     tags_ph: "Comma separated, e.g. stage, camera",
     save: "Save",
@@ -94,7 +102,7 @@ const STRINGS = {
     origin_salvo: "salvo",
     origin_undo: "undo",
     origin_service: "service",
-    shortcuts: "Keys: / search · arrows move · Enter TAKE · Esc clear · U undo · L lock · 1-9 destination",
+    shortcuts: "Keys: / search · arrows move · Enter TAKE · Esc clear · U undo · L lock · N names · 1-9 destination",
     dest_label: "Destination",
     source_label: "Source",
     no_match: "No source matches the filter.",
@@ -151,9 +159,17 @@ const STRINGS = {
     sub_warning: "Warnung",
     sub_error: "Fehler",
     edit_labels: "Labels bearbeiten",
-    edit_hint: "Bearbeiten: Quelle antippen, um sie umzubenennen",
+    edit_hint: "Bearbeiten: Quelle oder Ziel antippen, um es umzubenennen",
     label: "Label",
     label_ph: "Klarname, z. B. Präsentation",
+    label_ph_dest: "Klarname, z. B. Foyer links",
+    names: "Namen",
+    names_label: "Label",
+    names_original: "Original",
+    names_both: "Beide",
+    names_tip_label: "Labels zeigen (sonst den Originalnamen) · N",
+    names_tip_original: "Originalnamen zeigen (Gerät / Netzwerk) · N",
+    names_tip_both: "Label, darunter der Originalname · N",
     tags: "Tags",
     tags_ph: "Kommagetrennt, z. B. Bühne, Kamera",
     save: "Speichern",
@@ -182,7 +198,7 @@ const STRINGS = {
     origin_salvo: "Salvo",
     origin_undo: "Undo",
     origin_service: "Dienst",
-    shortcuts: "Tasten: / Suche · Pfeile navigieren · Enter TAKE · Esc verwerfen · U Undo · L Sperre · 1-9 Ziel",
+    shortcuts: "Tasten: / Suche · Pfeile navigieren · Enter TAKE · Esc verwerfen · U Undo · L Sperre · N Namen · 1-9 Ziel",
     dest_label: "Ziel",
     source_label: "Quelle",
     no_match: "Keine Quelle passt zum Filter.",
@@ -210,6 +226,8 @@ const ICON_PATHS = {
   device: '<rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 10v4M11 10v4M15.5 12h2"/>',
   power: '<path d="M12 2.5v9"/><path d="M18.4 6.6a9 9 0 1 1-12.8 0"/>',
   bolt: '<path d="M13 2 4 14h7l-1 8 9-12h-7Z"/>',
+  names: '<path d="M4 7h13"/><path d="M4 12.5h16" opacity=".5"/><path d="M4 17.5h10" opacity=".5"/>',
+  preset: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2.5"/>',
   keyboard:
     '<rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/>',
 };
@@ -221,6 +239,95 @@ const esc = (text) =>
     /[&<>"']/g,
     (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]
   );
+
+/* ------------------------------------------------------------------ device illustrations
+ * One SVG per icon_key in ./devices/<key>.svg next to this file (served by the integration at
+ * /av_matrix_static/devices/). Each key is fetched once per page, checked, namespaced (classes get an
+ * "avmd-" prefix so they cannot clash with the card's CSS) and cached as a <symbol>; every card copies the
+ * symbols it needs into a hidden sprite in its shadow root and draws them with <use>. Colours come from CSS
+ * custom properties (--avm-led per status, --avm-dev-* per theme). Unknown key / failed fetch → generic
+ * key of the protocol, else no picture. */
+const DEVICE_GENERIC = { ndi: "ndi_decoder", dante: "dante_device" };
+const DEVICE_ART = new Map(); // key → { state: "loading" | "ok" | "fail", symbol, led }
+const DEVICE_LISTENERS = new Set();
+
+/** Base URL of the SVGs: derived from this script's URL (HA loads it as a module → no currentScript). */
+const DEVICE_BASE = (() => {
+  try {
+    let src = document.currentScript && document.currentScript.src;
+    if (!src) {
+      const el = [...document.querySelectorAll("script[src]")].find((s) => /av-matrix-card\.js/.test(s.src));
+      src = el && el.src;
+    }
+    if (!src) {
+      const m = /((?:https?|file):\/\/[^\s'"()]*?av-matrix-card\.js)/.exec(new Error().stack || "");
+      src = m && m[1];
+    }
+    if (src) return new URL("devices/", src).href;
+  } catch (_e) {
+    /* fall through */
+  }
+  return "/av_matrix_static/devices/";
+})();
+
+function parseDeviceSvg(key, text) {
+  const t = String(text)
+    .replace(/^﻿/, "")
+    .replace(/^\s*(<\?xml[^>]*\?>\s*)?(<!--[\s\S]*?-->\s*)*/, "");
+  if (!/^<svg[\s>]/i.test(t) || /<script/i.test(t) || t.length > 200000) throw new Error("not an svg");
+  const doc = new DOMParser().parseFromString(t, "image/svg+xml");
+  const svg = doc.documentElement;
+  if (!svg || svg.localName !== "svg" || doc.getElementsByTagName("parsererror").length) throw new Error("bad svg");
+  for (const el of [svg, ...svg.querySelectorAll("*")]) {
+    if (["script", "foreignObject", "iframe", "image"].includes(el.localName)) {
+      el.remove();
+      continue;
+    }
+    for (const at of [...el.attributes]) {
+      const n = at.name.toLowerCase();
+      if (n.startsWith("on")) el.removeAttribute(at.name);
+      else if ((n === "href" || n === "xlink:href") && !at.value.trim().startsWith("#")) el.removeAttribute(at.name);
+      else if (n === "class")
+        el.setAttribute("class", at.value.split(/\s+/).filter(Boolean).map((c) => "avmd-" + c).join(" "));
+    }
+    if (el.localName === "style") el.textContent = el.textContent.replace(/\.(-?[A-Za-z_][\w-]*)/g, ".avmd-$1");
+  }
+  // status LED position: the card draws a soft halo there while a destination is connecting
+  let led = null;
+  const l = svg.querySelector(".avmd-led");
+  if (l) {
+    const num = (a) => parseFloat(l.getAttribute(a)) || 0;
+    if (l.localName === "circle") led = { x: num("cx"), y: num("cy"), r: num("r") };
+    else if (l.localName === "ellipse") led = { x: num("cx"), y: num("cy"), r: Math.max(num("rx"), num("ry")) };
+    else if (l.localName === "rect")
+      led = { x: num("x") + num("width") / 2, y: num("y") + num("height") / 2, r: Math.max(num("width"), num("height")) / 2 };
+    if (led && !(led.r > 0)) led = null;
+  }
+  const NS = "http://www.w3.org/2000/svg";
+  const symbol = document.createElementNS(NS, "symbol");
+  symbol.setAttribute("id", `avm-dev-${key}`);
+  symbol.setAttribute("viewBox", svg.getAttribute("viewBox") || "0 0 96 64");
+  for (const child of [...svg.childNodes]) symbol.appendChild(document.importNode(child, true));
+  return { symbol, led };
+}
+
+/** Cached art of a key, starts the download on first use. null for invalid keys. */
+function deviceArt(key) {
+  if (!key || typeof key !== "string" || !/^[a-z0-9_]{1,48}$/.test(key)) return null;
+  let art = DEVICE_ART.get(key);
+  if (!art) {
+    art = { state: "loading" };
+    DEVICE_ART.set(key, art);
+    fetch(`${DEVICE_BASE}${key}.svg`, { credentials: "same-origin" })
+      .then((r) => (r.ok ? r.text() : Promise.reject(new Error(String(r.status)))))
+      .then((text) => Object.assign(art, parseDeviceSvg(key, text), { state: "ok" }))
+      .catch(() => {
+        art.state = "fail";
+      })
+      .finally(() => DEVICE_LISTENERS.forEach((fn) => fn()));
+  }
+  return art;
+}
 
 /* ------------------------------------------------------------------ tiny DOM morph
  * Patches an existing subtree to match freshly parsed HTML. Keeps element identity
@@ -322,6 +429,8 @@ function historyFor(hass) {
 const LONG_PRESS_MS = 450;
 const PENDING_TIMEOUT = 8000;
 const STATUS_ORDER = ["connected", "connecting", "no_source", "source_lost", "error", "offline"];
+const NAME_MODES = ["label", "original", "both"];
+const NAME_MODE_KEY = "av-matrix-card:name-mode";
 
 
 class AvMatrixCard extends HTMLElement {
@@ -353,6 +462,34 @@ class AvMatrixCard extends HTMLElement {
     this._dstGroup = ""; // device filter of the destinations
     this._lastHtml = "";
     this._width = 0;
+    this._nameMode = "both"; // label | original | both
+    this._sprited = new Set(); // device art keys already in this card's sprite
+    this._onArt = () => {
+      this._lastHtml = "";
+      this._render();
+    };
+  }
+
+  _loadNameMode() {
+    let stored = null;
+    try {
+      stored = localStorage.getItem(NAME_MODE_KEY);
+    } catch (_e) {
+      /* storage unavailable */
+    }
+    const cfg = this._config && this._config.name_mode;
+    this._nameMode = NAME_MODES.includes(stored) ? stored : NAME_MODES.includes(cfg) ? cfg : "both";
+  }
+
+  _setNameMode(mode) {
+    if (!NAME_MODES.includes(mode)) return;
+    this._nameMode = mode;
+    try {
+      localStorage.setItem(NAME_MODE_KEY, mode);
+    } catch (_e) {
+      /* storage unavailable */
+    }
+    this._render();
   }
 
   _storeKey() {
@@ -398,6 +535,7 @@ class AvMatrixCard extends HTMLElement {
     this._protocol = this._config.protocol || this._protocol;
     this._modeUser = null;
     this._loadCollapsed();
+    this._loadNameMode();
     this._render();
   }
 
@@ -432,11 +570,13 @@ class AvMatrixCard extends HTMLElement {
     }
     if (this._ro) this._ro.observe(this);
     if (!this._tick) this._tick = setInterval(() => this._render(), 15000);
+    DEVICE_LISTENERS.add(this._onArt);
     this._render();
   }
 
   disconnectedCallback() {
     this._unsubscribe();
+    DEVICE_LISTENERS.delete(this._onArt);
     if (this._ro) this._ro.disconnect();
     clearInterval(this._tick);
     this._tick = null;
@@ -457,7 +597,7 @@ class AvMatrixCard extends HTMLElement {
   }
 
   static getStubConfig() {
-    return { title: "AV Matrix", mode: "panel", take_mode: "direct" };
+    return { title: "AV Matrix", mode: "panel", take_mode: "direct", name_mode: "both" };
   }
 
   /* ---------------- data */
@@ -628,8 +768,31 @@ class AvMatrixCard extends HTMLElement {
     this._saveCollapsed();
   }
 
-  _destName(d) {
-    return d.group && d.channel ? d.channel : d.name;
+  /** Original (device) name of a destination; short = channel only inside a device group. */
+  _destOrig(d, short = true) {
+    if (short && d.group && d.channel) return d.channel;
+    return d.original_name || d.name;
+  }
+
+  /** [primary, secondary] name of a destination for the current name mode (secondary only in "both"). */
+  _dnames(d, short = true) {
+    const orig = this._destOrig(d, short);
+    const label = d.label;
+    if (!label || this._nameMode === "original") return [orig, ""];
+    if (this._nameMode === "label") return [label, ""];
+    return label === orig || label === (d.original_name || d.name) ? [label, ""] : [label, orig];
+  }
+
+  /** One-line destination name (chips, history, toasts): primary name of the mode, never just a channel. */
+  _dTitle(d) {
+    return this._dnames(d, false)[0];
+  }
+
+  /** Tooltip: label and original name. */
+  _dTip(d) {
+    const orig = this._destOrig(d, false);
+    const model = [d.manufacturer, d.model].filter(Boolean).join(" ");
+    return [d.label && d.label !== orig ? `${d.label}\n${orig}` : orig, model].filter(Boolean).join("\n");
   }
 
   /** Target of a service call: the select entity, or the destination id (entities may be disabled). */
@@ -646,7 +809,9 @@ class AvMatrixCard extends HTMLElement {
       if (this._tags.size && !(s.tags || []).some((t) => this._tags.has(t))) return false;
       if (this._srcGroup && s.group !== this._srcGroup) return false;
       if (!q) return true;
-      return [s.name, s.id, s.host, ...(s.tags || [])].some((v) => v && String(v).toLowerCase().includes(q));
+      return [s.name, s.label, s.original_name, s.id, s.channel, s.group, s.host, ...(s.tags || [])].some(
+        (v) => v && String(v).toLowerCase().includes(q)
+      );
     });
   }
 
@@ -657,7 +822,23 @@ class AvMatrixCard extends HTMLElement {
 
   _isLight() {
     const th = this._hass && this._hass.themes;
-    return !!th && th.darkMode === false;
+    if (th && typeof th.darkMode === "boolean") return !th.darkMode;
+    // no theme info: look at the card background
+    try {
+      const cs = getComputedStyle(this);
+      const bg = (cs.getPropertyValue("--ha-card-background") || cs.getPropertyValue("--card-background-color")).trim();
+      const m = /^#([0-9a-f]{6})$/i.exec(bg) || /^#([0-9a-f]{3})$/i.exec(bg);
+      if (m) {
+        const hex = m[1].length === 3 ? [...m[1]].map((c) => c + c).join("") : m[1];
+        const [r, g, b] = [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.5;
+      }
+      const rgb = /rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)/.exec(bg);
+      if (rgb) return (0.2126 * rgb[1] + 0.7152 * rgb[2] + 0.0722 * rgb[3]) / 255 > 0.5;
+    } catch (_e) {
+      /* not rendered yet */
+    }
+    return false;
   }
 
   _isAdmin() {
@@ -679,18 +860,73 @@ class AvMatrixCard extends HTMLElement {
     return id == null ? null : proto.sources.find((s) => s.id === id) || null;
   }
 
-  /** [primary, secondary] text for a source: label over NDI name, else "Stream" over "MACHINE". */
-  _names(src, id) {
-    if (!src) {
-      if (!id) return [this._t("off"), ""];
-      const at = id.lastIndexOf("@");
-      return at > 0 ? [id.slice(0, at), id.slice(at + 1)] : [id, ""];
-    }
-    if (src.label) return [src.label, src.id];
-    if (src.group && src.channel) return [src.channel, src.group];
-    const m = /^(.*?)\s*\((.+)\)$/.exec(src.id);
+  /** Original name of a source split for display: "Stream" over "MACHINE" (NDI), channel over device (Dante). */
+  _origParts(src, id) {
+    if (src && src.group && src.channel) return [src.channel, src.group];
+    const name = (src && src.original_name) || (src && src.id) || id;
+    const m = /^(.*?)\s*\((.+)\)$/.exec(name);
     if (m) return [m[2], m[1]];
-    return [src.id, src.host || ""];
+    if (!src) {
+      const at = name.lastIndexOf("@");
+      return at > 0 ? [name.slice(0, at), name.slice(at + 1)] : [name, ""];
+    }
+    return [name, src.host || ""];
+  }
+
+  /** [primary, secondary] text for a source in the current name mode (label | original | both). */
+  _names(src, id) {
+    if (!src && !id) return [this._t("off"), ""];
+    const orig = this._origParts(src, id);
+    const label = src && src.label;
+    if (!label || this._nameMode === "original") return orig;
+    if (this._nameMode === "label") return [label, ""];
+    const full = src.group && src.channel ? src.channel : src.original_name || src.id;
+    return label === full ? orig : [label, full];
+  }
+
+  /** Tooltip of a source: label, original name, host. */
+  _srcTip(src, id) {
+    if (!src) return id || this._t("off");
+    const orig = src.original_name || src.id;
+    return [src.label && src.label !== orig ? src.label : "", orig + (src.host ? ` · ${src.host}` : "")]
+      .filter(Boolean)
+      .join("\n");
+  }
+
+  /* ---------------- device illustrations */
+  /** Status → LED colour class of the illustration. */
+  _art(key, protoKey, state, cls = "") {
+    let art = deviceArt(key);
+    if (art && art.state === "fail") {
+      const generic = DEVICE_GENERIC[protoKey];
+      key = generic && generic !== key ? generic : null;
+      art = key ? deviceArt(key) : null;
+    } else if (!art) {
+      key = DEVICE_GENERIC[protoKey] || null;
+      art = key ? deviceArt(key) : null;
+    }
+    if (!art || art.state === "fail") return "";
+    if (art.state !== "ok") return `<span class="dev ${cls} wait" aria-hidden="true"></span>`;
+    this._needArt(key, art);
+    const halo =
+      state === "connecting" && art.led
+        ? `<circle class="halo" cx="${art.led.x}" cy="${art.led.y}" r="${Math.max(art.led.r * 2.6, 4)}"/>`
+        : "";
+    return `<svg class="dev ${cls} s-${esc(state)}" viewBox="${esc(art.symbol.getAttribute("viewBox"))}" aria-hidden="true" focusable="false"><use href="#avm-dev-${key}"/>${halo}</svg>`;
+  }
+
+  _needArt(key, art) {
+    if (this._sprited.has(key) || !this._sprite) return;
+    this._sprited.add(key);
+    this._sprite.appendChild(art.symbol.cloneNode(true));
+  }
+
+  /** Aggregated status of a group of destinations (device header). */
+  _groupState(items) {
+    const st = items.map((d) => this._destState(d).status);
+    if (st.every((x) => x === "offline")) return "offline";
+    for (const s of ["error", "source_lost", "connecting", "connected"]) if (st.includes(s)) return s;
+    return "no_source";
   }
 
   _srcName(proto, id) {
@@ -735,8 +971,8 @@ class AvMatrixCard extends HTMLElement {
     if (blocked.length) {
       this._toast(
         blocked.length === 1 && !ok.length
-          ? this._t(blocked[0][0].locked ? "dest_locked" : "dest_offline", { d: blocked[0][0].name })
-          : this._t("dests_locked", { d: blocked.map(([d]) => d.name).join(", ") }),
+          ? this._t(blocked[0][0].locked ? "dest_locked" : "dest_offline", { d: this._dTitle(blocked[0][0]) })
+          : this._t("dests_locked", { d: blocked.map(([d]) => this._dTitle(d)).join(", ") }),
         "warn"
       );
       this._shake(blocked.map(([d]) => d.id));
@@ -776,7 +1012,7 @@ class AvMatrixCard extends HTMLElement {
   _pickSource(sourceId) {
     const proto = this._currentProtocol();
     if (!proto) return;
-    if (this._editMode && sourceId) return this._openLabel(sourceId);
+    if (this._editMode && sourceId) return this._openLabel("source", sourceId);
     const dests = this._destinations(proto).filter((d) => this._sel.includes(d.id));
     if (!dests.length) {
       this._toast(this._t("select_dest_first"), "info");
@@ -794,7 +1030,7 @@ class AvMatrixCard extends HTMLElement {
     }
     const locked = dests.filter((d) => d.locked);
     if (locked.length) {
-      this._toast(this._t("dest_locked", { d: locked.map((d) => d.name).join(", ") }), "warn");
+      this._toast(this._t("dest_locked", { d: locked.map((d) => this._dTitle(d)).join(", ") }), "warn");
       this._shake(locked.map((d) => d.id));
     }
     const free = dests.filter((d) => !d.locked);
@@ -866,46 +1102,57 @@ class AvMatrixCard extends HTMLElement {
   }
 
   /* ---------------- label dialog (admin) */
-  _openLabel(sourceId) {
+  /** Label editor (admin) for kind "source" (id = source id) or "destination" (id = destination id). */
+  _openLabel(kind, id) {
     if (!this._isAdmin()) return;
     const proto = this._currentProtocol();
-    const src = this._srcById(proto, sourceId);
-    if (!src) return;
+    if (!proto) return;
+    const dest = kind === "destination";
+    const item = dest ? proto.destinations.find((d) => d.id === id) : this._srcById(proto, id);
+    if (!item) return;
     const dlg = this.shadowRoot.querySelector("dialog");
-    const allTags = [...new Set(proto.sources.flatMap((s) => s.tags || []))].sort();
+    const allTags = dest ? [] : [...new Set(proto.sources.flatMap((s) => s.tags || []))].sort();
+    const orig = dest ? this._destOrig(item, false) : item.original_name || item.id;
+    const sub = dest ? [item.manufacturer, item.model].filter(Boolean).join(" ") : item.host;
+    const art = this._art(item.icon_key, this._protocol, dest ? this._destState(item).status : item.live ? "connected" : "no_source", "dlgart");
     dlg.innerHTML = `
       <form method="dialog" class="dlg-body">
         <div class="dlg-head">
-          <div><div class="dlg-kicker">${esc(this._t("edit_labels"))} · ${esc(proto.title)}</div>
-          <div class="dlg-title mono">${esc(src.id)}</div>
-          ${src.host ? `<div class="dlg-sub mono">${esc(src.host)}</div>` : ""}</div>
+          ${art}
+          <div class="dlg-id"><div class="dlg-kicker">${esc(this._t("edit_labels"))} · ${esc(this._t(dest ? "dest_label" : "source_label"))} · ${esc(proto.title)}</div>
+          <div class="dlg-title mono">${esc(orig)}</div>
+          ${sub ? `<div class="dlg-sub mono">${esc(sub)}</div>` : ""}</div>
           <button type="button" class="ibtn" data-dlg="cancel" aria-label="${esc(this._t("cancel"))}">${icon("x")}</button>
         </div>
         <label class="fld"><span>${esc(this._t("label"))}</span>
-          <input name="label" autocomplete="off" value="${esc(src.label || "")}" placeholder="${esc(this._t("label_ph"))}"></label>
-        <label class="fld"><span>${esc(this._t("tags"))}</span>
-          <input name="tags" autocomplete="off" value="${esc((src.tags || []).join(", "))}" placeholder="${esc(this._t("tags_ph"))}"></label>
+          <input name="label" autocomplete="off" value="${esc(item.label || "")}" placeholder="${esc(this._t(dest ? "label_ph_dest" : "label_ph"))}"></label>
+        ${dest ? "" : `<label class="fld"><span>${esc(this._t("tags"))}</span>
+          <input name="tags" autocomplete="off" value="${esc((item.tags || []).join(", "))}" placeholder="${esc(this._t("tags_ph"))}"></label>`}
         ${
           allTags.length
             ? `<div class="dlg-tags">${allTags.map((t) => `<button type="button" class="chip" data-addtag="${esc(t)}">#${esc(t)}</button>`).join("")}</div>`
             : ""
         }
         <div class="dlg-actions">
-          ${src.label || (src.tags || []).length ? `<button type="button" class="btn ghost danger" data-dlg="reset">${esc(this._t("reset"))}</button>` : "<span></span>"}
+          ${item.label || (!dest && (item.tags || []).length) ? `<button type="button" class="btn ghost danger" data-dlg="reset">${esc(this._t("reset"))}</button>` : "<span></span>"}
           <span class="grow"></span>
           <button type="button" class="btn ghost" data-dlg="cancel">${esc(this._t("cancel"))}</button>
           <button type="submit" class="btn primary" data-dlg="save">${esc(this._t("save"))}</button>
         </div>
       </form>`;
-    this._dlgSrc = src.id;
+    this._dlgTarget = { kind: dest ? "destination" : "source", id: item.id, tags: item.tags || [] };
     if (dlg.open) dlg.close();
     dlg.showModal();
     setTimeout(() => dlg.querySelector('input[name="label"]').focus(), 30);
   }
 
-  async _sendLabel(source, label, tags) {
+  async _sendLabel(target, label, tags) {
+    const msg =
+      target.kind === "destination"
+        ? { type: "av_matrix/label", kind: "destination", destination: target.id, label, tags }
+        : { type: "av_matrix/label", protocol: this._protocol, source: target.id, label, tags };
     try {
-      await this._hass.connection.sendMessagePromise({ type: "av_matrix/label", protocol: this._protocol, source, label, tags });
+      await this._hass.connection.sendMessagePromise(msg);
       this._toast(this._t("label_saved"), "ok");
     } catch (err) {
       this._toast(`${this._t("action_failed")}: ${(err && err.message) || err}`, "err");
@@ -917,12 +1164,16 @@ class AvMatrixCard extends HTMLElement {
       e.preventDefault();
       const form = e.target;
       const label = form.elements.label.value.trim();
-      const tags = form.elements.tags.value
-        .split(",")
-        .map((x) => x.trim())
-        .filter(Boolean);
+      const target = this._dlgTarget;
+      // destinations: no tag field in the editor - keep the stored tags
+      const tags = form.elements.tags
+        ? form.elements.tags.value
+            .split(",")
+            .map((x) => x.trim())
+            .filter(Boolean)
+        : target.tags;
       dlg.close();
-      this._sendLabel(this._dlgSrc, label || null, tags.length ? tags : null);
+      this._sendLabel(target, label || null, tags.length ? tags : null);
     });
     dlg.addEventListener("click", (e) => {
       if (e.target === dlg) {
@@ -943,7 +1194,8 @@ class AvMatrixCard extends HTMLElement {
         dlg.close();
       } else if (b.dataset.dlg === "reset") {
         dlg.close();
-        this._sendLabel(this._dlgSrc, null, null);
+        const target = this._dlgTarget;
+        this._sendLabel(target, null, target.kind === "destination" && target.tags.length ? target.tags : null);
       }
     });
     // keys typed in the dialog must not reach the card / HA shortcuts
@@ -994,9 +1246,12 @@ class AvMatrixCard extends HTMLElement {
     if (this.shadowRoot && this._root) return;
     const sr = this.shadowRoot || this.attachShadow({ mode: "open" });
     sr.innerHTML = `<style>${CSS_TEXT}</style><style class="hover"></style>
-      <ha-card><div class="root" tabindex="-1"></div><div class="toasts" aria-live="polite"></div></ha-card>
+      <ha-card><svg class="sprite" aria-hidden="true" focusable="false"></svg><div class="root" tabindex="-1"></div><div class="toasts" aria-live="polite"></div></ha-card>
       <dialog class="dlg"></dialog>`;
     this._root = sr.querySelector(".root");
+    this._card = sr.querySelector("ha-card");
+    this._sprite = sr.querySelector("svg.sprite");
+    this._sprited = new Set();
     this._hoverStyle = sr.querySelector("style.hover");
     this._tpl = document.createElement("template");
     this._bind(sr);
@@ -1010,6 +1265,7 @@ class AvMatrixCard extends HTMLElement {
       this._config.compact ? "compact" : ""
     } mode-${this._mode()} take-${this._take} ${this._isLight() ? "light" : ""}`;
     if (this._root.className !== cls) this._root.className = cls;
+    this._card.classList.toggle("amx-light", this._isLight());
     const html = this._html().replace(/>\s+</g, "><");
     if (html === this._lastHtml) return;
     this._lastHtml = html;
@@ -1042,11 +1298,11 @@ class AvMatrixCard extends HTMLElement {
       ${this._historyOpen ? this._htmlHistory(proto) : ""}`;
   }
 
-  _seg(group, items, value) {
-    return `<div class="seg" role="radiogroup" data-k="seg-${group}">${items
+  _seg(group, items, value, aria = "") {
+    return `<div class="seg" role="radiogroup" data-k="seg-${group}"${aria ? ` aria-label="${esc(aria)}"` : ""}>${items
       .map(
-        ([v, label, ic]) =>
-          `<button type="button" role="radio" class="${v === value ? "on" : ""}" aria-checked="${v === value}" data-act="${group}" data-v="${esc(v)}" title="${esc(label)}">${ic ? icon(ic) : ""}<span>${esc(label)}</span></button>`
+        ([v, label, ic, tip]) =>
+          `<button type="button" role="radio" class="${v === value ? "on" : ""}" aria-checked="${v === value}" aria-label="${esc(label)}" data-act="${group}" data-v="${esc(v)}" title="${esc(tip || label)}">${ic ? icon(ic) : ""}<span>${esc(label)}</span></button>`
       )
       .join("")}</div>`;
   }
@@ -1083,13 +1339,27 @@ class AvMatrixCard extends HTMLElement {
         </div>
         <div class="ctrls">
           ${tabs}
+          <div class="ctrl2">
           ${this._seg("mode", [["panel", this._t("panel"), "panel"], ["matrix", this._t("matrix"), "matrix"]], this._mode())}
-          ${this._seg("takemode", [["direct", this._t("direct"), "bolt"], ["preset", this._t("preset"), null]], this._take)}
+          ${this._seg("takemode", [["direct", this._t("direct"), "bolt"], ["preset", this._t("preset"), "preset"]], this._take)}
+          ${
+            this._fallback
+              ? ""
+              : this._width && this._width < 420
+                ? `<button type="button" class="ibtn namesbtn" data-act="names" data-v="${NAME_MODES[(NAME_MODES.indexOf(this._nameMode) + 1) % NAME_MODES.length]}" title="${esc(this._t("names_tip_" + this._nameMode))}" aria-label="${esc(this._t("names"))}: ${esc(this._t("names_" + this._nameMode))}">${icon("names")}<span>${esc(this._t("names_" + this._nameMode))}</span></button>`
+                : this._seg(
+                  "names",
+                  NAME_MODES.map((m) => [m, this._t("names_" + m), null, this._t("names_tip_" + m)]),
+                  this._nameMode,
+                  this._t("names")
+                )
+          }
           ${
             this._isAdmin()
               ? `<button type="button" class="ibtn tgl ${this._editMode ? "on" : ""}" aria-pressed="${this._editMode}" data-act="edit" title="${esc(this._t("edit_labels"))}" aria-label="${esc(this._t("edit_labels"))}">${icon("pencil")}</button>`
               : ""
           }
+          </div>
         </div>
       </div>
       <div class="filters" data-k="filters">
@@ -1134,7 +1404,11 @@ class AvMatrixCard extends HTMLElement {
         ? items.some((x) => x.live)
         : items.some((x) => x.available !== false && x.status !== "offline");
     const label = this._t(closed ? "expand" : "collapse", { g: group });
-    return `<button type="button" class="gtog ${closed ? "closed" : ""}" data-act="grp" data-v="${esc(key)}" data-n="${items.length}" aria-expanded="${!closed}" title="${esc(label)}" aria-label="${esc(label)}">${icon("chevron", "chev")}<i class="led ${live ? "connected" : "offline"}"></i><span class="gname">${esc(group)}</span><span class="gcount">${esc(this._t("group_count", { n: items.length }))}</span>${extra}</button>`;
+    const art = items[0]
+      ? this._art(items[0].icon_key, this._protocol, kind === "s" ? (live ? "connected" : "no_source") : this._groupState(items), "gart")
+      : "";
+    const model = items[0] && items[0].model ? `${group} · ${items[0].model}` : group;
+    return `<button type="button" class="gtog ${closed ? "closed" : ""}" data-act="grp" data-v="${esc(key)}" data-n="${items.length}" aria-expanded="${!closed}" title="${esc(`${label}\n${model}`)}" aria-label="${esc(label)}">${icon("chevron", "chev")}${art}<i class="led ${live ? "connected" : "offline"}"></i><span class="gname">${esc(group)}</span><span class="gcount">${esc(this._t("group_count", { n: items.length }))}</span>${extra}</button>`;
   }
 
   _destState(d) {
@@ -1163,10 +1437,10 @@ class AvMatrixCard extends HTMLElement {
     const dispOn = disp && (disp.state === "on" || disp.state === "playing" || disp.state === "idle");
     const tools = [];
     tools.push(
-      `<button type="button" class="ibtn sm lock ${d.locked ? "on" : ""}" data-act="lock" data-d="${esc(d.id)}" aria-pressed="${d.locked}" title="${esc(this._t(d.locked ? "unlock" : "lock"))}" aria-label="${esc(this._t(d.locked ? "unlock" : "lock"))} · ${esc(d.name)}">${icon(d.locked ? "lock" : "unlock")}</button>`
+      `<button type="button" class="ibtn sm lock ${d.locked ? "on" : ""}" data-act="lock" data-d="${esc(d.id)}" aria-pressed="${d.locked}" title="${esc(this._t(d.locked ? "unlock" : "lock"))}" aria-label="${esc(this._t(d.locked ? "unlock" : "lock"))} · ${esc(this._dTitle(d))}">${icon(d.locked ? "lock" : "unlock")}</button>`
     );
     tools.push(
-      `<button type="button" class="ibtn sm" data-act="undo" data-d="${esc(d.id)}" ${d.can_undo && !d.locked ? "" : "disabled"} title="${esc(this._t("undo"))}" aria-label="${esc(this._t("undo"))} · ${esc(d.name)}">${icon("undo")}</button>`
+      `<button type="button" class="ibtn sm" data-act="undo" data-d="${esc(d.id)}" ${d.can_undo && !d.locked ? "" : "disabled"} title="${esc(this._t("undo"))}" aria-label="${esc(this._t("undo"))} · ${esc(this._dTitle(d))}">${icon("undo")}</button>`
     );
     if (disp) {
       const tip = disp.error
@@ -1175,7 +1449,7 @@ class AvMatrixCard extends HTMLElement {
           ? this._t("display_on", { i: disp.source || disp.configured_input || "" })
           : this._t("display_off");
       tools.push(
-        `<button type="button" class="ibtn sm tv ${dispOn ? "on" : ""} ${disp.error ? "bad" : ""}" data-act="tv" data-d="${esc(d.id)}" aria-pressed="${!!dispOn}" title="${esc(tip)}" aria-label="${esc(tip)} · ${esc(d.name)}">${icon("tv")}${!compact && dispOn && disp.source ? `<span class="tvin">${esc(disp.source)}</span>` : ""}</button>`
+        `<button type="button" class="ibtn sm tv ${dispOn ? "on" : ""} ${disp.error ? "bad" : ""}" data-act="tv" data-d="${esc(d.id)}" aria-pressed="${!!dispOn}" title="${esc(tip)}" aria-label="${esc(tip)} · ${esc(this._dTitle(d))}">${icon("tv")}${!compact && dispOn && disp.source ? `<span class="tvin">${esc(disp.source)}</span>` : ""}</button>`
       );
     }
     return tools.join("");
@@ -1199,17 +1473,23 @@ class AvMatrixCard extends HTMLElement {
         const warn = d.current_source && !d.current_source_live && status !== "offline";
         const res = this._res(d.resolution);
         const multi = this._sel.length > 1 && sel;
+        const [dn, dorig] = this._dnames(d);
+        const art = grouped ? "" : this._art(d.icon_key, this._protocol, status, "dart");
         return `
-        <div class="dest st-${status} ${sel ? "sel" : ""} ${d.locked ? "locked" : ""} ${pend ? "pending" : ""} ${preset !== undefined ? "armed" : ""}" data-k="d-${esc(d.id)}" data-shake="${esc(d.id)}">
-          <button type="button" class="dest-main" data-act="dest" data-d="${esc(d.id)}" data-nav="d" data-key="${esc(d.id)}" tabindex="${d.id === this._navKey.d ? "0" : "-1"}" aria-pressed="${sel}" aria-label="${esc(this._t("dest_label"))} ${esc(d.name)}: ${esc(cur)}">
-            <span class="dtop"><i class="led ${status}" title="${esc(this._t("status_" + status))}"></i><span class="dname">${esc(this._destName(d))}</span>${multi ? `<span class="selno">${this._sel.indexOf(d.id) + 1}</span>` : ""}</span>
+        <div class="dest st-${status} ${sel ? "sel" : ""} ${d.locked ? "locked" : ""} ${pend ? "pending" : ""} ${preset !== undefined ? "armed" : ""} ${art ? "has-art" : ""}" data-k="d-${esc(d.id)}" data-shake="${esc(d.id)}">
+          <button type="button" class="dest-main" data-act="dest" data-d="${esc(d.id)}" data-nav="d" data-key="${esc(d.id)}" tabindex="${d.id === this._navKey.d ? "0" : "-1"}" aria-pressed="${sel}" title="${esc(this._dTip(d))}" aria-label="${esc(this._t("dest_label"))} ${esc(this._dTitle(d))}: ${esc(cur)}">
+            <span class="dtop"><i class="led ${status}" title="${esc(this._t("status_" + status))}"></i><span class="dname" data-dl="${esc(d.id)}">${esc(dn)}</span>${multi ? `<span class="selno">${this._sel.indexOf(d.id) + 1}</span>` : ""}</span>
+            ${dorig ? `<span class="dorig mono">${esc(dorig)}</span>` : ""}
             <span class="dsrc ${d.current_source ? "" : "none"}">${pend ? `<span class="spinner sm"></span><span class="ell">${esc(this._t("switching"))}</span>` : `<span class="ell">${esc(cur)}</span>`}</span>
             <span class="dsub mono">${esc(pend ? this._srcName(proto, pend.source) : curSub)}</span>
-            <span class="dmeta">
+            ${(() => {
+              const chip = this._htmlSubChip(d, status, warn);
+              return chip ? `<span class="dwarn">${chip}</span>` : "";
+            })()}
+            <span class="dfoot"><span class="dmeta">
               ${res ? `<span class="chip res mono">${esc(res)}</span>` : `<span class="chip res mono dim">${esc(this._t("status_" + status))}</span>`}
               ${d.locked ? `<span class="chip lockchip">${icon("lock")}${esc(this._t("locked"))}</span>` : ""}
-              ${this._htmlSubChip(d, status, warn)}
-            </span>
+            </span>${art}</span>
             ${preset !== undefined ? `<span class="armline"><b>PST</b><span class="ell">→ ${esc(this._srcName(proto, preset))}</span></span>` : ""}
           </button>
           <div class="dtools">${this._htmlDestTools(d)}</div>
@@ -1249,16 +1529,17 @@ class AvMatrixCard extends HTMLElement {
       const foot = !live
         ? `<span class="offl">${esc(this._t("offline_since", { t: this._ago(s.last_seen) }))}</span>`
         : tags;
-      const cls = ["src", id === "" ? "black" : "", isPgm ? "pgm" : "", isPst ? "pst" : "", isPend ? "pend" : "", live ? "" : "dead"]
+      const cls = ["src", id === "" ? "black" : "", id !== "" && !grouped && s.icon_key ? "has-art" : "", isPgm ? "pgm" : "", isPst ? "pst" : "", isPend ? "pend" : "", live ? "" : "dead"]
         .filter(Boolean)
         .join(" ");
-      const titleTxt = id === "" ? primary : `${id}${s.host ? " · " + s.host : ""}`;
+      const titleTxt = id === "" ? primary : this._srcTip(s, id);
+      const art = id === "" || grouped ? "" : this._art(s.icon_key, this._protocol, live ? "connected" : "no_source", "sart");
       return `
         <button type="button" class="${cls}" data-k="s-${esc(id)}" data-act="src" data-s="${esc(id)}" data-nav="s" data-key="${esc(id)}" data-flash="${esc(flashKey(id))}" tabindex="${id === this._navKey.s ? "0" : "-1"}" aria-pressed="${isPgm}" title="${esc(titleTxt)}" aria-label="${esc(this._t("source_label"))} ${esc(primary)}${live ? "" : " (offline)"}">
           <span class="tally"></span>
           <span class="sname">${esc(primary)}</span>
           <span class="sid mono">${esc(secondary)}</span>
-          <span class="sfoot">${foot}${used && id !== "" ? `<span class="use" title="${esc(this._t("in_use", { n: used }))}"><i></i>${used}</span>` : ""}</span>
+          <span class="sfoot"><span class="stags">${foot}</span>${used && id !== "" ? `<span class="use" title="${esc(this._t("in_use", { n: used }))}"><i></i>${used}</span>` : ""}${art}</span>
         </button>`;
     };
     const cols = parseInt(this._config.columns, 10);
@@ -1318,12 +1599,14 @@ class AvMatrixCard extends HTMLElement {
           return `<th scope="col" class="ch sum ${gs} ${used ? "used" : ""}" data-c="${c}" data-k="ch-g-${esc(col.group)}" title="${esc(col.group)}">
             <div class="chw"><span class="chl"><span class="chn">${esc(this._t("group_count", { n: col.items.length }))}</span></span></div></th>`;
         }
-        const [primary] = id === "" ? [this._t("off"), ""] : this._names(s, id);
+        const [primary, secondary] = id === "" ? [this._t("off"), ""] : this._names(s, id);
         const live = id === "" || s.live;
         const used = proto.destinations.some((d) => (d.current_source || "") === id);
-        const tip = id === "" ? primary : `${primary}\n${id}${s.host ? " · " + s.host : ""}${live ? "" : "\n" + this._t("offline_since", { t: this._ago(s.last_seen) })}`;
+        const tip = id === "" ? primary : `${this._srcTip(s, id)}${live ? "" : "\n" + this._t("offline_since", { t: this._ago(s.last_seen) })}`;
+        const art = id === "" || grouped ? "" : this._art(s.icon_key, this._protocol, live ? "connected" : "no_source", "cart");
+        const sub = secondary && this._nameMode === "both" && s && s.label ? secondary : "";
         return `<th scope="col" class="ch ${gs} ${live ? "" : "dead"} ${used ? "used" : ""} ${id === "" ? "black" : ""}" data-c="${c}" data-k="ch-${esc(id)}" title="${esc(tip)}" ${this._isAdmin() && id ? `data-act="label" data-s="${esc(id)}"` : ""} ${grouped && id === "" ? 'rowspan="2"' : ""}>
-          <div class="chw"><span class="chl"><i class="led ${live ? (used ? "pgm" : "connected") : "no_source"}"></i><span class="chn">${esc(primary)}</span></span></div>
+          <div class="chw"><span class="chl"><i class="led ${live ? (used ? "pgm" : "connected") : "no_source"}"></i><span class="cht"><span class="chn">${esc(primary)}</span>${sub ? `<span class="chs mono">${esc(sub)}</span>` : ""}</span></span>${art}</div>
         </th>`;
       });
     const groupHead = colGroups
@@ -1350,7 +1633,7 @@ class AvMatrixCard extends HTMLElement {
             const hit = col.items.find((x) => x.id === cur);
             const isPst = preset !== undefined && col.items.some((x) => x.id === preset);
             const label = hit ? this._names(hit, hit.id)[0] : col.group;
-            return `<td role="gridcell" class="${gs}" data-r="${rr}" data-c="${c}"><button type="button" class="xp sum ${hit ? "pgm" : ""} ${hit && warn ? "lost" : ""} ${isPst ? "pst" : ""}" data-act="grp" data-v="${esc(`s:${col.group}`)}" data-n="${col.items.length}" data-nav="x" data-key="${k}" data-r="${rr}" data-c="${c}" tabindex="${this._navKey.x === k ? "0" : "-1"}" title="${esc(this._t("expand", { g: col.group }))}" aria-label="${esc(label)} → ${esc(d.name)}"><i></i>${hit ? `<b class="sumn">${esc(label)}</b>` : ""}</button></td>`;
+            return `<td role="gridcell" class="${gs}" data-r="${rr}" data-c="${c}"><button type="button" class="xp sum ${hit ? "pgm" : ""} ${hit && warn ? "lost" : ""} ${isPst ? "pst" : ""}" data-act="grp" data-v="${esc(`s:${col.group}`)}" data-n="${col.items.length}" data-nav="x" data-key="${k}" data-r="${rr}" data-c="${c}" tabindex="${this._navKey.x === k ? "0" : "-1"}" title="${esc(this._t("expand", { g: col.group }))}" aria-label="${esc(label)} → ${esc(this._dTitle(d))}"><i></i>${hit ? `<b class="sumn">${esc(label)}</b>` : ""}</button></td>`;
           }
           const { id, s } = col;
           const on = cur === id;
@@ -1361,17 +1644,19 @@ class AvMatrixCard extends HTMLElement {
           const cls = ["xp", on ? "pgm" : "", on && warn ? "lost" : "", isPst ? "pst" : "", isPend ? "pend" : "", live ? "" : "dead"]
             .filter(Boolean)
             .join(" ");
-          return `<td role="gridcell" class="${gs}" data-r="${rr}" data-c="${c}"><button type="button" class="${cls}" data-act="xp" data-d="${esc(d.id)}" data-s="${esc(id)}" data-nav="x" data-key="${k}" data-r="${rr}" data-c="${c}" data-flash="${esc(d.id)}|${esc(id)}" tabindex="${this._navKey.x === k ? "0" : "-1"}" aria-pressed="${on}" aria-label="${esc(name)} → ${esc(d.name)}" ${d.locked ? 'aria-disabled="true"' : ""}><i></i></button></td>`;
+          return `<td role="gridcell" class="${gs}" data-r="${rr}" data-c="${c}"><button type="button" class="${cls}" data-act="xp" data-d="${esc(d.id)}" data-s="${esc(id)}" data-nav="x" data-key="${k}" data-r="${rr}" data-c="${c}" data-flash="${esc(d.id)}|${esc(id)}" tabindex="${this._navKey.x === k ? "0" : "-1"}" aria-pressed="${on}" aria-label="${esc(name)} → ${esc(this._dTitle(d))}" ${d.locked ? 'aria-disabled="true"' : ""}><i></i></button></td>`;
         })
         .join("");
       const sub = d.subscription && ["error", "warning", "unresolved", "idle"].includes(d.subscription.state) && status !== "offline";
       const subTip = sub ? [this._t("sub_" + d.subscription.state), d.subscription.detail].filter(Boolean).join(" · ") : this._t("not_sending");
+      const [dn, dorig] = this._dnames(d);
+      const art = grouped ? "" : this._art(d.icon_key, this._protocol, status, "rart");
       return `<tr role="row" data-r="${rr}" data-k="r-${esc(d.id)}" class="${d.locked ? "locked" : ""} ${preset !== undefined ? "armed" : ""}" data-shake="${esc(d.id)}">
-          <th scope="row" class="rh" data-r="${rr}">
+          <th scope="row" class="rh" data-r="${rr}" data-d="${esc(d.id)}">
             <div class="rhw">
-              <i class="led ${status}" title="${esc(this._t("status_" + status))}"></i>
+              <i class="led ${status}" title="${esc(this._t("status_" + status))}"></i>${art}
               <div class="rht">
-                <div class="rhn" title="${esc(d.name)}">${esc(this._destName(d))}</div>
+                <div class="rhn" title="${esc(this._dTip(d))}" data-dl="${esc(d.id)}" ${this._editMode && this._isAdmin() ? `data-act="dlabel" data-d="${esc(d.id)}"` : ""}><span class="ell">${esc(dn)}</span>${dorig ? `<span class="rho mono">${esc(dorig)}</span>` : ""}</div>
                 <div class="rhs ${pend ? "pending" : ""}">${
                   pend
                     ? `<span class="spinner sm"></span>${esc(this._t("switching"))}`
@@ -1421,7 +1706,7 @@ class AvMatrixCard extends HTMLElement {
       .map(([id, s]) => {
         const d = dests.find((x) => x.id === id);
         return d
-          ? `<span class="armchip" data-k="arm-${esc(id)}"><b>${esc(d.name)}</b><span class="arr">←</span>${esc(this._srcName(proto, s))}<button type="button" class="x" data-act="disarm" data-d="${esc(id)}" aria-label="${esc(this._t("clear"))} ${esc(d.name)}">${icon("x")}</button></span>`
+          ? `<span class="armchip" data-k="arm-${esc(id)}" title="${esc(this._dTip(d))}"><b>${esc(this._dTitle(d))}</b><span class="arr">←</span>${esc(this._srcName(proto, s))}<button type="button" class="x" data-act="disarm" data-d="${esc(id)}" aria-label="${esc(this._t("clear"))} ${esc(this._dTitle(d))}">${icon("x")}</button></span>`
           : "";
       })
       .join("");
@@ -1479,7 +1764,7 @@ class AvMatrixCard extends HTMLElement {
         const user = this._userName(e.user_id);
         return `<li data-k="h-${e.time}-${esc(e.dest)}">
           <span class="ht mono">${esc(fmt(e.time))}</span>
-          <span class="hd">${esc(d ? d.name : e.dest_name || e.dest)}</span>
+          <span class="hd" title="${esc(d ? this._dTip(d) : e.dest_name || e.dest)}">${esc(d ? this._dTitle(d) : e.dest_name || e.dest)}</span>
           <span class="hs"><span class="arr">←</span>${esc(this._srcName(proto, e.source))}</span>
           <span class="hp">${e.previous !== undefined ? `<span class="was">${esc(this._t("was"))}</span><span class="mono">${esc(this._srcName(proto, e.previous))}</span>` : ""}</span>
           <span class="hu">${e.origin ? `<span class="tag">${esc(this._t("origin_" + e.origin))}</span>` : ""}${esc(user)}</span>
@@ -1538,7 +1823,14 @@ class AvMatrixCard extends HTMLElement {
           this._render();
           break;
         case "dest":
-          this._selectDest(el.dataset.d, multi);
+          if (this._editMode && this._isAdmin()) this._openLabel("destination", el.dataset.d);
+          else this._selectDest(el.dataset.d, multi);
+          break;
+        case "dlabel":
+          this._openLabel("destination", el.dataset.d);
+          break;
+        case "names":
+          this._setNameMode(el.dataset.v);
           break;
         case "src":
           this._pickSource(el.dataset.s);
@@ -1547,11 +1839,11 @@ class AvMatrixCard extends HTMLElement {
           const d = findDest(el.dataset.d);
           if (!d) break;
           if (this._editMode && el.dataset.s) {
-            this._openLabel(el.dataset.s);
+            this._openLabel("source", el.dataset.s);
             break;
           }
           if (d.locked) {
-            this._toast(this._t("dest_locked", { d: d.name }), "warn");
+            this._toast(this._t("dest_locked", { d: this._dTitle(d) }), "warn");
             this._shake([d.id]);
             break;
           }
@@ -1559,7 +1851,7 @@ class AvMatrixCard extends HTMLElement {
           break;
         }
         case "label":
-          this._openLabel(el.dataset.s);
+          this._openLabel("source", el.dataset.s);
           break;
         case "lock": {
           const d = findDest(el.dataset.d);
@@ -1619,33 +1911,54 @@ class AvMatrixCard extends HTMLElement {
       }
     });
 
-    // right click on a source = edit label (admin)
+    // right click on a source or a destination = edit label (admin)
     sr.addEventListener("contextmenu", (e) => {
+      if (!this._isAdmin()) return;
       const el = e.target.closest('[data-act="src"],[data-act="xp"],th.ch');
       const id = el && el.dataset.s;
-      if (id && this._isAdmin()) {
+      if (id) {
         e.preventDefault();
-        this._openLabel(id);
+        this._openLabel("source", id);
+        return;
+      }
+      const d = e.target.closest('[data-act="dest"],th.rh');
+      if (d && d.dataset.d) {
+        e.preventDefault();
+        this._openLabel("destination", d.dataset.d);
       }
     });
 
-    // long press: destination = add to multi selection, source = edit label (admin)
+    // double click on a destination name = edit label (admin)
+    sr.addEventListener("dblclick", (e) => {
+      const el = e.target.closest("[data-dl]");
+      if (el && this._isAdmin()) {
+        e.preventDefault();
+        this._openLabel("destination", el.dataset.dl);
+      }
+    });
+
+    // long press: destination name = edit label (admin), destination = add to multi selection,
+    // source = edit label (admin)
     sr.addEventListener("pointerdown", (e) => {
       if (!this._root.contains(sr.activeElement)) this._root.focus({ preventScroll: true });
-      const el = e.target.closest('[data-act="dest"],[data-act="src"]');
+      const nameEl = this._isAdmin() ? e.target.closest("[data-dl]") : null;
+      const el = nameEl || e.target.closest('[data-act="dest"],[data-act="src"]');
       clearTimeout(this._lp);
       if (!el || (e.pointerType === "mouse" && e.button !== 0)) return;
       const x = e.clientX;
       const y = e.clientY;
       this._lpStart = { x, y };
       this._lp = setTimeout(() => {
-        if (el.dataset.act === "dest") {
+        if (nameEl) {
+          this._suppressClick = true;
+          this._openLabel("destination", nameEl.dataset.dl);
+        } else if (el.dataset.act === "dest") {
           this._selectDest(el.dataset.d, true);
           this._suppressClick = true;
           if (navigator.vibrate) navigator.vibrate(15);
         } else if (el.dataset.s && this._isAdmin()) {
           this._suppressClick = true;
-          this._openLabel(el.dataset.s);
+          this._openLabel("source", el.dataset.s);
         }
       }, LONG_PRESS_MS);
     });
@@ -1748,6 +2061,11 @@ class AvMatrixCard extends HTMLElement {
         handled();
         return;
       }
+      case "n":
+      case "N":
+        this._setNameMode(NAME_MODES[(NAME_MODES.indexOf(this._nameMode) + 1) % NAME_MODES.length]);
+        handled();
+        return;
       case "l":
       case "L": {
         const dests = this._focusedDests(t);
@@ -1892,6 +2210,27 @@ kbd { font-family: var(--amx-mono); font-size: 10px; line-height: 1; padding: 3p
   color: var(--amx-fg2); transition: background .15s, color .15s, border-color .15s; padding: 0; }
 .ibtn:hover:not([disabled]) { color: var(--amx-fg); background: var(--amx-tile2); }
 .ibtn[disabled] { opacity: .35; cursor: default; }
+.ctrl2 { display: contents; }
+/* phones: protocol tabs next to the title, icon-only segmented controls, names as one cycling button
+   → the header takes two rows */
+.xs .hdr { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px 8px; align-items: start; }
+.xs .ctrls { display: contents; }
+.xs .tabs { grid-column: 2; grid-row: 1; }
+.xs .tab { padding: 0 9px; }
+.xs .ctrl2 { grid-column: 1 / -1; display: flex; gap: 6px; align-items: center; }
+.xs .ctrl2 .ibtn.tgl { margin-left: auto; }
+.xs .seg button { padding: 0 10px; }
+.xs .search { flex: 1 1 100%; }
+.xs .rhw { min-width: 150px; max-width: 176px; gap: 7px; padding-left: 9px; }
+.xs .rart, .xs .rho, .xs .rhs .chip.res, .xs .rtools [data-act="undo"] { display: none; }
+.xs .mxwrap:not(.grouped) .chw, .xs .mxwrap:not(.grouped) .cornerw { height: 150px; }
+.xs .chl { max-height: 116px; }
+.xs .seg button .ic + span { display: none; }
+.xs .seg button .ic { width: 17px; height: 17px; }
+.namesbtn { width: auto; padding: 0 9px; gap: 5px; font-size: 12px; font-weight: 500; color: var(--amx-fg); }
+.namesbtn .ic { width: 16px; height: 16px; }
+.xs .ibtn { width: 34px; height: 34px; flex: none; }
+.xs .ibtn.namesbtn { width: auto; }
 .ibtn.tgl.on { color: var(--amx-accent); border-color: color-mix(in srgb, var(--amx-accent) 50%, transparent);
   background: color-mix(in srgb, var(--amx-accent) 12%, transparent); }
 
@@ -2271,13 +2610,68 @@ dialog::backdrop { background: rgba(0,0,0,.45); -webkit-backdrop-filter: blur(3p
 .dests.grouped .dsrc { font-size: 15px; margin-top: 2px; }
 .dests.grouped .dsub { font-size: 10px; min-height: 12px; }
 .dests.grouped .dmeta { padding-top: 4px; }
-.dests.grouped .dmeta:not(:has(.warnchip, .lockchip)) { display: none; }
+.dests.grouped .dmeta:not(:has(.lockchip)) { display: none; }
+.dests.grouped .dwarn { margin-top: 4px; }
 .dests.grouped .dmeta .chip.res { display: none; }
 .dests.grouped .armline { margin-top: 4px; padding: 3px 6px; font-size: 12px; }
 .dests.grouped .dtools { flex-direction: column; justify-content: flex-start; padding: 4px 3px; border-top: 0;
   border-left: 1px solid var(--amx-line); gap: 0; }
 .dests.grouped .dtools .ibtn.sm { width: 26px; height: 26px; }
 @media (pointer: coarse) { .dests.grouped .dtools .ibtn.sm { width: 34px; height: 34px; } }
+/* ---------------- device illustrations (SVG sprite + <use>, colours via custom properties) */
+.sprite { position: absolute; width: 0; height: 0; overflow: hidden; pointer-events: none; }
+ha-card.amx-light { --avm-dev-body: #474e58; --avm-dev-top: #5c636d; --avm-dev-side: #2c3138; --avm-dev-line: #9aa3ad;
+  --avm-dev-metal: #c9d0d7; --avm-dev-screen: #161a20; }
+.dev { display: block; flex: none; overflow: visible; aspect-ratio: 3 / 2; height: auto; pointer-events: none; }
+span.dev.wait { visibility: hidden; }
+.dev.s-connected { --avm-led: var(--amx-ok); }
+.dev.s-connecting { --avm-led: #ffd23f; }
+.dev.s-no_source { --avm-led: #8a8f96; }
+.dev.s-source_lost { --avm-led: var(--amx-lost); }
+.dev.s-error, .dev.s-offline { --avm-led: var(--amx-err); }
+.dev .halo { fill: var(--avm-led); opacity: 0; animation: amx-halo 1.1s ease-in-out infinite; }
+@keyframes amx-halo { 0%, 100% { opacity: 0; } 50% { opacity: .55; } }
+/* panel destination tile: the device sits bottom right, next to the status chips */
+.dfoot { display: flex; align-items: flex-end; gap: 8px; margin-top: auto; min-width: 0; }
+.dfoot .dmeta { flex: 1; min-width: 0; margin-top: 0; }
+.dart { width: 70px; margin: -12px -4px -4px 0; }
+.dwarn { display: flex; margin-top: 6px; min-width: 0; }
+.dwarn .chip { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.dmeta .chip { max-width: 100%; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.compact .dart { width: 52px; }
+.narrow .dart { width: 54px; margin-top: -6px; }
+.xs .dart { width: 46px; }
+.dest.st-offline .dart, .dest.st-no_source .dart { opacity: .75; }
+.dorig { font-size: 10.5px; color: var(--amx-fg2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: -1px;
+  padding-left: 17px; }
+/* panel source tile: small device bottom right */
+.sart { width: 28px; margin: -6px -3px -3px auto; }
+.use + .sart { margin-left: 2px; }
+.stags { display: flex; gap: 6px; align-items: center; flex: 0 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; }
+.stags .offl { overflow: hidden; text-overflow: ellipsis; }
+.src.dead .sart { opacity: .4; }
+.compact .sart { width: 24px; }
+/* matrix */
+.rart { width: 30px; }
+.narrow .rart { width: 26px; }
+.rhn { display: flex; align-items: baseline; gap: 7px; min-width: 0; }
+.rho { font-size: 10.5px; font-weight: 400; color: var(--amx-fg2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 0 1 auto; }
+.rhn .ell { flex: 0 1 auto; }
+.rhn[data-act] { cursor: text; text-decoration: underline dotted color-mix(in srgb, var(--amx-accent) 70%, transparent); text-underline-offset: 3px; }
+.chw { flex-direction: column; align-items: center; justify-content: flex-end; gap: 6px; }
+.cht { display: flex; flex-direction: column; gap: 1px; overflow: hidden; min-height: 0; }
+.mxwrap:not(.grouped) .chw { height: 172px; }
+.mxwrap:not(.grouped) .cornerw { height: 172px; }
+.chl { max-height: 136px; }
+.cart { width: 24px; }
+.mxwrap.grouped .chl { max-height: 96px; }
+.gart { width: 34px; margin: -3px 0; }
+.mx .gart { width: 30px; }
+.dlg-head .dlgart { width: 72px; margin-top: 2px; }
+.dlg-id { flex: 1; min-width: 0; }
+.dname[data-dl] { cursor: inherit; }
+.mode-panel .edit-hint ~ .panel .dest-main .dname { text-decoration: underline dotted color-mix(in srgb, var(--amx-accent) 70%, transparent); text-underline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) { .dev .halo { animation: none !important; opacity: .35; } }
 @keyframes amx-blink { 0% { opacity: 1; } 50% { opacity: .45; } 100% { opacity: 1; } }
 @keyframes amx-pend { from { box-shadow: 0 0 0 0 color-mix(in srgb, var(--amx-tally) 0%, transparent); }
   to { box-shadow: 0 0 0 3px color-mix(in srgb, var(--amx-tally) 55%, transparent), 0 0 18px color-mix(in srgb, var(--amx-tally) 45%, transparent); } }
@@ -2351,6 +2745,19 @@ class AvMatrixCardEditor extends HTMLElement {
         ],
       },
       {
+        name: "name_mode",
+        selector: {
+          select: {
+            mode: "dropdown",
+            options: [
+              { value: "both", label: de ? "Beide (Label, darunter Originalname)" : "Both (label, original name underneath)" },
+              { value: "label", label: "Label" },
+              { value: "original", label: de ? "Originalname" : "Original name" },
+            ],
+          },
+        },
+      },
+      {
         type: "grid",
         name: "",
         schema: [
@@ -2370,6 +2777,7 @@ class AvMatrixCardEditor extends HTMLElement {
       take_mode: de ? "Schaltmodus" : "Take mode",
       protocol: de ? "Protokoll (Start-Tab)" : "Protocol (start tab)",
       columns: de ? "Spalten Quellen (0 = auto)" : "Source columns (0 = auto)",
+      name_mode: de ? "Namen (Start, im Browser umschaltbar)" : "Names (initial, switchable in the browser)",
       show_offline: de ? "Offline-Quellen zeigen" : "Show offline sources",
       compact: de ? "Kompakt" : "Compact",
       destinations: de ? "Ziele (Auswahl & Reihenfolge, leer = alle)" : "Destinations (selection & order, empty = all)",
@@ -2403,6 +2811,7 @@ class AvMatrixCardEditor extends HTMLElement {
     this._form.data = {
       mode: "panel",
       take_mode: "direct",
+      name_mode: "both",
       show_offline: this._config.show_offline ?? this._config.show_offline_sources ?? true,
       compact: false,
       ...this._config,

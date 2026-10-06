@@ -3,6 +3,22 @@
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- **Device illustrations** in the card: own, stylised SVG drawings of the devices (Magewell Pro Convert NDI to AIO
+  and other Pro Convert models, BirdDog PLAY, Audinate AVIO AES3 / analog / USB adapters, small Dante converters such
+  as HDCVT DA-22UC, Behringer WING-style consoles, generic NDI cameras/computers/decoders, Dante devices, displays).
+  The status LED in the drawing shows the destination status. New snapshot fields `icon_key`, `manufacturer`, `model`;
+  the mapping lives in `device_icons.py` (rules on driver, manufacturer, model, Dante default name prefix) and is
+  easy to extend (see CONTRIBUTING).
+- **Names like on a broadcast router panel:** `Label | Original | Both` switch in the card header (key `N`, remembered
+  per browser, YAML option `name_mode`, default `both`). Search finds labels and original names.
+- **Labels for destinations** (decoder outputs, Dante RX channels): `av_matrix/label` with `kind: "destination"`
+  (backwards compatible), snapshot fields `label`, `original_name`, `tags` for destinations and `original_name` for
+  sources; label editor in the card for destinations. Entity names are not changed.
+- Integration icon and logo (`brand/`), README header.
+
 ## [0.3.1] - 2026-10-05
 
 ### Fixed

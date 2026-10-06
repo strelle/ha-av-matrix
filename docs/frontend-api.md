@@ -38,6 +38,8 @@ const unsub = await hass.connection.subscribeMessage(
           "id": "STUDIO-PC (Slides)",          // identity; pass this as `source` when routing
           "name": "Slides",                    // label if set, else id
           "label": "Slides",                   // user label or null
+          "original_name": "STUDIO-PC (Slides)", // name on the network (NDI name, Dante channel@device)
+          "icon_key": "ndi_computer",          // device illustration, see "Device illustrations"
           "tags": ["presentation"],            // user tags (categories), may be []
           "live": true,                        // sending right now
           // grouped protocols (Dante®) only:
@@ -53,13 +55,19 @@ const unsub = await hass.connection.subscribeMessage(
         {
           "id": "magewell-a123456789_main",    // stable destination id
           "entity_id": "select.lobby_source",  // use this for service calls (null if the entity is disabled → use "id")
-          "name": "Lobby",                     // device name, plus " · Channel n" on multi-channel devices
+          "name": "Lobby",                     // label if set, else original_name
+          "label": null,                       // user label of the destination or null
+          "original_name": "Lobby",            // device name, plus " · Channel n" on multi-channel devices
+          "tags": [],                          // user tags of the destination
           "channel": null,                     // channel name or null
           "device_name": "Lobby",
           "group": null,                       // Dante®: the device of the RX channel (sub-device), else null
           "device_id": "4f1c…",                // HA device registry id
           "entry_id": "01J…",
           "driver": "magewell",
+          "manufacturer": "Magewell",          // from the device / mDNS, may be null
+          "model": "Pro Convert NDI to AIO",   // may be null
+          "icon_key": "magewell_ndi_aio",      // device illustration
           "protocol": "ndi",
           "current_source": "STUDIO-PC (Slides)",   // source id or null (= None/off)
           "current_source_live": true,
@@ -99,7 +107,9 @@ Notes:
 
 ## `av_matrix/label` (admin only)
 
-Set or clear a label and tags of a source (persisted in `.storage/av_matrix`).
+Set or clear a label and tags of a source or a destination (persisted in `.storage/av_matrix`). Labels are display
+names for the card ("Label | Original | both" switch); entity names in Home Assistant are not changed by
+destination labels.
 
 ```js
 await hass.connection.sendMessagePromise({
@@ -110,7 +120,16 @@ await hass.connection.sendMessagePromise({
   tags: ["presentation", "stage"] // null or [] clears tags
 });
 // → result: { "label": "Präsentation", "tags": ["presentation", "stage"] }  ({} when cleared)
+
+await hass.connection.sendMessagePromise({
+  type: "av_matrix/label",
+  kind: "destination",            // default "source" (backwards compatible)
+  destination: "magewell-a123456789_main",   // destination id
+  label: "Foyer left"             // null or "" clears
+});
 ```
+
+Errors: `unknown_protocol`, `unknown_destination`, `invalid_format` (source missing), `unauthorized` (not admin).
 
 Labels are also accepted by the services and appear as `select` options.
 
@@ -141,6 +160,16 @@ await hass.callService("av_matrix", "route", { entity_id: "select.lobby_source",
 
 The event is fired with the context of the action that caused it, so `event.context.user_id` identifies the user
 (null for automations without a user). The card resolves it to a name via `config/auth/list` for admins.
+
+## Device illustrations
+
+`icon_key` names an SVG in `/av_matrix_static/devices/<icon_key>.svg` (shipped with the integration). The key is
+derived in `device_icons.py` from driver, manufacturer, model and device name (Dante: mDNS model or the default
+name prefix such as `AVIOAES3-`, `DA-22UC-`, `WING`); NDI sources fall back to `ndi_camera` / `ndi_computer` by
+name. Keys: `magewell_ndi_aio`, `magewell_pro_convert`, `birddog_play`, `ndi_decoder`, `ndi_camera`, `ndi_computer`,
+`avio_aes3`, `avio_analog_in`, `avio_analog_out`, `avio_usb`, `dante_converter`, `wing`, `dante_device`, `display`.
+The SVGs use CSS custom properties: `--avm-led` (status LED colour, set by the card), `--avm-dev-body`,
+`--avm-dev-top`, `--avm-dev-side`, `--avm-dev-line`, `--avm-dev-metal`, `--avm-dev-screen`.
 
 ## Card loading
 

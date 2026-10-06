@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/images/header.png" alt="AV Matrix – NDI® & Dante® crosspoint router for Home Assistant" width="100%"></p>
+
 # AV Matrix for Home Assistant
 
 **Smart crosspoint router for NDI® decoders (BirdDog, Magewell) and Dante® audio networks.**
@@ -19,6 +21,10 @@ Dante device on the network is a source, every RX channel a destination – foun
 <td width="68%"><img src="docs/screenshots/panel-desktop.png" alt="Panel (X-Y) view with two destinations armed for a salvo"><br>
 <img src="docs/screenshots/panel-light.png" alt="Panel view in a light theme with the routing history open"></td>
 <td width="32%"><img src="docs/screenshots/panel-phone.png" alt="Panel view on a phone"></td>
+</tr><tr>
+<td width="68%"><img src="docs/screenshots/matrix-light.png" alt="Matrix view in a light theme, names shown as label and original"></td>
+<td width="32%"><img src="docs/screenshots/matrix-phone.png" alt="Matrix view on a phone"><br>
+<img src="docs/screenshots/panel-phone-light.png" alt="Panel view on a phone in a light theme"></td>
 </tr></table>
 
 *Screenshots from the [mock demo](docs/demo/index.html) (no Home Assistant needed: serve the repo with
@@ -39,10 +45,14 @@ Dante device on the network is a source, every RX channel a destination – foun
 - **Actions:** `av_matrix.route`, `av_matrix.salvo` (several routes at once, validated first),
   `av_matrix.lock` / `unlock`, `av_matrix.undo`, `av_matrix.refresh_sources`; event `av_matrix_routed`.
 - **Linked displays:** power on a TV/projector and switch its input when a destination is routed.
-- **Labels:** give cryptic NDI names a friendly label and tags (via the WebSocket API / card).
+- **Labels:** give cryptic NDI names, decoder outputs and Dante channels a friendly label (sources also tags); the
+  card switches between *Label*, *Original* and *both* like a broadcast router panel.
+- **Device illustrations:** every decoder, Dante device and source is shown as a small drawing of the device
+  (Magewell, BirdDog, AVIO adapters, Dante converters, WING …) whose LED shows the live status.
 - **Router panel card** `custom:av-matrix-card`, shipped with the integration — no manual resource needed:
   X-Y panel and matrix view, direct or preset + TAKE (salvo), lock, undo, labels, history, keyboard control.
 - **HomeKit-ready:** the source selects work with the HomeKit Bridge (one switch per source).
+- Own integration icon and logo (shipped in `brand/`, shown by Home Assistant 2026.3+).
 - Config flow with connection test, re-authentication, reconfigure, options, diagnostics (passwords redacted).
 - **Dante® network** (*experimental*): one entry for the whole network, devices found via mDNS; TX channels =
   sources, RX channels = destinations, routing = subscriptions. See [Dante](#dante).
@@ -139,6 +149,7 @@ type: custom:av-matrix-card
 title: Video routing
 mode: panel            # panel (X-Y) | matrix
 take_mode: preset      # direct | preset (arm + TAKE)
+name_mode: both        # label | original | both
 # protocol: ndi        # start tab
 # show_offline: true
 # compact: false
@@ -153,13 +164,15 @@ take_mode: preset      # direct | preset (arm + TAKE)
 | `title` | `AV Matrix` | Card title (empty = none). |
 | `mode` | `panel` | `panel`: destinations on top, sources below (X-Y panel). `matrix`: destinations × sources grid. Narrow cards (< 640 px) start in panel mode. |
 | `take_mode` | `direct` | `direct`: tapping a source switches immediately. `preset`: tapping arms the route (amber), **TAKE** switches all armed routes at once (salvo). |
+| `name_mode` | `both` | Names shown: `label` (label, else the original name), `original` (device / NDI / Dante name), `both` (label, original name in small print underneath). Initial value only – the switch in the header is remembered per browser. |
 | `protocol` | first | Protocol tab to start on (`ndi`, `dante`). Only sources of the same protocol can be routed. |
 | `show_offline` | `true` | Show sources that stopped sending (greyed, "offline · 6 min"). |
 | `compact` | `false` | Smaller tiles. |
 | `columns` | auto | Number of source columns in panel mode. |
 | `destinations` | all | List of destination `select` entities: which ones to show, in this order. |
 
-Mode and take mode can also be switched in the card header at any time.
+Mode, take mode and names (**Label | Original | Both**, like on a Lawo panel) can also be switched in the card header
+at any time.
 
 **Operating it like a router panel**
 
@@ -176,8 +189,14 @@ Mode and take mode can also be switched in the card header at any time.
 - **Lock** (padlock) protects a destination, **undo** (↶) restores its previous source; *Undo last* in the footer
   undoes the latest route made from the card. The **TV** button switches a linked display on/off and shows its input.
 - **Search and tags** filter the sources; *Live only* hides offline sources.
-- **Labels (admins):** pencil button in the header, then tap a source – or right-click / long-press a source.
-  Give cryptic NDI names a friendly label and tags; the NDI name stays visible in small print.
+- **Labels (admins):** pencil button in the header, then tap a source or a destination – or right-click / long-press
+  a source, double-click / long-press a destination name (right-click works too). Give cryptic NDI names and
+  device names a friendly label (sources also tags); the original name stays visible in small print in *Both* mode.
+  Destination labels only rename the destination in the card, not the entities in Home Assistant.
+- **Names:** *Label | Original | Both* in the header (key `N`) switches every name in the card – tiles, matrix
+  headers, take bar, history, messages. Search always finds label, original name and tags.
+- **Devices:** each destination shows a small drawing of its device (Magewell, BirdDog, AVIO adapters, WING, …) whose
+  LED follows the status; sources show a small icon (Dante: on the device header).
 - **History:** the last 50 routes with time, destination, source, previous source, origin and user (who switched;
   user names are resolved for admins).
 - Switching shows *switching…* immediately and is confirmed by the live state from Home Assistant.
@@ -192,6 +211,7 @@ Mode and take mode can also be switched in the card header at any time.
 | Esc | Clear presets / multi-selection |
 | `U` | Undo (focused or selected destination, else the last route) |
 | `L` | Lock / unlock the focused or selected destination |
+| `N` | Names: Label → Original → Both |
 | `1` – `9` | Select destination 1–9 (Shift adds to the selection) |
 
 The card follows your Home Assistant theme (dark and light) and respects *reduced motion*. Tally colours can be
@@ -363,7 +383,10 @@ linked displays, config flow, services, WebSocket API).
 - **Karte:** `type: custom:av-matrix-card` – wird von der Integration selbst ausgeliefert, keine Ressource nötig.
   Kreuzschienen-Bedienfeld wie bei Videohub & Co.: Panel (Ziel wählen → Quelle) oder Matrix, Direkt oder
   Preset + TAKE (Salvo, Mehrfachauswahl per Shift/Long-Press), Sperre, Undo, Labels/Tags (Admin), Verlauf mit
-  Benutzer, Tastatur (`/` Suche, Enter TAKE, Esc verwerfen, U Undo, L Sperre). Optionen siehe Tabelle oben.
+  Benutzer, Tastatur (`/` Suche, Enter TAKE, Esc verwerfen, U Undo, L Sperre, N Namen). Namensanzeige wie bei Lawo
+  umschaltbar: *Label | Original | Beide* (`name_mode`, im Browser gemerkt); Labels (Admin) auch für Ziele
+  (Stift, dann Ziel antippen, oder Doppelklick / langes Drücken auf den Zielnamen). Jedes Gerät wird als kleine
+  Zeichnung mit Status-LED gezeigt. Optionen siehe Tabelle oben.
 - **HomeKit:** die Quellen-Auswahl über die HomeKit-Bridge freigeben (ein Schalter pro Quelle; neue Quellen erst nach Neuladen der Bridge).
 - **Updates** kommen über HACS (Update-Entität), danach Home Assistant neu starten.
 - **Dante®** (*experimentell*): Eintrag „Dante®-Netzwerk“ übernimmt alle Dante-Geräte im Netz automatisch (mDNS,
@@ -383,6 +406,8 @@ oder manuell nach `<config>/custom_components/av_matrix`, danach Neustart.
 
 NDI® is a registered trademark of Vizrt NDI AB. Dante® is a registered trademark of Audinate Group Pty Ltd; the Dante
 support uses an unofficial, reverse-engineered protocol. This project is not affiliated with, endorsed or sponsored
-by Vizrt, Audinate, BirdDog or Magewell. Protocol knowledge from netaudio (public domain), see [NOTICE](NOTICE).
+by Vizrt, Audinate, BirdDog, Magewell, Behringer, Neutrik or HDCVT. The device illustrations are our own stylised
+drawings, not manufacturer artwork; product names only identify the supported devices. Protocol knowledge from
+netaudio (public domain), see [NOTICE](NOTICE).
 
 License: [MIT](LICENSE) · © 2026 Strelle
