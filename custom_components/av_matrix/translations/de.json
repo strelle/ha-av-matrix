@@ -3,9 +3,50 @@
     "step": {
       "user": {
         "title": "Gerät hinzufügen",
+        "description": "Netzwerk nach NDI®-Decodern durchsuchen oder den Gerätetyp selbst wählen (auch für das Dante®-Netzwerk).",
+        "menu_options": {
+          "scan": "Netzwerk nach Decodern durchsuchen",
+          "manual": "Gerätetyp manuell wählen"
+        }
+      },
+      "manual": {
+        "title": "Gerätetyp wählen",
         "description": "Protokoll und Gerätetyp wählen. Jedes NDI®-Gerät (Decoder) wird ein Eintrag; seine Ausgänge werden Ziele der Kreuzschiene. „Dante®-Netzwerk“ übernimmt alle Dante-Geräte im Netz auf einmal.",
         "data": {
           "driver": "Gerätetyp"
+        }
+      },
+      "scan": {
+        "title": "Netzwerk durchsuchen",
+        "description": "Jede Adresse des Subnetzes wird (nur lesend, ohne Anmeldung) gefragt, ob sie ein unterstützter Decoder ist. Dauert einige Sekunden.",
+        "data": {
+          "subnet": "Subnetz"
+        },
+        "data_description": {
+          "subnet": "IPv4-Subnetz in CIDR-Schreibweise, z. B. 192.0.2.0/24 (höchstens /22). Vorgabe: das Netz von Home Assistant."
+        }
+      },
+      "pick": {
+        "title": "Gefundene Decoder",
+        "description": "{count} neue(r) Decoder gefunden. Bereits eingerichtete Geräte werden nicht angezeigt.",
+        "data": {
+          "host": "Gerät"
+        }
+      },
+      "confirm": {
+        "title": "{device}",
+        "description": "**{name}** ({host}) hinzufügen? Die Verbindung wird vor dem Hinzufügen getestet. Magewell: die Werks-Anmeldung ist vorausgefüllt - eigene Zugangsdaten eintragen, falls geändert.",
+        "data": {
+          "username": "Benutzername",
+          "password": "Passwort",
+          "name": "Anzeigename (optional)",
+          "channels": "Anzahl Decoder-Kanäle"
+        },
+        "data_description": {
+          "username": "Magewell-Werkseinstellung: Admin",
+          "password": "Magewell-Werkseinstellung: Admin (bitte ändern!). BirdDog: nur nötig, wenn die API eine Anmeldung verlangt.",
+          "name": "Standard: der Name des Geräts.",
+          "channels": "Nur für mehrkanalige BirdDog-Geräte (1-4)."
         }
       },
       "device": {
@@ -68,14 +109,18 @@
     "error": {
       "cannot_connect": "Gerät nicht erreichbar (falsche Adresse/Port oder anderer Gerätetyp).",
       "invalid_auth": "Das Gerät hat Benutzername oder Passwort abgelehnt.",
-      "unknown": "Unerwarteter Fehler, siehe Protokoll."
+      "unknown": "Unerwarteter Fehler, siehe Protokoll.",
+      "invalid_subnet": "Kein gültiges IPv4-Subnetz (z. B. 192.0.2.0/24, höchstens /22).",
+      "no_devices_found": "Keine neuen Decoder in diesem Subnetz gefunden."
     },
     "abort": {
       "already_configured": "Dieses Gerät ist bereits eingerichtet.",
       "reauth_successful": "Neu-Anmeldung erfolgreich.",
       "reconfigure_successful": "Neukonfiguration erfolgreich.",
       "unique_id_mismatch": "Diese Adresse gehört zu einem anderen Gerät.",
-      "network_reconfigure": "Nichts neu zu konfigurieren: Dante-Geräte werden automatisch gefunden. Bitte die Optionen verwenden."
+      "network_reconfigure": "Nichts neu zu konfigurieren: Dante-Geräte werden automatisch gefunden. Bitte die Optionen verwenden.",
+      "not_supported": "Dieses Gerät ist kein unterstützter Decoder.",
+      "already_in_progress": "Dieses Gerät wird bereits eingerichtet."
     },
     "flow_title": "{name}"
   },

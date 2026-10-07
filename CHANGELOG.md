@@ -3,6 +3,22 @@
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- **Discovery of NDI® decoders.** New decoders appear as *Discovered* and are added with one click (Magewell: the
+  factory login `Admin`/`Admin` is pre-filled). DHCP matchers on the MAC vendor prefixes of Magewell (`D0:C8:57:8x`,
+  verified on three devices) and BirdDog (IEEE registry, untested) plus `registered_devices`: devices that are
+  already set up are recognised by serial number or by the MAC in the device registry, and their new IP address is
+  taken over. Requires that Home Assistant sees the DHCP traffic or a device tracker (e.g. UniFi) reports the MAC.
+- **Network scan** in the config flow (*Search the network for decoders*): checks the own /24 (or a given subnet up
+  to /22) read-only, 64 addresses in parallel with short timeouts (~3 s for a /24), and lists the decoders found.
+  Drivers take part through the new `Driver.async_probe()` / `PROBE_PORTS`.
+- docs/devices.md: which discovery signals each device really sends (mDNS, SSDP, DHCP, HTTP fingerprint).
+
+### Changed
+- *Add integration* starts with a menu: *Search the network* or *Choose the device type manually*.
+
 ## [0.4.0] - 2026-10-06
 
 ### Added

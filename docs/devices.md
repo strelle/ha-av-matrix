@@ -20,6 +20,30 @@ Everything marked *untested* comes from documentation, other projects or older f
   `<ndi><services><service name=… port=…/></services></ndi>`. *Not used yet* (planned as an optional extra source
   of truth).
 
+## Discovery signals (verified October 2026, studio LAN)
+
+What the devices actually send, checked with `dns-sd -B _services._dns-sd._udp`, `dns-sd -L`, python-zeroconf, an
+SSDP `M-SEARCH ssdp:all`, TCP port checks and the UniFi client list. Read-only, nothing was changed on the devices.
+
+| Signal | Magewell Pro Convert (FW 1.3.24, 2 online + 1 offline) | BirdDog | Dante® (AVIO AES3, HDCVT DA-22UC) |
+|---|---|---|---|
+| MAC vendor prefix | `D0:C8:57:8…` — **IEEE MA-M block `D0:C8:57:80/28`** of Nanjing Magewell (the rest of `D0:C8:57` belongs to other vendors!); also `70:B3:D5:75:D0/36`. All three studio devices are in the `/28`. | `D4:20:00:A0/28`, `70:B3:D5:3B:90/36`, `70:B3:D5:C7:E0/36` (IEEE registry, *no device here*) | – |
+| DHCP host name | the device name set by the user (e.g. `Strelle2`) — useless for matching | *untested* | – |
+| mDNS | `<device name>._http._tcp.local.` port 80, **empty TXT record** (no model, no MAC) — no `_ndi._tcp`, no vendor service type | *untested* | `_netaudio-arc/-cmc/-dbc._udp` (+ `_netaudio-chan`) |
+| SSDP | no answer | *untested* | – |
+| HTTP fingerprint | `GET /mwapi?method=get-summary-info` → `{"status":37}` (not logged in) + cookie `sid`; web UI title `Pro Convert`; server `nginx` | `GET :8080/about` → JSON `HostName`, `FirmwareVersion`, `SerialNumber` (no login) | – |
+| Other | TCP **5959 open** (the Pro Convert runs an NDI Discovery Server / listens on the discovery port) | – | – |
+
+Consequences for the integration (`manifest.json`):
+
+- `dhcp`: `macaddress` `D0C8578*`, `70B3D575D*` (Magewell), `D42000A*`, `70B3D53B9*`, `70B3D5C7E*` (BirdDog) and
+  `registered_devices: true` (IP changes of devices that are already set up, any vendor).
+- `zeroconf`: only `_netaudio-arc._udp.local.` (Dante network). An `_http._tcp` matcher for Magewell is not possible
+  without matching every web server on the network.
+- Network scan (`Driver.async_probe`): Magewell by the status-37 answer, BirdDog by `/about`.
+- Unique id stays the serial number. A Magewell does not tell it before login, so discovery first uses the MAC
+  (`magewell-<mac>`) and finds already configured devices through the MAC connection in the device registry.
+
 ## Magewell Pro Convert (NDI® → HDMI / SDI / AIO)
 
 | | |

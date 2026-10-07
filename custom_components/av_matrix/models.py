@@ -61,6 +61,21 @@ class DeviceInfo:
     mac: str | None = None
 
 
+@dataclass(slots=True)
+class ProbeResult:
+    """A device recognised by ``Driver.async_probe`` (network scan / discovery), before any login."""
+
+    driver: str
+    host: str
+    port: int | None = None
+    name: str | None = None
+    model: str | None = None
+    serial: str | None = None
+    mac: str | None = None
+    #: True if the device needs credentials before it tells more about itself (Magewell)
+    needs_auth: bool = False
+
+
 @dataclass(frozen=True, slots=True)
 class DestinationInfo:
     """A routable destination of a device (decoder output, receiver channel ...)."""

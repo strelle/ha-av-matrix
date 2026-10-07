@@ -10,8 +10,9 @@ from collections.abc import Mapping
 from typing import Any
 
 import voluptuous as vol
-from homeassistant.config_entries import ConfigFlow, ConfigFlowResult, OptionsFlow
+from homeassistant.config_entries import SOURCE_USER, ConfigFlow, ConfigFlowResult, OptionsFlow
 from homeassistant.core import callback
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.device_registry import format_mac
 from homeassistant.helpers.selector import (
@@ -29,6 +30,7 @@ from homeassistant.helpers.selector import (
     TextSelectorConfig,
     TextSelectorType,
 )
+from homeassistant.helpers.service_info.dhcp import DhcpServiceInfo
 from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 
 from .const import (
@@ -47,8 +49,10 @@ from .const import (
 )
 from .drivers import DRIVERS, CannotConnect, Driver, InvalidAuth
 from .drivers.dante import CONF_HIDDEN_DEVICES, CONF_ONLY_SELECTED, CONF_RX_SELECTED, CONF_STATIC_HOSTS
-from .models import ConfigField, DeviceInfo, FieldType
+from .models import ConfigField, DeviceInfo, FieldType, ProbeResult
 from .protocols import PROTOCOLS
+from .protocols.dante import ARC_SERVICE_TYPE
+from .scan import InvalidSubnet, async_default_subnet, async_probe_host, async_scan, parse_subnet
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -65,17 +69,28 @@ def _selector(field: ConfigField) -> Any:
     return TextSelector()
 
 
-def build_schema(fields: tuple[ConfigField, ...], values: Mapping[str, Any] | None = None) -> vol.Schema:
-    """Form schema from driver-declared fields (``values`` pre-fill the form)."""
+def build_schema(
+    fields: tuple[ConfigField, ...],
+    values: Mapping[str, Any] | None = None,
+    factory_defaults: Mapping[str, Any] | None = None,
+) -> vol.Schema:
+    """Form schema from driver-declared fields (``values`` pre-fill the form).
+
+    Stored secrets are never pre-filled; ``factory_defaults`` (public factory logins like Magewell's
+    ``Admin``/``Admin``) are, so a discovered device can be added with one click.
+    """
     values = values or {}
+    factory_defaults = factory_defaults or {}
     schema: dict[Any, Any] = {}
     for field in fields:
-        value = values.get(field.key, field.default)
+        value = values.get(field.key, factory_defaults.get(field.key, field.default))
         if field.type is FieldType.PASSWORD:
-            value = None  # never pre-fill secrets
+            value = factory_defaults.get(field.key)  # never pre-fill stored secrets
         marker = vol.Required if field.required else vol.Optional
         if value is None:
             key = marker(field.key)
+        elif field.type is FieldType.PASSWORD:
+            key = marker(field.key, description={"suggested_value": value})
         elif field.required:
             key = marker(field.key, default=value)
         else:
@@ -102,6 +117,8 @@ def clean_input(fields: tuple[ConfigField, ...], user_input: Mapping[str, Any]) 
 
 
 CONF_SHOWN_DEVICES = "devices"
+CONF_SUBNET = "subnet"
+CONF_HOST = "host"
 
 
 def parse_hosts(text: Any) -> list[str]:
@@ -129,6 +146,8 @@ class AvMatrixConfigFlow(ConfigFlow, domain=DOMAIN):
 
     def __init__(self) -> None:
         self._driver_key: str | None = None
+        self._discovered: ProbeResult | None = None
+        self._scan_results: list[ProbeResult] = []
 
     @staticmethod
     @callback
@@ -150,6 +169,10 @@ class AvMatrixConfigFlow(ConfigFlow, domain=DOMAIN):
             return None, {"base": "unknown"}
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Search the network, or pick the device type by hand."""
+        return self.async_show_menu(step_id="user", menu_options=["scan", "manual"])
+
+    async def async_step_manual(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Choose protocol + device type."""
         if user_input is not None:
             self._driver_key = user_input[CONF_DRIVER]
@@ -166,7 +189,7 @@ class AvMatrixConfigFlow(ConfigFlow, domain=DOMAIN):
             for key, cls in sorted(DRIVERS.items(), key=lambda kv: (kv[1].PROTOCOL, not kv[1].NETWORK, kv[1].TITLE))
         ]
         return self.async_show_form(
-            step_id="user",
+            step_id="manual",
             data_schema=vol.Schema(
                 {
                     vol.Required(CONF_DRIVER): SelectSelector(
@@ -174,6 +197,165 @@ class AvMatrixConfigFlow(ConfigFlow, domain=DOMAIN):
                     )
                 }
             ),
+        )
+
+    # ------------------------------------------------------------------ discovery helpers
+    def _configured_hosts(self) -> set[str]:
+        return {
+            str(e.data.get("host", "")).strip().lower() for e in self._async_current_entries(include_ignore=False)
+        }
+
+    @callback
+    def _async_update_known_device(self, mac: str | None, host: str) -> bool:
+        """A device we already have (by MAC in the device registry, or by address): update its host.
+
+        Covers entries whose unique id is the serial number, which a DHCP/zeroconf announcement does not
+        tell. Returns True if the device is known (the caller aborts with ``already_configured``).
+        """
+        if host.lower() in self._configured_hosts():
+            return True
+        if not mac:
+            return False
+        device = dr.async_get(self.hass).async_get_device(connections={(dr.CONNECTION_NETWORK_MAC, format_mac(mac))})
+        if device is None:
+            return False
+        for entry_id in device.config_entries:
+            entry = self.hass.config_entries.async_get_entry(entry_id)
+            if entry is None or entry.domain != DOMAIN or DRIVERS.get(entry.data.get(CONF_DRIVER), Driver).NETWORK:
+                continue
+            if entry.data.get("host") != host:
+                _LOGGER.info("%s moved to %s, updating the entry", entry.title, host)
+                self.hass.config_entries.async_update_entry(entry, data={**entry.data, "host": host})
+                self.hass.config_entries.async_schedule_reload(entry.entry_id)
+            return True
+        return False
+
+    async def _async_discovered(self, host: str, mac: str | None) -> ConfigFlowResult:
+        """Common part of DHCP / zeroconf discovery: recognise the device, de-duplicate, ask to confirm."""
+        if self._async_update_known_device(mac, host):
+            return self.async_abort(reason="already_configured")
+        drivers = [d for d in DRIVERS.values() if not d.NETWORK]
+        probe = await async_probe_host(async_get_clientsession(self.hass), host, drivers, check_ports=False)
+        if probe is None:
+            return self.async_abort(reason="not_supported")
+        probe.mac = probe.mac or mac
+        return await self._async_offer(probe)
+
+    async def _async_offer(self, probe: ProbeResult) -> ConfigFlowResult:
+        """Set the best unique id we can know before a login, then show the confirmation form."""
+        driver_cls = DRIVERS[probe.driver]
+        if probe.serial or probe.mac:
+            info = DeviceInfo(serial=probe.serial, mac=None if probe.serial else probe.mac)
+            # discovery: a second announcement of the same device aborts (already_in_progress)
+            await self.async_set_unique_id(
+                unique_id_for(driver_cls.KEY, info, probe.host), raise_on_progress=self.source != SOURCE_USER
+            )
+            self._abort_if_unique_id_configured(updates={"host": probe.host})
+        self._driver_key = driver_cls.KEY
+        self._discovered = probe
+        self.context["title_placeholders"] = {"name": probe.name or f"{driver_cls.MANUFACTURER} {probe.host}"}
+        return await self.async_step_confirm()
+
+    # ------------------------------------------------------------------ discovery
+    async def async_step_dhcp(self, discovery_info: DhcpServiceInfo) -> ConfigFlowResult:
+        """A decoder's MAC address (vendor prefix) was seen by DHCP / a device tracker."""
+        return await self._async_discovered(discovery_info.ip, discovery_info.macaddress)
+
+    async def async_step_zeroconf(self, discovery_info: ZeroconfServiceInfo) -> ConfigFlowResult:
+        """Dante®: a device announced itself → offer the Dante network (once). Others: probe the host."""
+        if discovery_info.type != ARC_SERVICE_TYPE:
+            return await self._async_discovered(discovery_info.host, discovery_info.properties.get("mac"))
+        self._driver_key = "dante"
+        await self.async_set_unique_id("dante-network")
+        self._abort_if_unique_id_configured()
+        self.context["title_placeholders"] = {"name": "Dante network"}
+        return await self.async_step_network()
+
+    async def async_step_scan(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Actively search a subnet for decoders of every driver that can be probed."""
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            try:
+                subnet = parse_subnet(user_input.get(CONF_SUBNET, ""))
+            except InvalidSubnet:
+                errors[CONF_SUBNET] = "invalid_subnet"
+            else:
+                found = await async_scan(async_get_clientsession(self.hass), subnet, DRIVERS.values())
+                configured = self._configured_hosts()
+                known = {e.unique_id for e in self._async_current_entries(include_ignore=False)}
+                self._scan_results = [
+                    r
+                    for r in found
+                    if r.host.lower() not in configured
+                    and not (r.serial and unique_id_for(r.driver, DeviceInfo(serial=r.serial), r.host) in known)
+                ]
+                if self._scan_results:
+                    return await self.async_step_pick()
+                errors["base"] = "no_devices_found"
+            default = user_input.get(CONF_SUBNET, "")
+        else:
+            subnet_default = await async_default_subnet(self.hass)
+            default = str(subnet_default) if subnet_default else ""
+        return self.async_show_form(
+            step_id="scan",
+            data_schema=vol.Schema({vol.Required(CONF_SUBNET, default=default): TextSelector()}),
+            errors=errors,
+        )
+
+    async def async_step_pick(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Choose one of the devices the scan found."""
+        if user_input is not None:
+            probe = next(r for r in self._scan_results if r.host == user_input[CONF_HOST])
+            return await self._async_offer(probe)
+        options = [
+            SelectOptionDict(
+                value=r.host,
+                label=" · ".join(
+                    p for p in (DRIVERS[r.driver].MANUFACTURER, r.name or r.model or "", r.host) if p
+                ),
+            )
+            for r in self._scan_results
+        ]
+        return self.async_show_form(
+            step_id="pick",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_HOST, default=options[0]["value"]): SelectSelector(
+                        SelectSelectorConfig(options=options, mode=SelectSelectorMode.LIST)
+                    )
+                }
+            ),
+            description_placeholders={"count": str(len(options))},
+        )
+
+    async def async_step_confirm(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Discovered device: credentials (factory defaults pre-filled) and an optional name, one click."""
+        assert self._discovered is not None and self._driver_key is not None
+        probe = self._discovered
+        driver_cls = DRIVERS[self._driver_key]
+        fields = tuple(f for f in driver_cls.CONFIG_FIELDS if f.key not in ("host", "port"))
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            data = {"host": probe.host, **clean_input(fields, user_input)}
+            if probe.port and probe.port != driver_cls.DEFAULT_PORT:
+                data["port"] = probe.port
+            elif any(f.key == "port" for f in driver_cls.CONFIG_FIELDS):
+                data["port"] = driver_cls.DEFAULT_PORT
+            info, errors = await self._async_validate(driver_cls, data)
+            if info is not None:
+                await self.async_set_unique_id(unique_id_for(driver_cls.KEY, info, probe.host), raise_on_progress=False)
+                self._abort_if_unique_id_configured(updates={"host": probe.host})
+                name = data.pop("name", None) or info.name or probe.host
+                return self.async_create_entry(title=name, data={CONF_DRIVER: driver_cls.KEY, **data})
+        return self.async_show_form(
+            step_id="confirm",
+            data_schema=build_schema(fields, user_input, driver_cls.DISCOVERY_DEFAULTS if user_input is None else None),
+            errors=errors,
+            description_placeholders={
+                "device": driver_cls.TITLE,
+                "host": probe.host,
+                "name": probe.name or probe.host,
+            },
         )
 
     async def async_step_device(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
@@ -213,14 +395,6 @@ class AvMatrixConfigFlow(ConfigFlow, domain=DOMAIN):
             step_id="network",
             data_schema=vol.Schema({vol.Optional(CONF_STATIC_HOSTS): TextSelector()}),
         )
-
-    async def async_step_zeroconf(self, discovery_info: ZeroconfServiceInfo) -> ConfigFlowResult:
-        """A Dante device announced itself: offer the Dante network (once)."""
-        self._driver_key = "dante"
-        await self.async_set_unique_id("dante-network")
-        self._abort_if_unique_id_configured()
-        self.context["title_placeholders"] = {"name": "Dante network"}
-        return await self.async_step_network()
 
     async def async_step_reauth(self, entry_data: Mapping[str, Any]) -> ConfigFlowResult:
         return await self.async_step_reauth_confirm()

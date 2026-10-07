@@ -22,8 +22,26 @@ from typing import Any
 
 import aiohttp
 
-from ..models import ConfigField, DestinationInfo, DestinationStatus, DeviceInfo, FieldType, SourceSighting
-from .base import HOST, NAME, CannotConnect, Driver, InvalidAuth, RouteFailed, format_resolution, short
+from ..models import (
+    ConfigField,
+    DestinationInfo,
+    DestinationStatus,
+    DeviceInfo,
+    FieldType,
+    ProbeResult,
+    SourceSighting,
+)
+from .base import (
+    HOST,
+    NAME,
+    PROBE_TIMEOUT,
+    CannotConnect,
+    Driver,
+    InvalidAuth,
+    RouteFailed,
+    format_resolution,
+    short,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -62,6 +80,38 @@ class BirdDogDecoder(Driver):
     TRUSTED_SOURCE_LIST = False
     SETTLE_TIME = 2.0
     VERIFY_DELAY = 0.7
+    PROBE_PORTS = (8080,)
+
+    @classmethod
+    async def async_probe(
+        cls, session: aiohttp.ClientSession, host: str, timeout: float = PROBE_TIMEOUT
+    ) -> ProbeResult | None:
+        """``GET :8080/about`` (no login) → JSON with ``HostName`` / ``FirmwareVersion`` / ``SerialNumber``."""
+        try:
+            async with session.get(
+                f"http://{host}:8080/about",
+                headers={"Accept": "application/json"},
+                timeout=aiohttp.ClientTimeout(total=timeout),
+            ) as resp:
+                if resp.status in (401, 403):
+                    return None  # API locked: cannot tell a BirdDog from anything else without a password
+                if resp.status != 200:
+                    return None
+                data = json.loads(await resp.text())
+        except (aiohttp.ClientError, TimeoutError, ValueError, UnicodeDecodeError):
+            return None
+        if not isinstance(data, dict) or _ci(data, "HostName", "FirmwareVersion", "SerialNumber") is None:
+            return None
+        hostname = _ci(data, "HostName", "hostname")
+        return ProbeResult(
+            cls.KEY,
+            host,
+            8080,
+            name=str(hostname).removesuffix(".local") if hostname else None,
+            model=_ci(data, "Model", "ProductName", "DeviceModel"),
+            serial=_ci(data, "SerialNumber", "Serial"),
+            mac=_ci(data, "MacAddress", "MAC"),
+        )
 
     def __init__(self, session: aiohttp.ClientSession, config: dict[str, Any], timeout: float = 3.0) -> None:
         super().__init__(session, config, timeout)

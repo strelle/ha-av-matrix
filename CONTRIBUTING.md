@@ -58,6 +58,11 @@ The short version (details and how the Dante® network driver works in [docs/add
 
    and set `KEY`, `PROTOCOL`, `TITLE`, `MANUFACTURER`, `DEFAULT_PORT`, `CONFIG_FIELDS`, `TRUSTED_SOURCE_LIST`,
    `SETTLE_TIME`.
+   For discovery also set `PROBE_PORTS` and implement the classmethod `async_probe(session, host, timeout)`:
+   a read-only fingerprint **without login** that returns a `ProbeResult` or `None` and never raises. The network
+   scan and DHCP discovery use it automatically. `DISCOVERY_DEFAULTS` pre-fills public factory logins in the
+   confirmation form. Add the vendor's MAC prefix (IEEE registry — mind MA-M/MA-S blocks!) as a `dhcp` matcher to
+   `manifest.json` and document the signals in `docs/devices.md`.
 2. Add it to `DRIVERS` in `drivers/__init__.py`. The config flow picks it up automatically.
 3. Add translations for any new config field key.
 4. Add tests with real (anonymised!) device answers using `tests/fake_http.py`.

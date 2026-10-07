@@ -13,7 +13,7 @@ import asyncio
 import hashlib
 import json
 import logging
-from typing import Any
+from typing import Any, ClassVar
 from urllib.parse import quote
 
 import aiohttp
@@ -25,9 +25,20 @@ from ..models import (
     DeviceInfo,
     DevicePoll,
     FieldType,
+    ProbeResult,
     SourceSighting,
 )
-from .base import HOST, NAME, CannotConnect, Driver, InvalidAuth, RouteFailed, format_resolution, short
+from .base import (
+    HOST,
+    NAME,
+    PROBE_TIMEOUT,
+    CannotConnect,
+    Driver,
+    InvalidAuth,
+    RouteFailed,
+    format_resolution,
+    short,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -61,6 +72,8 @@ class MagewellProConvert(Driver):
     )
     TRUSTED_SOURCE_LIST = True
     SETTLE_TIME = 3.0
+    PROBE_PORTS = (80,)
+    DISCOVERY_DEFAULTS: ClassVar[dict[str, Any]] = {"username": "Admin", "password": "Admin"}  # factory login
 
     def __init__(self, session: aiohttp.ClientSession, config: dict[str, Any], timeout: float = 3.0) -> None:
         super().__init__(session, config, timeout)
@@ -75,6 +88,38 @@ class MagewellProConvert(Driver):
     @property
     def configuration_url(self) -> str | None:
         return self._base.removesuffix("/mwapi")
+
+    @classmethod
+    async def async_probe(
+        cls, session: aiohttp.ClientSession, host: str, timeout: float = PROBE_TIMEOUT
+    ) -> ProbeResult | None:
+        """``get-summary-info`` without a session answers ``{"status": 37}`` (verified, FW 1.3.24)."""
+        try:
+            async with session.get(
+                f"http://{host}/mwapi?method=get-summary-info", timeout=aiohttp.ClientTimeout(total=timeout)
+            ) as resp:
+                if resp.status != 200:
+                    return None
+                data = json.loads(await resp.text())
+        except (aiohttp.ClientError, TimeoutError, ValueError, UnicodeDecodeError):
+            return None
+        if not isinstance(data, dict):
+            return None
+        status = data.get("status")
+        if status == STATUS_NOT_LOGGED_IN:
+            return ProbeResult(cls.KEY, host, 80, needs_auth=True)
+        if status == STATUS_OK and isinstance(data.get("device"), dict):  # device without login
+            dev, eth = data["device"], data.get("ethernet") or {}
+            return ProbeResult(
+                cls.KEY,
+                host,
+                80,
+                name=_first(dev, "name"),
+                model=_first(dev, "model", "product-name"),
+                serial=_first(dev, "serial-no", "serial-number", "sn"),
+                mac=_first(eth, "mac-addr", "mac") if isinstance(eth, dict) else None,
+            )
+        return None
 
     # ----------------------------------------------------------------- transport
     async def _get(self, method: str, **params: str) -> dict[str, Any]:

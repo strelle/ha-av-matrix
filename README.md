@@ -89,9 +89,9 @@ Requires Home Assistant **2026.8** or newer.
 
 ## Configuration
 
-Add one entry per device:
+Add one entry per device — usually Home Assistant finds the decoders by itself (see [Discovery](#discovery)):
 
-1. Choose the protocol and device type, e.g. *NDI® · Magewell Pro Convert*.
+1. *Search the network for decoders*, or *Choose the device type manually*, e.g. *NDI® · Magewell Pro Convert*.
 2. Enter host/IP, port (empty = default), credentials and an optional name. The connection is tested before the
    device is added.
    - **Magewell:** factory login is `Admin` / `Admin` — please change the password in the device's web UI.
@@ -100,6 +100,30 @@ Add one entry per device:
 3. Options (⚙ on the entry): polling interval (default 5 s) and a **linked display** per destination.
 
 Sources need no configuration: everything that sends NDI on the network shows up within seconds.
+
+## Discovery
+
+New decoders show up under *Settings → Devices & services* as **Discovered**; one click (Magewell: the factory
+login `Admin`/`Admin` is pre-filled, change it if yours differs) adds them. Devices that are already set up are
+recognised (by serial number or MAC address), and a **new IP address is taken over** automatically.
+
+| Way | Magewell Pro Convert | BirdDog | Dante® |
+|---|---|---|---|
+| **DHCP / device tracker** (MAC vendor prefix) | ✅ `D0:C8:57:8x` (verified, 3 devices) · `70:B3:D5:75:Dx` | `D4:20:00:Ax`, `70:B3:D5:3B:9x`, `70:B3:D5:C7:Ex` (*untested*) | – |
+| **Known device, new IP** (DHCP `registered_devices`) | ✅ (MAC in device registry) | ✅ (serial, unit-tested only) | automatic (mDNS) |
+| **mDNS / zeroconf** | ✗ only `_http._tcp` with the user-given name and no TXT data — nothing to match on | *untested* | ✅ `_netaudio-arc._udp` offers the *Dante network* entry (once) |
+| **SSDP / UPnP** | ✗ does not answer M-SEARCH | *untested* | – |
+| **Network scan** (config flow) | ✅ `GET /mwapi?method=get-summary-info` → `{"status":37}` | `GET :8080/about` (*untested on hardware*) | – |
+
+**DHCP discovery needs Home Assistant to see the device's MAC address**: either HA receives the DHCP requests
+(same network segment / HA OS with host networking), or a **device tracker** reports it — e.g. the **UniFi Network**
+integration, Fritz!Box, nmap tracker. Home Assistant's DHCP integration also looks for hosts on its own network periodically. If the decoders sit in
+another VLAN without a device tracker, use the scan.
+
+**Network scan:** *Add integration → AV Matrix → Search the network for decoders*. The subnet defaults to Home
+Assistant's own network (a /24; at most /22 is accepted). Every address is checked read-only and without login:
+first a quick TCP connect to the driver's port (0.7 s timeout, 64 in parallel), then the driver's fingerprint
+request. A /24 takes about 3 seconds. Every driver that implements `async_probe` takes part automatically.
 
 ## Dante
 
@@ -371,6 +395,12 @@ linked displays, config flow, services, WebSocket API).
 - **Ziele** sind die Decoder hinter den Bildschirmen; jedes Gerät wird über *Einstellungen → Geräte & Dienste →
   Integration hinzufügen → AV Matrix* angelegt (erst Protokoll/Hersteller wählen, dann Adresse und Zugangsdaten;
   die Verbindung wird dabei geprüft). Magewell-Werkszugang `Admin`/`Admin` – bitte ändern.
+- **Automatische Erkennung:** neue Decoder erscheinen unter *Geräte & Dienste* als „Entdeckt“ und werden mit einem
+  Klick übernommen (Magewell: Werkszugang vorausgefüllt). Erkannt werden sie über die MAC-Herstellerkennung (DHCP –
+  dafür muss HA die DHCP-Anfragen sehen oder ein Device-Tracker wie UniFi die MAC melden); bekannte Geräte mit neuer
+  IP werden automatisch nachgeführt. Zusätzlich: *Integration hinzufügen → AV Matrix → Netzwerk nach Decodern
+  durchsuchen* fragt das eigene /24 (oder ein angegebenes Subnetz bis /22) nur lesend ab (~3 s). Magewell sendet
+  kein verwertbares mDNS und kein SSDP; Dante-Geräte schlagen per mDNS den Eintrag „Dante®-Netzwerk“ vor.
 - **Quellen** werden automatisch gefunden (mDNS und die Listen aller Decoder), nach NDI-Namen zusammengeführt;
   veraltete Einträge fallen weg, verschwundene Quellen bleiben 2 Minuten stehen, damit nichts springt.
   Umlaut-Namen, die BirdDog nur als `NDI_…` kennt, werden über die Adresse zugeordnet.

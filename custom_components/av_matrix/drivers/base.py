@@ -20,10 +20,12 @@ from ..models import (
     DeviceInfo,
     DevicePoll,
     FieldType,
+    ProbeResult,
     SourceSighting,
 )
 
 DEFAULT_TIMEOUT = 3.0
+PROBE_TIMEOUT = 2.0
 
 
 class DriverError(Exception):
@@ -72,6 +74,10 @@ class Driver(ABC):
     #: True for drivers that cover a whole network (e.g. Dante): one config entry, many devices that
     #: appear and disappear at runtime; ``destinations()`` may change after every poll.
     NETWORK: ClassVar[bool] = False
+    #: TCP ports the network scan checks before calling ``async_probe`` (empty = not scannable).
+    PROBE_PORTS: ClassVar[tuple[int, ...]] = ()
+    #: Pre-filled in the confirmation form of a discovered device (factory defaults, e.g. Magewell Admin/Admin).
+    DISCOVERY_DEFAULTS: ClassVar[dict[str, Any]] = {}
 
     def __init__(
         self,
@@ -96,6 +102,17 @@ class Driver(ABC):
     def configuration_url(self) -> str | None:
         """Web UI of the device, if any."""
         return f"http://{self.host}"
+
+    @classmethod
+    async def async_probe(
+        cls, session: aiohttp.ClientSession, host: str, timeout: float = PROBE_TIMEOUT
+    ) -> ProbeResult | None:
+        """Is ``host`` a device of this driver? Fingerprint WITHOUT credentials, never raises.
+
+        Used by the network scan and by DHCP/zeroconf discovery. Must only read (no login, no
+        changes), must be quick and must return ``None`` for anything that is not this device family.
+        """
+        return None
 
     # --------------------------------------------------------------- interface
     def destinations(self) -> list[DestinationInfo]:

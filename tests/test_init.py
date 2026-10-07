@@ -133,7 +133,8 @@ async def add_device(
 # ------------------------------------------------------------------ config flow
 async def test_config_flow_creates_entry(hass: HomeAssistant) -> None:
     result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
-    assert result["type"] is FlowResultType.FORM and result["step_id"] == "user"
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": "manual"})
+    assert result["type"] is FlowResultType.FORM and result["step_id"] == "manual"
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {"driver": "magewell"})
     assert result["step_id"] == "device"
     with patch("custom_components.av_matrix.async_setup_entry", return_value=True):
@@ -156,6 +157,7 @@ async def test_config_flow_creates_entry(hass: HomeAssistant) -> None:
 async def test_config_flow_errors(hass: HomeAssistant, exc, error) -> None:
     FakeDecoder.state("192.0.2.21")["fail"] = exc
     result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": "manual"})
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {"driver": "magewell"})
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], {"host": "192.0.2.21", "username": "Admin", "password": "x"}
@@ -167,6 +169,7 @@ async def test_config_flow_errors(hass: HomeAssistant, exc, error) -> None:
 async def test_config_flow_already_configured(hass: HomeAssistant) -> None:
     await add_device(hass)
     result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": "manual"})
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {"driver": "magewell"})
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], {"host": "192.0.2.20", "username": "Admin", "password": "x"}
@@ -176,6 +179,7 @@ async def test_config_flow_already_configured(hass: HomeAssistant) -> None:
 
 async def test_birddog_form_is_built_from_driver_fields(hass: HomeAssistant) -> None:
     result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": "manual"})
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {"driver": "birddog"})
     keys = [str(k) for k in result["data_schema"].schema]
     assert keys == ["host", "port", "password", "channels", "name"]

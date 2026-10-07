@@ -69,6 +69,7 @@ def requests(dev: FakeDanteDevice, opcode: int) -> list[bytes]:
 # ------------------------------------------------------------------ config flow
 async def test_config_flow_network(hass: HomeAssistant) -> None:
     result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": "manual"})
     labels = [o["label"] for o in result["data_schema"].schema["driver"].config["options"]]
     assert "Dante® network – all devices, found automatically" in labels
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {"driver": "dante"})
@@ -83,6 +84,7 @@ async def test_config_flow_network(hass: HomeAssistant) -> None:
     assert result["options"] == {"static_hosts": ["192.0.2.40", "192.0.2.41"]}
     # only one network entry
     result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": "manual"})
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {"driver": "dante"})
     assert result["type"] is FlowResultType.ABORT and result["reason"] == "already_configured"
 

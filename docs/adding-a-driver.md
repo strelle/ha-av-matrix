@@ -36,6 +36,20 @@ each becomes a `select` entity and a row in the matrix.
        def destinations(self) -> list[DestinationInfo]: ...                          # optional, default: one
    ```
 
+   Discovery (optional, recommended):
+
+   ```python
+       PROBE_PORTS = (80,)                                   # TCP ports the network scan checks first
+       DISCOVERY_DEFAULTS = {"username": "admin", "password": "admin"}   # public factory login, pre-filled
+
+       @classmethod
+       async def async_probe(cls, session, host, timeout=PROBE_TIMEOUT) -> ProbeResult | None:
+           ...  # one read-only request without login; None if it is not this device; never raise
+   ```
+
+   Then add `dhcp` matchers (`{"macaddress": "AABBCC*"}`, uppercase, no separators) to `manifest.json`. Check the
+   IEEE registry: many vendors only own a `/28` (MA-M) or `/36` (MA-S) block, so the pattern needs 7 or 9 digits.
+
 2. Register it in `drivers/__init__.py` (`DRIVERS`).
 3. The config flow builds its form from `CONFIG_FIELDS`. Known keys (`host`, `port`, `username`, `password`,
    `name`, `channels`) are already translated; a new key needs labels in `strings.json` and

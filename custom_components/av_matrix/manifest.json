@@ -8,8 +8,29 @@
   "dependencies": [
     "frontend",
     "http",
+    "network",
     "websocket_api",
     "zeroconf"
+  ],
+  "dhcp": [
+    {
+      "registered_devices": true
+    },
+    {
+      "macaddress": "D0C8578*"
+    },
+    {
+      "macaddress": "70B3D575D*"
+    },
+    {
+      "macaddress": "D42000A*"
+    },
+    {
+      "macaddress": "70B3D53B9*"
+    },
+    {
+      "macaddress": "70B3D5C7E*"
+    }
   ],
   "documentation": "https://github.com/strelle/ha-av-matrix",
   "integration_type": "device",

@@ -3,9 +3,50 @@
     "step": {
       "user": {
         "title": "Add a device",
+        "description": "Search the network for NDI® decoders, or choose the device type yourself (also for the Dante® network).",
+        "menu_options": {
+          "scan": "Search the network for decoders",
+          "manual": "Choose the device type manually"
+        }
+      },
+      "manual": {
+        "title": "Choose the device type",
         "description": "Choose the protocol and device type. Each NDI® device (decoder) becomes one entry; its outputs become destinations of the matrix. Dante® network adds all Dante devices of the network at once.",
         "data": {
           "driver": "Device type"
+        }
+      },
+      "scan": {
+        "title": "Search the network",
+        "description": "Every address of the subnet is asked (read-only, no login) whether it is a supported decoder. Takes a few seconds.",
+        "data": {
+          "subnet": "Subnet"
+        },
+        "data_description": {
+          "subnet": "IPv4 subnet in CIDR notation, e.g. 192.0.2.0/24 (at most /22). Defaults to Home Assistant's own network."
+        }
+      },
+      "pick": {
+        "title": "Decoders found",
+        "description": "{count} new decoder(s) found. Devices that are already set up are not listed.",
+        "data": {
+          "host": "Device"
+        }
+      },
+      "confirm": {
+        "title": "{device}",
+        "description": "Add **{name}** ({host})? The connection is tested before the device is added. Magewell: the factory login is pre-filled - enter your own if you changed it.",
+        "data": {
+          "username": "User name",
+          "password": "Password",
+          "name": "Display name (optional)",
+          "channels": "Number of decoder channels"
+        },
+        "data_description": {
+          "username": "Magewell factory default: Admin",
+          "password": "Magewell factory default: Admin (change it!). BirdDog: only needed if the API requires a login.",
+          "name": "Defaults to the device's own name.",
+          "channels": "Multi-channel BirdDog devices only (1-4)."
         }
       },
       "device": {
@@ -68,14 +109,18 @@
     "error": {
       "cannot_connect": "Cannot reach the device (wrong address/port, or it is not this device type).",
       "invalid_auth": "The device rejected the user name or password.",
-      "unknown": "Unexpected error, see the log."
+      "unknown": "Unexpected error, see the log.",
+      "invalid_subnet": "Not a valid IPv4 subnet (e.g. 192.0.2.0/24, at most /22).",
+      "no_devices_found": "No new decoders found in this subnet."
     },
     "abort": {
       "already_configured": "This device is already configured.",
       "reauth_successful": "Re-authentication was successful.",
       "reconfigure_successful": "Reconfiguration was successful.",
       "unique_id_mismatch": "This address belongs to a different device.",
-      "network_reconfigure": "Nothing to reconfigure: Dante devices are found automatically. Use the options instead."
+      "network_reconfigure": "Nothing to reconfigure: Dante devices are found automatically. Use the options instead.",
+      "not_supported": "This device is not a supported decoder.",
+      "already_in_progress": "This device is already being set up."
     },
     "flow_title": "{name}"
   },
