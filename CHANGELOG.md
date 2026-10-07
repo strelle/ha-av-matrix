@@ -3,7 +3,7 @@
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions follow [SemVer](https://semver.org/).
 
-## [Unreleased]
+## [0.6.0] - 2026-10-07
 
 ### Changed
 - **Card redesigned in the "Strelle Pult-UI" style** (console conventions from Lawo, Yamaha and Allen & Heath):
@@ -21,6 +21,10 @@ All notable changes to this project are documented here. The format follows
 - Typefaces **Atkinson Hyperlegible Next** (text) and **Atkinson Hyperlegible Mono** (values) shipped with the
   integration (`frontend/fonts/`, Latin subset, 41 kB WOFF2, SIL OFL 1.1, see NOTICE); registered once on the page,
   no external font service.
+
+### Commits
+
+- feat: card in the Strelle Pult-UI design (dark + daylight theme, bundled Atkinson Hyperlegible fonts) (0db4c28)
 
 ## [0.5.0] - 2026-10-07
 
