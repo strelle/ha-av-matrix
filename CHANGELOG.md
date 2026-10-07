@@ -3,7 +3,7 @@
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions follow [SemVer](https://semver.org/).
 
-## [Unreleased]
+## [0.5.0] - 2026-10-07
 
 ### Added
 - **Discovery of NDI® decoders.** New decoders appear as *Discovered* and are added with one click (Magewell: the
@@ -18,6 +18,10 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 - *Add integration* starts with a menu: *Search the network* or *Choose the device type manually*.
+
+### Commits
+
+- feat: auto-discovery of NDI decoders (DHCP, network scan) (4eda51b)
 
 ## [0.4.0] - 2026-10-06
 
