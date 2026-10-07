@@ -201,9 +201,7 @@ class AvMatrixConfigFlow(ConfigFlow, domain=DOMAIN):
 
     # ------------------------------------------------------------------ discovery helpers
     def _configured_hosts(self) -> set[str]:
-        return {
-            str(e.data.get("host", "")).strip().lower() for e in self._async_current_entries(include_ignore=False)
-        }
+        return {str(e.data.get("host", "")).strip().lower() for e in self._async_current_entries(include_ignore=False)}
 
     @callback
     def _async_update_known_device(self, mac: str | None, host: str) -> bool:
@@ -253,7 +251,14 @@ class AvMatrixConfigFlow(ConfigFlow, domain=DOMAIN):
             self._abort_if_unique_id_configured(updates={"host": probe.host})
         self._driver_key = driver_cls.KEY
         self._discovered = probe
-        self.context["title_placeholders"] = {"name": probe.name or f"{driver_cls.MANUFACTURER} {probe.host}"}
+        # name is the flow title; the rest is for the card's "new receiver found" hint (av_matrix/discovered)
+        self.context["title_placeholders"] = {
+            "name": probe.name or f"{driver_cls.MANUFACTURER} {probe.host}",
+            "host": probe.host,
+            "driver": driver_cls.KEY,
+            "manufacturer": driver_cls.MANUFACTURER,
+            "model": probe.model or "",
+        }
         return await self.async_step_confirm()
 
     # ------------------------------------------------------------------ discovery
@@ -268,7 +273,7 @@ class AvMatrixConfigFlow(ConfigFlow, domain=DOMAIN):
         self._driver_key = "dante"
         await self.async_set_unique_id("dante-network")
         self._abort_if_unique_id_configured()
-        self.context["title_placeholders"] = {"name": "Dante network"}
+        self.context["title_placeholders"] = {"name": "Dante network", "driver": "dante", "manufacturer": "Audinate"}
         return await self.async_step_network()
 
     async def async_step_scan(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
@@ -310,9 +315,7 @@ class AvMatrixConfigFlow(ConfigFlow, domain=DOMAIN):
         options = [
             SelectOptionDict(
                 value=r.host,
-                label=" · ".join(
-                    p for p in (DRIVERS[r.driver].MANUFACTURER, r.name or r.model or "", r.host) if p
-                ),
+                label=" · ".join(p for p in (DRIVERS[r.driver].MANUFACTURER, r.name or r.model or "", r.host) if p),
             )
             for r in self._scan_results
         ]
@@ -354,7 +357,7 @@ class AvMatrixConfigFlow(ConfigFlow, domain=DOMAIN):
             description_placeholders={
                 "device": driver_cls.TITLE,
                 "host": probe.host,
-                "name": probe.name or probe.host,
+                "name": probe.name or driver_cls.MANUFACTURER,
             },
         )
 

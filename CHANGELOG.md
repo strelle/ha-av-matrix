@@ -3,6 +3,26 @@
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions follow [SemVer](https://semver.org/).
 
+## [0.7.0] - 2026-10-07
+
+### Added
+- **Discovered receivers in the card** (admins): when Home Assistant has discovered a decoder (DHCP / zeroconf) that
+  is not set up yet, the card shows a banner *"1 new receiver found – Add"* under the header. *Add* opens the
+  confirmation in a dialog in the card itself (credentials with the Magewell factory login pre-filled, optional
+  name); wrong credentials are shown as a form error, *Ignore* ignores the device, *Settings* opens
+  *Devices & services*. The new destination appears in the matrix right away.
+- **"+ Add" button** in the card header (admins): runs the integration's config flow in the same dialog - search
+  the network (scan, pick from the results) or choose the device type manually, then credentials. Cancelling
+  removes the started flow; a discovered device keeps waiting when its dialog is closed.
+- WebSocket command **`av_matrix/discovered`** (admin only): discovery flows of the integration waiting for
+  confirmation (`flow_id`, `name`, `host`, `source`, `driver`, `manufacturer`, `model`, `icon_key`), see
+  [docs/frontend-api.md](docs/frontend-api.md). The card refreshes it on every config flow change
+  (`config_entries/flow/subscribe`).
+
+### Changed
+- Discovery flows carry `host`, `driver`, `manufacturer` and `model` in their title placeholders; the confirmation
+  text names the manufacturer instead of repeating the IP address when the device has no name yet.
+
 ## [0.6.0] - 2026-10-07
 
 ### Changed

@@ -103,8 +103,9 @@ Sources need no configuration: everything that sends NDI on the network shows up
 
 ## Discovery
 
-New decoders show up under *Settings → Devices & services* as **Discovered**; one click (Magewell: the factory
-login `Admin`/`Admin` is pre-filled, change it if yours differs) adds them. Devices that are already set up are
+New decoders show up **right in the matrix card** (admins): a banner *"1 new receiver found – Add"* opens the
+confirmation in the card itself, and they are also listed under *Settings → Devices & services* as **Discovered**;
+one click (Magewell: the factory login `Admin`/`Admin` is pre-filled, change it if yours differs) adds them. Devices that are already set up are
 recognised (by serial number or MAC address), and a **new IP address is taken over** automatically.
 
 | Way | Magewell Pro Convert | BirdDog | Dante® |
@@ -229,6 +230,15 @@ font service. Tally and preset colours can still be changed with the theme varia
 - **Lock** (padlock) protects a destination, **undo** (↶) restores its previous source; *Undo last* in the footer
   undoes the latest route made from the card. The **TV** button switches a linked display on/off and shows its input.
 - **Search and tags** filter the sources; *Live only* hides offline sources.
+- **Add receivers (admins):** when Home Assistant has discovered a decoder (DHCP / mDNS) that is not set up yet, a
+  banner *"1 new receiver found"* appears under the header. **Add** opens the setup right in the card: credentials
+  (Magewell factory login pre-filled), optional name, done – the new destination appears immediately. A wrong
+  password is shown as an error in the form; *Ignore* hides the device like in the settings, *Settings* opens
+  *Devices & services*. The **+ Add** button in the header runs the same dialog for any device: *Search the network*
+  (scan, pick from the results) or *Choose the device type manually*. Non-admin users see neither.
+
+  <img src="docs/screenshots/discovered-banner.png" alt="Banner in the card: 1 new receiver found, Magewell 192.0.2.127, Add" width="100%">
+  <img src="docs/screenshots/discovered-dialog.png" alt="Add dialog in the card (daylight theme): factory login pre-filled, the device rejected the password" width="70%">
 - **Labels (admins):** pencil button in the header, then tap a source or a destination – or right-click / long-press
   a source, double-click / long-press a destination name (right-click works too). Give cryptic NDI names and
   device names a friendly label (sources also tags); the original name stays visible in small print in *Both* mode.
@@ -411,7 +421,10 @@ linked displays, config flow, services, WebSocket API).
 - **Ziele** sind die Decoder hinter den Bildschirmen; jedes Gerät wird über *Einstellungen → Geräte & Dienste →
   Integration hinzufügen → AV Matrix* angelegt (erst Protokoll/Hersteller wählen, dann Adresse und Zugangsdaten;
   die Verbindung wird dabei geprüft). Magewell-Werkszugang `Admin`/`Admin` – bitte ändern.
-- **Automatische Erkennung:** neue Decoder erscheinen unter *Geräte & Dienste* als „Entdeckt“ und werden mit einem
+- **Automatische Erkennung:** neue Decoder meldet die Karte selbst (Admins): Banner „1 neuer Empfänger gefunden –
+  Hinzufügen“, die Einrichtung läuft direkt in der Karte (Zugangsdaten, fertig; falsches Passwort = Fehler im
+  Formular). Der Knopf **+ Hinzufügen** in der Kopfzeile startet dasselbe für beliebige Geräte (Netzwerk durchsuchen
+  oder Gerätetyp wählen). Außerdem erscheinen sie unter *Geräte & Dienste* als „Entdeckt“ und werden mit einem
   Klick übernommen (Magewell: Werkszugang vorausgefüllt). Erkannt werden sie über die MAC-Herstellerkennung (DHCP –
   dafür muss HA die DHCP-Anfragen sehen oder ein Device-Tracker wie UniFi die MAC melden); bekannte Geräte mit neuer
   IP werden automatisch nachgeführt. Zusätzlich: *Integration hinzufügen → AV Matrix → Netzwerk nach Decodern

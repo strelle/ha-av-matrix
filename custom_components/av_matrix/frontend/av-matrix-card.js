@@ -5,6 +5,7 @@
  *  - Matrix mode: destinations x sources grid with crosshair, sticky headers.
  *  - Take modes: Direct (tap = switch) or Preset + TAKE (arm one or many, TAKE = salvo).
  *  - Lock, undo, labels/tags (admin), linked displays, routing history, keyboard control.
+ *  - Admin: hint for discovered receivers + "add receiver" dialog (drives the config flow in the card).
  *
  * Data: WebSocket "av_matrix/subscribe" (docs/frontend-api.md); falls back to the select entities.
  * Plain web component, no build step. Served and registered by the integration itself.
@@ -113,6 +114,28 @@ const STRINGS = {
     mod_dests: "Destinations",
     mod_sources: "Sources",
     for_dests: "for {d}",
+    add_receiver: "Add receiver",
+    add_short: "Add",
+    found_one: "1 new receiver found",
+    found_n: "{n} new receivers found",
+    found_sub: "on the network, not in the matrix yet",
+    found_add: "Add",
+    found_tip: "{name} was found on the network - add it to the matrix",
+    found_kicker: "New receiver found",
+    loading_flow: "Loading…",
+    flow_next: "Next",
+    flow_submit: "Add",
+    flow_busy: "Testing connection…",
+    flow_scanning: "Searching the network…",
+    flow_close: "Close",
+    flow_ignore: "Ignore",
+    flow_ignored: "{name} ignored",
+    flow_added: "{name} added",
+    flow_failed: "Setup failed",
+    flow_gone: "This device is no longer waiting (added or ignored elsewhere, or Home Assistant restarted).",
+    flow_settings: "Settings",
+    flow_settings_tip: "Open Settings → Devices & services",
+    flow_settings_needed: "This step needs the Home Assistant settings.",
   },
   de: {
     sources_live: "{live}/{total} Quellen live",
@@ -214,11 +237,38 @@ const STRINGS = {
     mod_dests: "Ziele",
     mod_sources: "Quellen",
     for_dests: "für {d}",
+    add_receiver: "Empfänger hinzufügen",
+    add_short: "Hinzufügen",
+    found_one: "1 neuer Empfänger gefunden",
+    found_n: "{n} neue Empfänger gefunden",
+    found_sub: "im Netzwerk, noch nicht in der Kreuzschiene",
+    found_add: "Hinzufügen",
+    found_tip: "{name} wurde im Netzwerk gefunden - zur Kreuzschiene hinzufügen",
+    found_kicker: "Neuer Empfänger gefunden",
+    loading_flow: "Lade…",
+    flow_next: "Weiter",
+    flow_submit: "Hinzufügen",
+    flow_busy: "Teste Verbindung…",
+    flow_scanning: "Durchsuche Netzwerk…",
+    flow_close: "Schließen",
+    flow_ignore: "Ignorieren",
+    flow_ignored: "{name} ignoriert",
+    flow_added: "{name} hinzugefügt",
+    flow_failed: "Einrichtung fehlgeschlagen",
+    flow_gone: "Dieses Gerät wartet nicht mehr (anderswo hinzugefügt oder ignoriert, oder Home Assistant wurde neu gestartet).",
+    flow_settings: "Einstellungen",
+    flow_settings_tip: "Einstellungen → Geräte & Dienste öffnen",
+    flow_settings_needed: "Dieser Schritt geht nur in den Home-Assistant-Einstellungen.",
   },
 };
+/** Config-flow texts of the integration per language (frontend/get_translations), shared by all cards. */
+const FLOW_TEXTS = new Map();
 
 /* ------------------------------------------------------------------ icons (24px, stroke) */
 const ICON_PATHS = {
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  signal: '<path d="M4.5 10.5a11 11 0 0 1 15 0"/><path d="M7.8 14a6.3 6.3 0 0 1 8.4 0"/><circle cx="12" cy="18" r="1.4"/>',
+  external: '<path d="M14 4h6v6"/><path d="M20 4l-9 9"/><path d="M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/>',
   lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
   unlock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 7.6-1.7"/>',
   undo: '<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>',
@@ -599,7 +649,11 @@ class AvMatrixCard extends HTMLElement {
       });
     }
     if (this._ro) this._ro.observe(this);
-    if (!this._tick) this._tick = setInterval(() => this._render(), 15000);
+    if (!this._tick)
+      this._tick = setInterval(() => {
+        if (this._foundPoll && !(this._tickN = ((this._tickN || 0) + 1) % 4)) this._loadFound(); // every 60 s
+        this._render();
+      }, 15000);
     DEVICE_LISTENERS.add(this._onArt);
     this._render();
   }
@@ -640,6 +694,7 @@ class AvMatrixCard extends HTMLElement {
     const unsub = hass.connection.subscribeMessage((snap) => this._applySnapshot(snap), {
       type: "av_matrix/subscribe",
     });
+    this._watchFound();
     this._unsub = unsub;
     unsub.catch((err) => {
       if (this._unsub !== unsub) return;
@@ -656,6 +711,7 @@ class AvMatrixCard extends HTMLElement {
   }
 
   _unsubscribe() {
+    this._unwatchFound();
     if (this._unsub) {
       this._unsub.then((u) => u()).catch(() => {});
       this._unsub = null;
@@ -1235,6 +1291,362 @@ class AvMatrixCard extends HTMLElement {
     dlg.addEventListener("keydown", (e) => e.stopPropagation());
   }
 
+  /* ---------------- discovered devices + add-device dialog (admin)
+   * Discovered devices are config flows of this integration started by DHCP / zeroconf
+   * (WS av_matrix/discovered). The dialog drives any av_matrix config flow over Home Assistant's
+   * REST flow API and renders its forms itself (texts from the integration's translations). */
+  _canAdd() {
+    return this._isAdmin() && !!(this._hass && this._hass.connection);
+  }
+
+  _watchFound() {
+    if (!this._canAdd() || this._foundUnsub || this._foundOff) return;
+    this._loadFound();
+    // any config flow change (discovered, finished, ignored) → reload; admin-only HA command
+    const unsub = this._hass.connection.subscribeMessage(
+      () => {
+        clearTimeout(this._foundTimer);
+        this._foundTimer = setTimeout(() => this._loadFound(), 400);
+      },
+      { type: "config_entries/flow/subscribe" }
+    );
+    this._foundUnsub = unsub;
+    unsub.catch(() => {
+      if (this._foundUnsub === unsub) this._foundUnsub = null;
+      this._foundPoll = true; // fall back to polling with the render tick
+    });
+  }
+
+  _unwatchFound() {
+    if (this._foundUnsub) {
+      this._foundUnsub.then((u) => u()).catch(() => {});
+      this._foundUnsub = null;
+    }
+    clearTimeout(this._foundTimer);
+  }
+
+  async _loadFound() {
+    if (!this._canAdd() || this._foundOff) return;
+    try {
+      const res = await this._hass.connection.sendMessagePromise({ type: "av_matrix/discovered" });
+      this._found = (res && res.flows) || [];
+    } catch (err) {
+      if (err && err.code === "unknown_command") this._foundOff = true; // older integration
+      this._found = [];
+    }
+    this._render();
+  }
+
+  _htmlFound() {
+    const found = this._canAdd() ? this._found || [] : [];
+    if (!found.length) return "";
+    const n = found.length;
+    return `
+      <div class="found" data-k="found" role="status">
+        <div class="found-txt">${icon("signal")}<span><b>${esc(this._t(n === 1 ? "found_one" : "found_n", { n }))}</b>
+          <span class="found-sub">${esc(this._t("found_sub"))}</span></span></div>
+        <div class="found-list">${found
+          .map(
+            (f) => `<button type="button" class="found-dev" data-act="found" data-f="${esc(f.flow_id)}" data-k="found-${esc(f.flow_id)}"
+              title="${esc(this._t("found_tip", { name: f.name || f.host || "" }))}">
+              ${this._art(f.icon_key, "ndi", "no_source", "fart")}
+              <span class="fdn"><span class="ell">${esc(f.name || f.host || "?")}</span>
+                <span class="fdh mono">${esc([f.host && f.host !== f.name ? f.host : "", (f.source || "").toUpperCase()].filter(Boolean).join(" · "))}</span></span>
+              <span class="fadd">${icon("plus")}<span>${esc(this._t("found_add"))}</span></span>
+            </button>`
+          )
+          .join("")}</div>
+      </div>`;
+  }
+
+  _htmlAddBtn() {
+    if (!this._canAdd()) return "";
+    const t = this._t("add_receiver");
+    return `<button type="button" class="ibtn addbtn" data-act="addflow" title="${esc(t)}" aria-label="${esc(t)}">${icon("plus")}<span>${esc(this._t("add_short"))}</span></button>`;
+  }
+
+  async _flowTexts() {
+    const lang = (this._hass && this._hass.language) || "en";
+    if (FLOW_TEXTS.has(lang)) return FLOW_TEXTS.get(lang);
+    let res = {};
+    try {
+      const r = await this._hass.callWS({ type: "frontend/get_translations", language: lang, category: "config", integration: ["av_matrix"] });
+      res = (r && r.resources) || {};
+    } catch (_e) {
+      res = {};
+    }
+    FLOW_TEXTS.set(lang, res);
+    return res;
+  }
+
+  _ftr(key, vars) {
+    const res = (this._flow && this._flow.texts) || {};
+    let s = res[`component.av_matrix.config.${key}`];
+    if (s == null) return "";
+    for (const [k, v] of Object.entries(vars || {})) s = s.split(`{${k}}`).join(v ?? "");
+    return s;
+  }
+
+  /** Open the dialog: flowId = a discovered flow (continue it), null = start "add receiver". */
+  async _openFlow(flowId) {
+    if (!this._canAdd()) return;
+    const found = flowId ? (this._found || []).find((f) => f.flow_id === flowId) : null;
+    this._flow = { id: flowId, discovered: !!flowId, found, result: null, busy: true, error: null, values: {}, done: false };
+    const dlg = this.shadowRoot.querySelector("dialog.flowdlg");
+    this._renderFlow();
+    if (!dlg.open) dlg.showModal();
+    const flow = this._flow;
+    flow.texts = await this._flowTexts();
+    try {
+      const result = flowId
+        ? await this._hass.callApi("GET", `config/config_entries/flow/${encodeURIComponent(flowId)}`)
+        : await this._hass.callApi("POST", "config/config_entries/flow", { handler: "av_matrix", show_advanced_options: false });
+      if (this._flow !== flow) return;
+      this._flowResult(result);
+    } catch (err) {
+      if (this._flow !== flow) return;
+      flow.busy = false;
+      flow.error = flowId ? this._t("flow_gone") : `${this._t("flow_failed")}: ${this._errText(err)}`;
+      flow.dead = true;
+      this._renderFlow();
+      if (flowId) this._loadFound();
+    }
+  }
+
+  _errText(err) {
+    if (!err) return "";
+    if (typeof err === "string") return err;
+    return (err.body && (err.body.message || err.body.error)) || err.message || err.error || String(err);
+  }
+
+  _flowResult(result) {
+    const flow = this._flow;
+    flow.busy = false;
+    flow.result = result;
+    flow.id = result.flow_id || flow.id;
+    flow.error = null;
+    if (result.type === "create_entry") {
+      flow.done = true;
+      this.shadowRoot.querySelector("dialog.flowdlg").close();
+      this._toast(this._t("flow_added", { name: result.title || "" }), "ok");
+      this._loadFound();
+      return;
+    }
+    if (result.type === "abort") flow.done = true;
+    if (result.type === "form" && result.step_id !== (flow.step || null)) flow.values = {};
+    flow.step = result.step_id;
+    this._renderFlow();
+    setTimeout(() => {
+      const dlg = this.shadowRoot.querySelector("dialog.flowdlg");
+      const first = dlg && dlg.querySelector(".fbody input:not([type=hidden]):not([type=radio]), .fbody select, .fbody .opt input:checked, [data-fmenu]");
+      if (first) first.focus();
+    }, 30);
+  }
+
+  async _flowSend(input) {
+    const flow = this._flow;
+    if (!flow || !flow.id || flow.busy) return;
+    flow.busy = true;
+    flow.values = input;
+    this._renderFlow();
+    try {
+      const result = await this._hass.callApi("POST", `config/config_entries/flow/${encodeURIComponent(flow.id)}`, input);
+      if (this._flow !== flow) return;
+      this._flowResult(result);
+    } catch (err) {
+      if (this._flow !== flow) return;
+      flow.busy = false;
+      flow.error = `${this._t("flow_failed")}: ${this._errText(err)}`;
+      this._renderFlow();
+    }
+  }
+
+  _flowField(f, step, errors, values) {
+    const sel = f.selector || {};
+    const d = f.description || {};
+    let value = values[f.name];
+    if (value === undefined) value = d.suggested_value !== undefined ? d.suggested_value : f.default;
+    const label = this._ftr(`step.${step}.data.${f.name}`) || f.name;
+    const help = this._ftr(`step.${step}.data_description.${f.name}`);
+    const err = errors[f.name] ? this._ftr(`error.${errors[f.name]}`) || errors[f.name] : "";
+    const id = `ff-${f.name}`;
+    const req = f.required ? "required" : "";
+    const desc = `${help ? `<span class="fhelp" id="${id}-h">${esc(help)}</span>` : ""}${err ? `<span class="ferr" id="${id}-e" role="alert">${icon("warn")}${esc(err)}</span>` : ""}`;
+    const aria = `${err ? `aria-invalid="true"` : ""} aria-describedby="${id}-h ${id}-e"`;
+    if (sel.select) {
+      const opts = (sel.select.options || []).map((o) => (typeof o === "string" ? { value: o, label: o } : o));
+      const multiple = !!sel.select.multiple;
+      if (sel.select.mode === "list" || multiple) {
+        const cur = multiple ? new Set(value || []) : new Set(value != null ? [value] : []);
+        return `<fieldset class="fld opts-fld" data-fname="${esc(f.name)}" data-ftype="${multiple ? "multi" : "radio"}"><legend>${esc(label)}</legend>
+          <div class="opts">${opts
+            .map(
+              (o) => `<label class="opt"><input type="${multiple ? "checkbox" : "radio"}" name="${esc(f.name)}" value="${esc(o.value)}" ${cur.has(o.value) ? "checked" : ""} ${!multiple && f.required ? "required" : ""}><span class="optk"></span><span class="optl">${esc(o.label)}</span></label>`
+            )
+            .join("")}</div>${desc}</fieldset>`;
+      }
+      return `<label class="fld" data-fname="${esc(f.name)}" data-ftype="text"><span>${esc(label)}</span>
+        <select name="${esc(f.name)}" ${req} ${aria}>${f.required ? "" : '<option value=""></option>'}${opts
+          .map((o) => `<option value="${esc(o.value)}" ${o.value === value ? "selected" : ""}>${esc(o.label)}</option>`)
+          .join("")}</select>${desc}</label>`;
+    }
+    if (sel.boolean !== undefined || f.type === "boolean") {
+      return `<label class="fld chk" data-fname="${esc(f.name)}" data-ftype="bool"><input type="checkbox" name="${esc(f.name)}" ${value ? "checked" : ""}><span>${esc(label)}</span>${desc}</label>`;
+    }
+    const num = sel.number || (f.type === "integer" || f.type === "float" ? {} : null);
+    const pw = sel.text && sel.text.type === "password";
+    const type = num ? "number" : pw ? "password" : "text";
+    const extra = num ? `inputmode="numeric" ${num.min != null ? `min="${num.min}"` : ""} ${num.max != null ? `max="${num.max}"` : ""} step="${num.step || 1}"` : "";
+    return `<label class="fld" data-fname="${esc(f.name)}" data-ftype="${num ? "num" : "text"}"><span>${esc(label)}</span>
+      <input name="${esc(f.name)}" type="${type}" value="${esc(value ?? "")}" ${req} ${extra} ${aria} autocomplete="${pw ? "new-password" : "off"}" spellcheck="false" ${type === "text" ? 'autocapitalize="off"' : ""}>${desc}</label>`;
+  }
+
+  _flowInput(form) {
+    const out = {};
+    for (const el of form.querySelectorAll("[data-fname]")) {
+      const name = el.dataset.fname;
+      const t = el.dataset.ftype;
+      if (t === "multi") out[name] = [...el.querySelectorAll("input:checked")].map((i) => i.value);
+      else if (t === "radio") {
+        const c = el.querySelector("input:checked");
+        if (c) out[name] = c.value;
+      } else if (t === "bool") out[name] = el.querySelector("input").checked;
+      else {
+        const v = el.querySelector("input,select").value;
+        if (v === "") continue;
+        out[name] = t === "num" ? Number(v) : v;
+      }
+    }
+    return out;
+  }
+
+  _md(text) {
+    return esc(text)
+      .replace(/\*\*(.+?)\*\*/g, "<b>$1</b>")
+      .replace(/\n/g, "<br>");
+  }
+
+  _renderFlow() {
+    const dlg = this.shadowRoot && this.shadowRoot.querySelector("dialog.flowdlg");
+    const flow = this._flow;
+    if (!dlg || !flow) return;
+    const r = flow.result || {};
+    const step = r.step_id || "";
+    const ph = r.description_placeholders || {};
+    const found = flow.found;
+    const title =
+      (r.type === "abort" ? "" : this._ftr(`step.${step}.title`, ph)) ||
+      (found ? found.name || found.host : this._t("add_receiver"));
+    const kicker = [this._t(flow.discovered ? "found_kicker" : "add_receiver"), found && found.host && found.host !== title ? found.host : ""]
+      .filter(Boolean)
+      .join(" · ");
+    const art = this._art((found && found.icon_key) || "ndi_decoder", "ndi", flow.busy ? "connecting" : flow.error || (r.errors && r.errors.base) ? "error" : "no_source", "dlgart");
+    const errors = r.errors || {};
+    let body = "";
+    let primary = "";
+    if (flow.busy && !r.type) {
+      body = `<div class="msg"><span class="spinner"></span><span>${esc(this._t("loading_flow"))}</span></div>`;
+    } else if (r.type === "menu") {
+      const desc = this._ftr(`step.${step}.description`, ph);
+      const opts = Array.isArray(r.menu_options) ? r.menu_options : Object.keys(r.menu_options || {});
+      body = `${desc ? `<p class="fdesc">${this._md(desc)}</p>` : ""}<div class="fmenu">${opts
+        .map(
+          (o) => `<button type="button" class="fmenu-k" data-fmenu="${esc(o)}" ${flow.busy ? "disabled" : ""}>${icon(o === "scan" ? "search" : "device")}<span>${esc(this._ftr(`step.${step}.menu_options.${o}`) || o)}</span>${icon("chevron", "go")}</button>`
+        )
+        .join("")}</div>`;
+    } else if (r.type === "form") {
+      const desc = this._ftr(`step.${step}.description`, ph);
+      const base = errors.base ? this._ftr(`error.${errors.base}`) || errors.base : "";
+      body = `${desc ? `<p class="fdesc">${this._md(desc)}</p>` : ""}
+        ${base ? `<div class="fbase" role="alert">${icon("warn")}<span>${esc(base)}</span></div>` : ""}
+        <div class="fbody">${(r.data_schema || []).map((f) => this._flowField(f, step, errors, flow.values || {})).join("")}</div>`;
+      primary = `<button type="submit" class="btn primary" ${flow.busy ? "disabled" : ""}>${
+        flow.busy ? `<span class="spinner sm"></span>` : ""
+      }${esc(this._t(flow.busy ? (step === "scan" ? "flow_scanning" : "flow_busy") : ["confirm", "device", "network"].includes(step) ? "flow_submit" : "flow_next"))}</button>`;
+    } else if (r.type === "abort") {
+      const reason = this._ftr(`abort.${r.reason}`, ph) || r.reason;
+      body = `<div class="fbase" role="alert">${icon("warn")}<span>${esc(reason)}</span></div>`;
+    } else if (r.type) {
+      body = `<div class="fbase" role="alert">${icon("warn")}<span>${esc(this._t("flow_settings_needed"))}</span></div>`;
+    }
+    if (flow.error) body = `<div class="fbase" role="alert">${icon("warn")}<span>${esc(flow.error)}</span></div>${flow.dead ? "" : body}`;
+    const settings = `<button type="button" class="btn ghost" data-fdlg="settings" title="${esc(this._t("flow_settings_tip"))}">${icon("external")}<span>${esc(this._t("flow_settings"))}</span></button>`;
+    const ignore =
+      flow.discovered && !flow.done && !flow.dead
+        ? `<button type="button" class="btn ghost" data-fdlg="ignore" ${flow.busy ? "disabled" : ""}>${esc(this._t("flow_ignore"))}</button>`
+        : "";
+    dlg.innerHTML = `
+      <form method="dialog" class="dlg-body" novalidate>
+        <div class="dlg-head">
+          ${art}
+          <div class="dlg-id"><div class="dlg-kicker">${esc(kicker)}</div>
+          <div class="dlg-title">${esc(title)}</div></div>
+          <button type="button" class="ibtn" data-fdlg="cancel" aria-label="${esc(this._t("cancel"))}">${icon("x")}</button>
+        </div>
+        ${body}
+        <div class="dlg-actions">
+          ${ignore}${settings}
+          <span class="grow"></span>
+          <button type="button" class="btn ghost" data-fdlg="cancel">${esc(this._t(flow.done || flow.dead ? "flow_close" : "cancel"))}</button>
+          ${primary}
+        </div>
+      </form>`;
+  }
+
+  _closeFlow() {
+    const flow = this._flow;
+    this._flow = null;
+    // a flow the user started here is removed again; discovered devices keep waiting
+    if (flow && flow.id && !flow.discovered && !flow.done && !flow.dead) {
+      this._hass.callApi("DELETE", `config/config_entries/flow/${encodeURIComponent(flow.id)}`).catch(() => {});
+    }
+  }
+
+  _bindFlowDialog(dlg) {
+    dlg.addEventListener("close", () => this._closeFlow());
+    dlg.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const form = e.target;
+      if (!form.checkValidity()) {
+        form.reportValidity();
+        return;
+      }
+      this._flowSend(this._flowInput(form));
+    });
+    dlg.addEventListener("click", (e) => {
+      if (e.target === dlg) return dlg.close();
+      const b = e.target.closest("[data-fdlg],[data-fmenu]");
+      if (!b || b.disabled) return;
+      if (b.dataset.fmenu) return this._flowSend({ next_step_id: b.dataset.fmenu });
+      const act = b.dataset.fdlg;
+      if (act === "cancel") dlg.close();
+      else if (act === "settings") {
+        dlg.close();
+        window.history.pushState(null, "", "/config/integrations/dashboard");
+        window.dispatchEvent(new CustomEvent("location-changed", { detail: { replace: false } }));
+      } else if (act === "ignore") {
+        const flow = this._flow;
+        const name = (flow.found && (flow.found.name || flow.found.host)) || "";
+        flow.busy = true;
+        this._renderFlow();
+        this._hass
+          .callWS({ type: "config_entries/ignore_flow", flow_id: flow.id, title: name })
+          .then(() => {
+            flow.done = true;
+            dlg.close();
+            this._toast(this._t("flow_ignored", { name }), "ok");
+            this._loadFound();
+          })
+          .catch((err) => {
+            flow.busy = false;
+            flow.error = `${this._t("flow_failed")}: ${this._errText(err)}`;
+            this._renderFlow();
+          });
+      }
+    });
+    dlg.addEventListener("keydown", (e) => e.stopPropagation());
+  }
+
   /* ---------------- feedback */
   _toast(text, kind = "info") {
     const box = this.shadowRoot && this.shadowRoot.querySelector(".toasts");
@@ -1280,7 +1692,7 @@ class AvMatrixCard extends HTMLElement {
     const sr = this.shadowRoot || this.attachShadow({ mode: "open" });
     sr.innerHTML = `<style>${CSS_TEXT}</style><style class="hover"></style>
       <ha-card><svg class="sprite" aria-hidden="true" focusable="false"></svg><div class="root" tabindex="-1"></div><div class="toasts" aria-live="polite"></div></ha-card>
-      <dialog class="dlg"></dialog>`;
+      <dialog class="dlg"></dialog><dialog class="dlg flowdlg" aria-label="AV Matrix"></dialog>`;
     this._root = sr.querySelector(".root");
     this._card = sr.querySelector("ha-card");
     this._sprite = sr.querySelector("svg.sprite");
@@ -1289,6 +1701,7 @@ class AvMatrixCard extends HTMLElement {
     this._tpl = document.createElement("template");
     this._bind(sr);
     this._bindDialog(sr.querySelector("dialog"));
+    this._bindFlowDialog(sr.querySelector("dialog.flowdlg"));
   }
 
   _render() {
@@ -1315,7 +1728,12 @@ class AvMatrixCard extends HTMLElement {
       if (this._error) msg = `<div class="msg err">${icon("warn")}<span>${esc(this._error)}</span></div>`;
       else if (!this._snap) msg = `<div class="msg"><span class="spinner"></span><span>${esc(this._t("loading"))}</span></div>`;
       else msg = `<div class="msg">${esc(this._t("no_devices"))}</div>`;
-      return `${this._config.title ? `<div class="hdr"><div class="ttl"><h2>${esc(this._config.title)}</h2></div></div>` : ""}${msg}`;
+      const add = this._snap ? this._htmlAddBtn() : "";
+      return `${
+        this._config.title || add
+          ? `<div class="hdr" data-k="hdr"><div class="ttl">${this._config.title ? `<h2>${esc(this._config.title)}</h2>` : ""}</div><div class="ctrls">${add}</div></div>`
+          : ""
+      }${this._snap ? this._htmlFound() : ""}${msg}`;
     }
     const dests = this._destinations(proto);
     // panel selection: keep valid, default to first destination
@@ -1326,6 +1744,7 @@ class AvMatrixCard extends HTMLElement {
     const mode = this._mode();
     return `
       ${this._htmlHeader(protos, proto, dests)}
+      ${this._htmlFound()}
       ${this._editMode ? `<div class="edit-hint" data-k="edithint">${icon("pencil")}<span>${esc(this._t("edit_hint"))}</span></div>` : ""}
       ${mode === "matrix" ? this._htmlMatrix(proto, dests, sources) : this._htmlPanel(proto, dests, sources)}
       ${this._htmlFooter(proto, dests)}
@@ -1390,7 +1809,7 @@ class AvMatrixCard extends HTMLElement {
           }
           ${
             this._isAdmin()
-              ? `<button type="button" class="ibtn tgl ${this._editMode ? "on" : ""}" aria-pressed="${this._editMode}" data-act="edit" title="${esc(this._t("edit_labels"))}" aria-label="${esc(this._t("edit_labels"))}">${icon("pencil")}</button>`
+              ? `<span class="adm">${this._htmlAddBtn()}<button type="button" class="ibtn tgl ${this._editMode ? "on" : ""}" aria-pressed="${this._editMode}" data-act="edit" title="${esc(this._t("edit_labels"))}" aria-label="${esc(this._t("edit_labels"))}">${icon("pencil")}</button></span>`
               : ""
           }
           </div>
@@ -1860,6 +2279,12 @@ class AvMatrixCard extends HTMLElement {
         case "edit":
           this._editMode = !this._editMode;
           this._render();
+          break;
+        case "found":
+          this._openFlow(el.dataset.f);
+          break;
+        case "addflow":
+          this._openFlow(null);
           break;
         case "tag":
           if (this._tags.has(el.dataset.v)) this._tags.delete(el.dataset.v);
@@ -2634,6 +3059,75 @@ dialog::backdrop { background: rgba(0,0,0,.5); }
 .btn.danger { color: var(--p-live); }
 .dlg-head .dlgart { width: 72px; margin-top: 2px; }
 .dlg-id { flex: 1; min-width: 0; }
+
+/* ---------------- discovered receivers + add dialog (admin) */
+.addbtn { width: auto; padding: 0 14px 0 11px; gap: 6px; font-size: 15px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+.addbtn .ic { width: 18px; height: 18px; }
+.adm { display: contents; }
+/* phones: add + edit on their own row, right-aligned, so the console controls keep their 44/56 px keys */
+.xs .ctrl2 { flex-wrap: wrap; }
+.xs .ctrl2 .seg { flex: none; }
+.xs .adm { display: flex; gap: 6px; margin-left: auto; }
+.xs .ctrl2 .adm .ibtn.tgl { margin-left: 0; }
+.found { display: flex; align-items: center; gap: 10px 16px; flex-wrap: wrap; padding: 10px 12px 10px 14px; border-radius: var(--amx-r);
+  background: color-mix(in srgb, var(--p-accent) 13%, var(--p-surface-2)); border: 1px solid color-mix(in srgb, var(--p-accent) 55%, var(--p-line-strong));
+  border-left: 5px solid var(--p-accent); animation: amx-in .2s ease-out; }
+.found-txt { display: flex; align-items: center; gap: 10px; flex: 1 1 260px; min-width: 0; color: var(--p-fg); font-size: 16px; line-height: 1.25; }
+.found-txt > .ic { width: 26px; height: 26px; flex: none; color: var(--p-accent-text); }
+.found-txt b { font-weight: 800; }
+.found-sub { display: block; font-size: 14px; color: var(--p-muted); }
+.found-list { display: flex; gap: 8px; flex-wrap: wrap; }
+.found-dev { display: inline-flex; align-items: center; gap: 10px; min-height: var(--amx-hit); padding: 4px 6px 4px 8px; cursor: pointer;
+  border-radius: var(--amx-r); border: 1px solid var(--p-line-strong); background: var(--p-surface); color: var(--p-fg); text-align: left;
+  max-width: 100%; transition: background-color .15s, border-color .15s; }
+.found-dev:hover { border-color: var(--p-accent); }
+.found-dev:focus-visible { outline: 3px solid var(--p-accent-text); outline-offset: 2px; }
+.found-dev .fart { width: 44px; flex: none; }
+.fdn { display: flex; flex-direction: column; min-width: 0; font-size: 15px; font-weight: 700; }
+.fdh { font-size: 13px; font-weight: 500; color: var(--p-muted); font-family: var(--amx-mono); white-space: nowrap; }
+.fadd { display: inline-flex; align-items: center; gap: 5px; margin-left: 4px; padding: 0 12px 0 9px; min-height: 36px; border-radius: 8px;
+  background: var(--p-accent); color: var(--p-on-accent); font-size: 14px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; white-space: nowrap; }
+.fadd .ic { width: 16px; height: 16px; }
+.narrow .found-list, .narrow .found-dev { width: 100%; }
+.narrow .found-dev .fdn { flex: 1; }
+dialog.flowdlg { width: min(540px, calc(100vw - 32px)); max-height: calc(100vh - 48px); }
+.flowdlg .dlg-title { word-break: normal; font-size: 20px; }
+.fdesc { margin: 0; font-size: 15px; line-height: 1.45; color: var(--p-muted); }
+.fdesc b { color: var(--p-fg); font-weight: 700; }
+.fbody { display: flex; flex-direction: column; gap: 14px; }
+.fbase { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: var(--amx-r); font-size: 15px; font-weight: 600;
+  background: color-mix(in srgb, var(--p-live) 12%, var(--p-surface)); border: 1px solid color-mix(in srgb, var(--p-live) 50%, var(--p-line-strong)); }
+.fbase .ic { width: 20px; height: 20px; flex: none; color: var(--p-live); }
+.fld select { height: 56px; border-radius: var(--amx-r); border: 1px solid var(--p-line-strong); background: var(--p-surface); color: var(--p-fg);
+  padding: 0 12px; font-size: 17px; font-weight: 500; text-transform: none; letter-spacing: 0; }
+.fld input[aria-invalid="true"] { border-color: var(--p-live); box-shadow: inset 0 0 0 1px var(--p-live); }
+.fhelp { font-size: 13px; letter-spacing: 0; text-transform: none; color: var(--p-muted); font-weight: 400; line-height: 1.35; }
+.ferr { display: inline-flex; gap: 6px; align-items: center; font-size: 14px; font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--p-live); }
+.ferr .ic { width: 15px; height: 15px; }
+.fld.chk { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 10px; text-transform: none; letter-spacing: 0; font-size: 16px; color: var(--p-fg); }
+.fld.chk input { width: 22px; height: 22px; accent-color: var(--p-accent); }
+.fld.chk .fhelp, .fld.chk .ferr { flex-basis: 100%; }
+fieldset.fld { border: 0; margin: 0; padding: 0; min-width: 0; }
+fieldset.fld legend { padding: 0; margin-bottom: 6px; }
+.opts { display: flex; flex-direction: column; gap: 6px; max-height: 300px; overflow: auto; }
+.opt { position: relative; display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 6px 12px; cursor: pointer; border-radius: var(--amx-r);
+  border: 1px solid var(--p-line-strong); background: var(--p-surface); color: var(--p-fg); font-size: 16px; font-weight: 600; letter-spacing: 0; text-transform: none; }
+.opt input { position: absolute; opacity: 0; pointer-events: none; }
+.optk { width: 18px; height: 18px; flex: none; border-radius: 50%; box-shadow: inset 0 0 0 2px var(--p-line-strong); }
+.opt input[type=checkbox] + .optk { border-radius: 4px; }
+.opt:has(input:checked) { border-color: var(--p-accent); box-shadow: inset 4px 0 0 var(--p-accent); }
+.opt input:checked + .optk { background: var(--p-accent); box-shadow: inset 0 0 0 4px var(--p-surface), 0 0 0 2px var(--p-accent); }
+.opt:has(input:focus-visible) { outline: 3px solid var(--p-accent-text); outline-offset: 2px; }
+.fmenu { display: flex; flex-direction: column; gap: 8px; }
+.fmenu-k { display: flex; align-items: center; gap: 12px; min-height: 60px; padding: 0 14px; cursor: pointer; border-radius: var(--amx-r);
+  border: 1px solid var(--p-line-strong); background: var(--p-surface); color: var(--p-fg); font-size: 16px; font-weight: 700; text-align: left; }
+.fmenu-k:hover:not([disabled]) { border-color: var(--p-accent); }
+.fmenu-k:focus-visible { outline: 3px solid var(--p-accent-text); outline-offset: 2px; }
+.fmenu-k .ic { width: 22px; height: 22px; flex: none; color: var(--p-accent-text); }
+.fmenu-k span { flex: 1; }
+.fmenu-k .go { transform: rotate(-90deg); color: var(--p-muted); width: 18px; height: 18px; }
+.flowdlg .dlg-actions { flex-wrap: wrap; }
+.flowdlg .btn .ic { width: 16px; height: 16px; }
 
 /* ---------------- grouped protocols (Dante®): device filters, collapsible device groups */
 .gsels { display: flex; gap: 6px; flex-wrap: wrap; }

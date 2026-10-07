@@ -34,7 +34,7 @@ custom_components/av_matrix/
 ├── coordinator.py     polling per device (backoff while offline)
 ├── select.py …        entities
 ├── services.py        av_matrix.route / salvo / lock / unlock / undo / refresh_sources
-├── websocket.py       av_matrix/state, av_matrix/subscribe, av_matrix/label
+├── websocket.py       av_matrix/state, av_matrix/subscribe, av_matrix/label, av_matrix/discovered
 └── frontend/          the Lovelace card (plain JS, no build step)
 ```
 

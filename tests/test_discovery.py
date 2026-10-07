@@ -22,6 +22,7 @@ from custom_components.av_matrix.drivers import DRIVERS, InvalidAuth
 from custom_components.av_matrix.drivers.birddog import BirdDogDecoder
 from custom_components.av_matrix.drivers.magewell import MagewellProConvert
 from custom_components.av_matrix.models import DeviceInfo, ProbeResult
+from custom_components.av_matrix.websocket import async_setup_websocket
 
 MAGEWELL_MAC = "d0:c8:57:80:00:01"  # Magewell block D0:C8:57:8x (anonymised)
 FLOW = "custom_components.av_matrix.config_flow"
@@ -171,7 +172,13 @@ async def test_dhcp_magewell_one_click(hass: HomeAssistant) -> None:
     assert schema["password"].description == {"suggested_value": "Admin"}  # factory login pre-filled
     flow = hass.config_entries.flow.async_get(result["flow_id"])
     assert flow["context"]["unique_id"] == f"magewell-{MAGEWELL_MAC}"
-    assert flow["context"]["title_placeholders"] == {"name": "Magewell 192.0.2.10"}
+    assert flow["context"]["title_placeholders"] == {
+        "name": "Magewell 192.0.2.10",
+        "host": "192.0.2.10",
+        "driver": "magewell",
+        "manufacturer": "Magewell",
+        "model": "",
+    }
     # same device announced again while the flow is open
     again = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": config_entries.SOURCE_DHCP}, data=dhcp()
@@ -312,9 +319,9 @@ async def _start_scan(hass: HomeAssistant):
 
 
 async def test_scan_pick_confirm(hass: HomeAssistant) -> None:
-    MockConfigEntry(domain=DOMAIN, unique_id="magewell-sn-other", data={"driver": "magewell", "host": "192.0.2.20"}).add_to_hass(
-        hass
-    )  # already set up → not offered
+    MockConfigEntry(
+        domain=DOMAIN, unique_id="magewell-sn-other", data={"driver": "magewell", "host": "192.0.2.20"}
+    ).add_to_hass(hass)  # already set up → not offered
     result = await _start_scan(hass)
     found = [
         ProbeResult("magewell", "192.0.2.10", 80, needs_auth=True),
@@ -365,6 +372,67 @@ async def test_default_subnet_from_adapters(hass: HomeAssistant) -> None:
     ]
     with patch.object(scan.network, "async_get_adapters", AsyncMock(return_value=adapters)):
         assert await scan.async_default_subnet(hass) == IPv4Network("192.0.2.0/24")
+
+
+# ------------------------------------------------------------------ card: discovered devices
+async def test_ws_discovered_lists_discovery_flows(hass: HomeAssistant, hass_ws_client) -> None:
+    """The card's "new receiver found" hint: discovery flows only (not user flows), admin only."""
+    async_setup_websocket(hass)
+    found = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_DHCP}, data=dhcp()
+    )
+    user = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
+    assert user["type"] is FlowResultType.MENU
+    client = await hass_ws_client(hass)
+    await client.send_json({"id": 1, "type": "av_matrix/discovered"})
+    msg = await client.receive_json()
+    assert msg["success"]
+    assert msg["result"] == {
+        "flows": [
+            {
+                "flow_id": found["flow_id"],
+                "source": "dhcp",
+                "step_id": "confirm",
+                "name": "Magewell 192.0.2.10",
+                "host": "192.0.2.10",
+                "driver": "magewell",
+                "manufacturer": "Magewell",
+                "model": None,
+                "icon_key": "magewell_pro_convert",
+            }
+        ]
+    }
+    # confirmed in the card (wrong password first: a form error, the flow stays open)
+    result = await hass.config_entries.flow.async_configure(found["flow_id"], {"username": "Admin", "password": "x"})
+    assert result["type"] is FlowResultType.FORM and result["errors"] == {"base": "invalid_auth"}
+    result = await hass.config_entries.flow.async_configure(
+        found["flow_id"], {"username": "Admin", "password": "Admin"}
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    await client.send_json({"id": 2, "type": "av_matrix/discovered"})
+    msg = await client.receive_json()
+    assert msg["success"] and msg["result"] == {"flows": []}
+
+
+async def test_ws_discovered_old_flow_without_host(hass: HomeAssistant, hass_ws_client) -> None:
+    """Flows started by v0.6.0 only carry the name: the host is taken from it."""
+    async_setup_websocket(hass)
+    found = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_DHCP}, data=dhcp()
+    )
+    hass.config_entries.flow._progress[found["flow_id"]].context["title_placeholders"] = {"name": "Magewell 192.0.2.10"}
+    client = await hass_ws_client(hass)
+    await client.send_json({"id": 1, "type": "av_matrix/discovered"})
+    flow = (await client.receive_json())["result"]["flows"][0]
+    assert flow["host"] == "192.0.2.10" and flow["driver"] is None and flow["icon_key"] == "ndi_decoder"
+
+
+async def test_ws_discovered_requires_admin(hass: HomeAssistant, hass_ws_client, hass_read_only_access_token) -> None:
+    async_setup_websocket(hass)
+    client = await hass_ws_client(hass, hass_read_only_access_token)
+    await client.send_json({"id": 1, "type": "av_matrix/discovered"})
+    msg = await client.receive_json()
+    assert not msg["success"] and msg["error"]["code"] == "unauthorized"
 
 
 def test_manifest_matchers() -> None:

@@ -2,16 +2,28 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 import voluptuous as vol
 from homeassistant.components import websocket_api
+from homeassistant.config_entries import (
+    SOURCE_DHCP,
+    SOURCE_INTEGRATION_DISCOVERY,
+    SOURCE_SSDP,
+    SOURCE_ZEROCONF,
+)
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
 from homeassistant.helpers.event import async_call_later
 
+from .const import DOMAIN
+from .device_icons import icon_key
+from .drivers import DRIVERS
 from .hub import DATA_HUB
 
 PUSH_DEBOUNCE = 0.2
+DISCOVERY_SOURCES = (SOURCE_DHCP, SOURCE_ZEROCONF, SOURCE_SSDP, SOURCE_INTEGRATION_DISCOVERY)
+_IPV4 = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
 
 
 @callback
@@ -19,6 +31,7 @@ def async_setup_websocket(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_state)
     websocket_api.async_register_command(hass, ws_subscribe)
     websocket_api.async_register_command(hass, ws_label)
+    websocket_api.async_register_command(hass, ws_discovered)
 
 
 @websocket_api.websocket_command({vol.Required("type"): "av_matrix/state"})
@@ -98,3 +111,46 @@ def ws_label(hass: HomeAssistant, connection: websocket_api.ActiveConnection, ms
         return
     hub.async_set_label(protocol, source, msg.get("label"), msg.get("tags"))
     connection.send_result(msg["id"], hub.label(protocol, source))
+
+
+@websocket_api.websocket_command({vol.Required("type"): "av_matrix/discovered"})
+@websocket_api.require_admin
+@callback
+def ws_discovered(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
+    """Discovered devices waiting for confirmation (config flows started by DHCP / zeroconf)."""
+    flows = []
+    for flow in hass.config_entries.flow.async_progress_by_handler(DOMAIN):
+        context = flow.get("context") or {}
+        source = context.get("source")
+        if source not in DISCOVERY_SOURCES:
+            continue
+        info = context.get("title_placeholders") or {}
+        name = info.get("name") or None
+        host = info.get("host") or None
+        if host is None and name and (match := _IPV4.search(name)):  # flows started before v0.7.0
+            host = match.group(0)
+        driver = info.get("driver") or None
+        driver_cls = DRIVERS.get(driver) if driver else None
+        manufacturer = info.get("manufacturer") or (driver_cls.MANUFACTURER if driver_cls else None)
+        model = info.get("model") or None
+        flows.append(
+            {
+                "flow_id": flow["flow_id"],
+                "source": source,
+                "step_id": flow.get("step_id"),
+                "name": name or host,
+                "host": host,
+                "driver": driver,
+                "manufacturer": manufacturer,
+                "model": model,
+                "icon_key": icon_key(
+                    protocol=driver_cls.PROTOCOL if driver_cls else "ndi",
+                    driver=driver,
+                    manufacturer=manufacturer,
+                    model=model,
+                    name=name,
+                ),
+            }
+        )
+    flows.sort(key=lambda f: (f["name"] or "").casefold())
+    connection.send_result(msg["id"], {"flows": flows})

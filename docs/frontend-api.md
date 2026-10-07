@@ -133,6 +133,26 @@ Errors: `unknown_protocol`, `unknown_destination`, `invalid_format` (source miss
 
 Labels are also accepted by the services and appear as `select` options.
 
+## `av_matrix/discovered` (admin only)
+
+Devices Home Assistant discovered (DHCP / zeroconf) that wait for confirmation: the integration's config flows
+started by a discovery source. The card shows them as *"n new receivers found"* and continues the flow with the
+REST flow API (`GET/POST /api/config/config_entries/flow/<flow_id>`; texts from `frontend/get_translations`,
+category `config`). Re-read it on `config_entries/flow/subscribe` events.
+
+```js
+const { flows } = await hass.connection.sendMessagePromise({ type: "av_matrix/discovered" });
+// → { "flows": [ {
+//      "flow_id": "01J…", "source": "dhcp",            // dhcp | zeroconf | ssdp | integration_discovery
+//      "step_id": "confirm",
+//      "name": "Magewell 192.0.2.127", "host": "192.0.2.127",
+//      "driver": "magewell", "manufacturer": "Magewell", "model": null,
+//      "icon_key": "magewell_pro_convert"               // device illustration
+//    } ] }
+```
+
+Sorted by name. `host` may be `null` (Dante® network flow). Errors: `unauthorized` (not admin).
+
 ## Services (actions)
 
 | Service | Data | Notes |

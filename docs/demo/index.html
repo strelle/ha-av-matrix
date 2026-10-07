@@ -227,6 +227,81 @@
   const target = (data) => byEntity(data.entity_id || (data.destination || [])[0]);
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+  /* ---------------- fake config flows (found=1: a discovered Magewell waits; Admin/Admin is the right login) */
+  const found = q.get("found") === "1"
+    ? [{ flow_id: "flow-found", source: "dhcp", step_id: "confirm", name: "Magewell 192.0.2.127", host: "192.0.2.127",
+         driver: "magewell", manufacturer: "Magewell", model: null, icon_key: "magewell_pro_convert" }]
+    : [];
+  const flows = new Map(); // flow id → { step, found }
+  const flowSubs = new Set();
+  const flowChanged = () => setTimeout(() => flowSubs.forEach((cb) => cb([{ type: "removed" }])), 50);
+  const T = (o) => ({ multiline: false, multiple: false, ...o });
+  const confirmForm = (id, host, errors = {}) => ({ type: "form", flow_id: id, handler: "av_matrix", step_id: "confirm", errors, last_step: null,
+    description_placeholders: { device: "Magewell Pro Convert (NDI® → HDMI/SDI)", host, name: "Magewell" },
+    data_schema: [
+      { selector: { text: T({}) }, name: "username", required: true, default: "Admin" },
+      { selector: { text: T({ type: "password" }) }, name: "password", description: { suggested_value: "Admin" }, required: true },
+      { selector: { text: T({}) }, name: "name", required: false, optional: true },
+    ] });
+  const flowStep = (id) => {
+    const f = flows.get(id);
+    if (f.step === "user") return { type: "menu", flow_id: id, handler: "av_matrix", step_id: "user", menu_options: ["scan", "manual"], description_placeholders: null };
+    if (f.step === "manual") return { type: "form", flow_id: id, handler: "av_matrix", step_id: "manual", errors: {}, description_placeholders: null, last_step: null,
+      data_schema: [{ name: "driver", required: true, selector: { select: { options: [
+        { value: "dante", label: "Dante® network" }, { value: "birddog", label: "NDI® · BirdDog PLAY / NDI decoder" },
+        { value: "magewell", label: "NDI® · Magewell Pro Convert (NDI® → HDMI/SDI)" }], mode: "list", multiple: false, sort: false, custom_value: false } } }] };
+    if (f.step === "scan") return { type: "form", flow_id: id, handler: "av_matrix", step_id: "scan", errors: f.errors || {}, description_placeholders: null, last_step: null,
+      data_schema: [{ name: "subnet", required: true, default: "192.0.2.0/24", selector: { text: T({}) } }] };
+    if (f.step === "pick") return { type: "form", flow_id: id, handler: "av_matrix", step_id: "pick", errors: {}, last_step: null, description_placeholders: { count: "2" },
+      data_schema: [{ name: "host", required: true, default: "192.0.2.127", selector: { select: { options: [
+        { value: "192.0.2.127", label: "Magewell · 192.0.2.127" }, { value: "192.0.2.131", label: "BirdDog · PLAY-7C1D · 192.0.2.131" }], mode: "list", multiple: false } } }] };
+    return confirmForm(id, f.host, f.errors || {});
+  };
+  let flowN = 0;
+  const callApi = async (method, path, body) => {
+    if (!admin) throw { error: "Unauthorized", body: { message: "Unauthorized" } };
+    await sleep(method === "GET" ? 120 : 380);
+    const id = path.split("/")[3];
+    if (method === "POST" && path === "config/config_entries/flow") {
+      const nid = "flow-user-" + ++flowN;
+      flows.set(nid, { step: "user" });
+      return flowStep(nid);
+    }
+    if (method === "DELETE") return flows.delete(id), {};
+    if (!flows.has(id) && id === "flow-found" && found.length) flows.set(id, { step: "confirm", host: "192.0.2.127", found: true });
+    const f = flows.get(id);
+    if (!f) throw { error: "Not Found", body: { message: "Invalid flow specified" } };
+    if (method === "GET") return flowStep(id);
+    f.errors = {};
+    if (body.next_step_id) f.step = body.next_step_id;
+    else if (f.step === "manual") f.step = body.driver === "magewell" ? "confirm" : "manual", (f.host = "192.0.2.127");
+    else if (f.step === "scan") { await sleep(1200); f.step = "pick"; }
+    else if (f.step === "pick") { f.step = "confirm"; f.host = body.host; }
+    else if (f.step === "confirm") {
+      if (body.username !== "Admin" || body.password !== "Admin") f.errors = { base: "invalid_auth" };
+      else {
+        flows.delete(id);
+        if (f.found) found.splice(0, found.length);
+        const name = body.name || "PRO-CONVERT-7F20";
+        dests.push(D("new_" + flowN, name, null, "no_source", { model: "Pro Convert NDI to HDMI", icon: "magewell_pro_convert", resolution: null }));
+        push();
+        flowChanged();
+        return { type: "create_entry", flow_id: id, handler: "av_matrix", title: name, version: 1, minor_version: 1, result: { entry_id: "e" } };
+      }
+    }
+    return flowStep(id);
+  };
+  let flowTexts = null;
+  const translations = async () => {
+    if (!flowTexts) {
+      const json = await (await fetch(`../../custom_components/av_matrix/translations/${lang === "de" ? "de" : "en"}.json`)).json();
+      flowTexts = {};
+      const walk = (o, pre) => Object.entries(o).forEach(([k, v]) => (typeof v === "object" ? walk(v, `${pre}.${k}`) : (flowTexts[`${pre}.${k}`] = v)));
+      walk(json.config, "component.av_matrix.config");
+    }
+    return { resources: flowTexts };
+  };
+
   const hass = {
     language: lang,
     themes: { darkMode: q.get("theme") !== "light" },
@@ -236,6 +311,11 @@
     entities: {},
     connection: {
       subscribeMessage(cb, msg) {
+        if (msg.type === "config_entries/flow/subscribe") {
+          if (!admin) return Promise.reject(new Error("Unauthorized"));
+          flowSubs.add(cb);
+          return Promise.resolve(() => flowSubs.delete(cb));
+        }
         if (msg.type !== "av_matrix/subscribe") return Promise.reject(new Error("unknown command"));
         subs.add(cb);
         setTimeout(() => cb(JSON.parse(JSON.stringify(snap))), 50);
@@ -265,13 +345,20 @@
           return s.label ? { label: s.label, tags: s.tags } : {};
         }
         if (msg.type === "av_matrix/state") return JSON.parse(JSON.stringify(snap));
+        if (msg.type === "av_matrix/discovered") {
+          if (!admin) throw Object.assign(new Error("Unauthorized"), { code: "unauthorized" });
+          return { flows: JSON.parse(JSON.stringify(found)) };
+        }
         throw new Error("unknown command");
       },
     },
     async callWS(msg) {
       if (msg.type === "config/auth/list") return users;
+      if (msg.type === "frontend/get_translations") return translations();
+      if (msg.type === "config_entries/ignore_flow") return found.splice(0, found.length), flowChanged(), null;
       throw new Error("unknown command");
     },
+    callApi,
     async callService(domain, service, data) {
       await sleep(180);
       if (domain === "av_matrix") {
@@ -334,7 +421,7 @@
   // still=1: no CSS transitions (headless screenshots use virtual time, which does not advance transitions)
   if (q.get("still") === "1") {
     const st = document.createElement("style");
-    st.textContent = "*,*::before,*::after{transition:none!important}.history li,.toast{animation:none!important}";
+    st.textContent = "*,*::before,*::after{transition:none!important}.history li,.toast,.found{animation:none!important}";
     card.shadowRoot.appendChild(st);
   }
   window.mock = { hass, snap, route };
@@ -381,6 +468,20 @@
       document.title = `render ${((performance.now() - t0) / 5).toFixed(1)} ms, ${card.shadowRoot.querySelectorAll(".xp").length} crosspoints`;
     }
     if (q.get("dlabel")) card._openLabel("destination", q.get("dlabel"));
+    // flow=found: open the discovered device; flow=add: "add receiver"; flowstep=manual|scan; flowerr=1: wrong password
+    if (q.get("flow")) {
+      await card._openFlow(q.get("flow") === "found" ? "flow-found" : null);
+      if (q.get("flowstep")) {
+        await card._flowSend({ next_step_id: q.get("flowstep") });
+        if (q.get("flowstep") === "scan" && q.get("flowpick")) await card._flowSend({ subnet: "192.0.2.0/24" });
+      }
+      if (q.get("flowok")) await card._flowSend(card._flowInput(card.shadowRoot.querySelector("dialog.flowdlg form")));
+      if (q.get("flowerr")) {
+        const pw = card.shadowRoot.querySelector('dialog.flowdlg input[name="password"]');
+        if (pw) pw.value = "wrong";
+        await card._flowSend(card._flowInput(card.shadowRoot.querySelector("dialog.flowdlg form")));
+      }
+    }
     if (q.get("slabel")) card._openLabel("source", q.get("slabel"));
     if (q.get("hover")) {
       const [r, c] = q.get("hover").split(",");
