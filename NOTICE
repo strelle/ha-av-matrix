@@ -15,3 +15,11 @@ no netaudio code is included. tests/dante_sim.py contains a few response packets
 
 Dante® is a registered trademark of Audinate Group Pty Ltd. NDI® is a registered trademark of Vizrt NDI AB.
 This project is not affiliated with, endorsed or sponsored by Audinate or Vizrt.
+
+Fonts
+-----
+custom_components/av_matrix/frontend/fonts/ contains Atkinson Hyperlegible Next and Atkinson Hyperlegible Mono
+(Braille Institute of America; sources: https://github.com/google/fonts, ofl/atkinsonhyperlegiblenext and
+ofl/atkinsonhyperlegiblemono), subset to Latin / Latin-1 and converted to WOFF2. They are licensed under the
+SIL Open Font License, Version 1.1 - see custom_components/av_matrix/frontend/fonts/OFL.txt. The card serves them
+from the integration itself; no external font service is contacted.

@@ -129,6 +129,11 @@ request. A /24 takes about 3 seconds. Every driver that implements `async_probe`
 
 ![Dante matrix grouped by device: stagebox channels on the mixer inputs, other devices collapsed](docs/screenshots/dante-matrix.png)
 
+<table><tr>
+<td width="57%"><img src="docs/screenshots/dante-panel.png" alt="Dante panel view: RX channels grouped by device as scribble-strip displays"></td>
+<td width="43%"><img src="docs/screenshots/dante-matrix-light.png" alt="Dante matrix in the daylight theme"></td>
+</tr></table>
+
 *Settings → Devices & services → Add integration → AV Matrix → **Dante® network*** (Home Assistant also offers it
 as soon as a Dante device announces itself). That single entry covers the whole network:
 
@@ -177,6 +182,7 @@ name_mode: both        # label | original | both
 # protocol: ndi        # start tab
 # show_offline: true
 # compact: false
+# theme: auto          # auto (follows HA) | dark | daylight
 # columns: 6           # source columns in the panel, 0 = auto
 # destinations:        # selection and order, default: all
 #   - select.stage_left_source
@@ -192,24 +198,34 @@ name_mode: both        # label | original | both
 | `protocol` | first | Protocol tab to start on (`ndi`, `dante`). Only sources of the same protocol can be routed. |
 | `show_offline` | `true` | Show sources that stopped sending (greyed, "offline · 6 min"). |
 | `compact` | `false` | Smaller tiles. |
+| `theme` | `auto` | `dark` (control room, hall, evening), `daylight` (open air, stage, office: high-contrast light theme) or `auto` (follows the dark mode of the Home Assistant theme). |
 | `columns` | auto | Number of source columns in panel mode. |
 | `destinations` | all | List of destination `select` entities: which ones to show, in this order. |
 
 Mode, take mode and names (**Label | Original | Both**, like on a Lawo panel) can also be switched in the card header
 at any time.
 
+**Design – Strelle Pult-UI.** The card follows the conventions of broadcast and live-sound consoles: one colour, one
+meaning everywhere (red = program / on air, amber = preset / warning, green = ok, blue only for selection, focus and
+TAKE), illuminated keys with a coloured state edge on top, destinations as scribble-strip displays with a coloured
+name label, states always as text and shape too (LED forms, "ON AIR" / "PRESET" on the keys), touch targets of
+56 px on touch screens, a dark and a high-contrast daylight theme. Type: Atkinson Hyperlegible Next for text and
+Atkinson Hyperlegible Mono for values – shipped with the integration (SIL OFL 1.1, `frontend/fonts/`), no external
+font service. Tally and preset colours can still be changed with the theme variables `av-matrix-tally-color` and
+`av-matrix-preset-color`.
+
 **Operating it like a router panel**
 
 - **Panel:** pick a destination (its current source lights up red = program/tally), then pick a source.
   Several destinations: **Shift/Ctrl-click** or **long-press** (touch) – the source then goes to all of them
   (salvo). Number badges show the selection order.
-- **Matrix:** click a crosspoint. Filled red = on air, amber ring = armed, orange = routed source not sending.
+- **Matrix:** click a crosspoint. Lit red = on air, lit amber = armed, red striped = routed source not sending.
   Hover shows a crosshair; headers stay in place while scrolling large matrices.
 - **Preset + TAKE:** armed routes are listed in the take bar; **TAKE** switches them together (validated first –
   a locked destination fails the whole salvo), **Clear**/Esc discards them. If switching fails the presets come back
   and an error is shown.
-- **Status:** LED and top line per destination – green connected, yellow (pulsing) connecting, grey no source,
-  orange source not sending, red device offline; resolution chip (e.g. `1080p50`).
+- **Status:** LED (form *and* colour) and coloured top edge per destination – green circle connected, amber
+  triangle connecting / source not sending, ring no source, red square device offline; resolution (e.g. `1080p50`).
 - **Lock** (padlock) protects a destination, **undo** (↶) restores its previous source; *Undo last* in the footer
   undoes the latest route made from the card. The **TV** button switches a linked display on/off and shows its input.
 - **Search and tags** filter the sources; *Live only* hides offline sources.

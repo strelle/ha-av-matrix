@@ -3,6 +3,25 @@
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+- **Card redesigned in the "Strelle Pult-UI" style** (console conventions from Lawo, Yamaha and Allen & Heath):
+  fixed signal colours (red = program / on air, amber = preset / warning, green = ok, blue only for selection, focus
+  and TAKE), illuminated source keys with a coloured state edge on top and the state as a word ("ON AIR",
+  "PRESET"), destinations as scribble-strip displays (number, resolution, coloured name label, current source),
+  modules for destinations and sources, LED chains for the live/ok counts, status LEDs that differ in shape
+  (circle ok, triangle warning, square error, ring off), crosspoints as lit keys (striped = source not sending),
+  TAKE as the one blue main action. Touch targets 56 px on touch screens, 44 px with a mouse; minimum font sizes
+  13 px for labels, 14 px for values. Sticky matrix headers without backdrop blur (faster with large Dante® matrices).
+- New option **`theme`**: `auto` (follows the dark mode of the Home Assistant theme), `dark`, `daylight`
+  (high-contrast light theme for open air / stage), also in the visual editor.
+
+### Added
+- Typefaces **Atkinson Hyperlegible Next** (text) and **Atkinson Hyperlegible Mono** (values) shipped with the
+  integration (`frontend/fonts/`, Latin subset, 41 kB WOFF2, SIL OFL 1.1, see NOTICE); registered once on the page,
+  no external font service.
+
 ## [0.5.0] - 2026-10-07
 
 ### Added

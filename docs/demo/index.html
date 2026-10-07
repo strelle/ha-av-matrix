@@ -8,7 +8,8 @@
   Runs custom:av-matrix-card against a mocked Home Assistant (no HA needed).
   Serve the repository root and open /docs/demo/:
     python3 -m http.server 8765   →   http://localhost:8765/docs/demo/
-  Query parameters: theme=light|dark  mode=panel|matrix  take=direct|preset  lang=en|de
+  Query parameters: theme=light|dark (HA theme)  cardtheme=auto|dark|daylight (card option theme)
+                     mode=panel|matrix  take=direct|preset  lang=en|de
                     scenario=preset|multi|history  compact=1  admin=0  still=1
                     proto=dante (Dante® tab)  collapse=WING-FOH,…  srcdev=…  dstdev=…  (device groups / filters)
                     names=label|original|both (name display; overrides the choice stored in the browser)
@@ -18,7 +19,7 @@
 <style>
   :root {
     color-scheme: dark;
-    --primary-background-color: #111111;
+    --primary-background-color: #0a0a0a;
     --card-background-color: #1c1c1c;
     --ha-card-background: #1c1c1c;
     --primary-text-color: #e1e1e1;
@@ -32,7 +33,7 @@
   }
   :root.light {
     color-scheme: light;
-    --primary-background-color: #f2f3f5;
+    --primary-background-color: #e9edf2;
     --card-background-color: #ffffff;
     --ha-card-background: #ffffff;
     --primary-text-color: #212121;
@@ -311,6 +312,7 @@
     mode: q.get("mode") || "panel",
     take_mode: q.get("take") || "direct",
     compact: q.get("compact") === "1",
+    ...(q.get("cardtheme") ? { theme: q.get("cardtheme") } : {}),
     ...(q.get("proto") ? { protocol: q.get("proto") } : {}),
   });
   if (["label", "original", "both"].includes(q.get("names"))) card._nameMode = q.get("names");
