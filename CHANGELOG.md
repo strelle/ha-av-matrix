@@ -5,6 +5,10 @@ All notable changes to this project are documented here. The format follows
 
 ## [0.7.0] - 2026-10-07
 
+- feat: discovered receivers and "add receiver" right in the card (c4e4767)
+
+## [0.7.0] - 2026-10-07
+
 ### Added
 - **Discovered receivers in the card** (admins): when Home Assistant has discovered a decoder (DHCP / zeroconf) that
   is not set up yet, the card shows a banner *"1 new receiver found – Add"* under the header. *Add* opens the

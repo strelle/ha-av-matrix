@@ -10,7 +10,7 @@
  * Data: WebSocket "av_matrix/subscribe" (docs/frontend-api.md); falls back to the select entities.
  * Plain web component, no build step. Served and registered by the integration itself.
  */
-const CARD_VERSION = "0.6.0";
+const CARD_VERSION = "0.7.0";
 
 /* ------------------------------------------------------------------ i18n */
 const STRINGS = {
