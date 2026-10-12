@@ -3,7 +3,7 @@
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions follow [SemVer](https://semver.org/).
 
-## [Unreleased]
+## [0.8.0] - 2026-10-12
 
 ### Added
 - **IP address of every device.** In the card as a quiet mono value: NDI® decoders on their tile and matrix row,
@@ -15,6 +15,10 @@ All notable changes to this project are documented here. The format follows
   (Magewell `http://<host>[:port]`, BirdDog `http://<host>` – the dashboard on port 80, untested); Dante® devices
   have no link. It is a local address: reachable in the device's network, not through remote access.
 - Frontend API: `host` and `web_url` per destination, see [docs/frontend-api.md](docs/frontend-api.md).
+
+### Commits
+
+- feat: IP address of every device and one-click link to its web interface (c218204)
 
 ## [0.7.0] - 2026-10-07
 
