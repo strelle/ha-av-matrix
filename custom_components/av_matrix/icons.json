@@ -17,7 +17,8 @@
       },
       "connection_channel": { "default": "mdi:lan-pending" },
       "resolution": { "default": "mdi:monitor-screenshot" },
-      "resolution_channel": { "default": "mdi:monitor-screenshot" }
+      "resolution_channel": { "default": "mdi:monitor-screenshot" },
+      "ip_address": { "default": "mdi:ip-network-outline" }
     },
     "binary_sensor": {
       "connected": { "default": "mdi:lan-connect" },

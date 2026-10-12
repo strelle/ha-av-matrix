@@ -100,8 +100,16 @@ class Driver(ABC):
 
     @property
     def configuration_url(self) -> str | None:
-        """Web UI of the device, if any."""
+        """Web UI of the device, ``None`` if it has none (device registry "Visit", link in the card)."""
         return f"http://{self.host}"
+
+    def destination_host(self, destination: str) -> str | None:
+        """IP address / host name of the device behind ``destination`` (informational)."""
+        return self.host
+
+    def destination_url(self, destination: str) -> str | None:
+        """Web UI of the device behind ``destination``, ``None`` if it has none. Never guessed by the card."""
+        return self.configuration_url
 
     @classmethod
     async def async_probe(

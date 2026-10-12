@@ -83,6 +83,8 @@ const STRINGS = {
     display: "Display",
     display_on: "Display on · {i}",
     display_off: "Display off",
+    web_ui: "Open web interface",
+    ip_address: "IP address",
     armed: "{n} armed",
     nothing_armed: "Nothing armed",
     arm_hint: "Pick a destination, then a source",
@@ -206,6 +208,8 @@ const STRINGS = {
     display: "Bildschirm",
     display_on: "Bildschirm an · {i}",
     display_off: "Bildschirm aus",
+    web_ui: "Weboberfläche öffnen",
+    ip_address: "IP-Adresse",
     armed: "{n} vorgemerkt",
     nothing_armed: "Nichts vorgemerkt",
     arm_hint: "Ziel wählen, dann Quelle",
@@ -878,7 +882,20 @@ class AvMatrixCard extends HTMLElement {
   _dTip(d) {
     const orig = this._destOrig(d, false);
     const model = [d.manufacturer, d.model].filter(Boolean).join(" ");
-    return [d.label && d.label !== orig ? `${d.label}\n${orig}` : orig, model].filter(Boolean).join("\n");
+    return [d.label && d.label !== orig ? `${d.label}\n${orig}` : orig, model, d.host].filter(Boolean).join("\n");
+  }
+
+  /** IP address (or host name) of a device as a quiet mono line; empty if the integration does not know it. */
+  _htmlHost(host, cls) {
+    return host ? `<span class="${cls} mono" title="${esc(this._t("ip_address"))}">${esc(host)}</span>` : "";
+  }
+
+  /** Link to the web UI of a device (new tab). The URL comes from the driver (web_url), it is never guessed. */
+  _htmlWebLink(d, name) {
+    const url = d && typeof d.web_url === "string" && /^https?:\/\//i.test(d.web_url) ? d.web_url : "";
+    if (!url) return "";
+    const tip = this._t("web_ui");
+    return `<a class="ibtn sm web" href="${esc(url)}" target="_blank" rel="noopener noreferrer" title="${esc(`${tip}\n${url}`)}" aria-label="${esc(tip)} · ${esc(name)}">${icon("external")}</a>`;
   }
 
   /** Target of a service call: the select entity, or the destination id (entities may be disabled). */
@@ -1871,7 +1888,9 @@ class AvMatrixCard extends HTMLElement {
       ? this._art(items[0].icon_key, this._protocol, kind === "s" ? (live ? "connected" : "no_source") : this._groupState(items), "gart")
       : "";
     const model = items[0] && items[0].model ? `${group} · ${items[0].model}` : group;
-    return `<button type="button" class="gtog ${closed ? "closed" : ""}" data-act="grp" data-v="${esc(key)}" data-n="${items.length}" aria-expanded="${!closed}" title="${esc(`${label}\n${model}`)}" aria-label="${esc(label)}">${icon("chevron", "chev")}${art}<i class="led ${live ? "connected" : "offline"}"></i><span class="gname">${esc(group)}</span><span class="gcount">${esc(this._t("group_count", { n: items.length }))}</span>${extra}</button>`;
+    const host = (items.find((x) => x.host) || {}).host || "";
+    const web = kind === "d" ? this._htmlWebLink(items.find((x) => x.web_url), group) : "";
+    return `<button type="button" class="gtog ${closed ? "closed" : ""}" data-act="grp" data-v="${esc(key)}" data-n="${items.length}" aria-expanded="${!closed}" title="${esc([label, model, host].filter(Boolean).join("\n"))}" aria-label="${esc(label)}">${icon("chevron", "chev")}${art}<i class="led ${live ? "connected" : "offline"}"></i><span class="gid"><span class="gname">${esc(group)}</span>${this._htmlHost(host, "gip")}</span><span class="gcount">${esc(this._t("group_count", { n: items.length }))}</span>${extra}</button>${web}`;
   }
 
   _destState(d) {
@@ -1899,6 +1918,7 @@ class AvMatrixCard extends HTMLElement {
     const disp = d.display;
     const dispOn = disp && (disp.state === "on" || disp.state === "playing" || disp.state === "idle");
     const tools = [];
+    if (!d.group) tools.push(this._htmlWebLink(d, this._dTitle(d)));
     tools.push(
       `<button type="button" class="ibtn sm lock ${d.locked ? "on" : ""}" data-act="lock" data-d="${esc(d.id)}" aria-pressed="${d.locked}" title="${esc(this._t(d.locked ? "unlock" : "lock"))}" aria-label="${esc(this._t(d.locked ? "unlock" : "lock"))} · ${esc(this._dTitle(d))}">${icon(d.locked ? "lock" : "unlock")}</button>`
     );
@@ -1952,6 +1972,7 @@ class AvMatrixCard extends HTMLElement {
             })()}
             <span class="dfoot"><span class="dmeta">
               ${d.locked ? `<span class="chip lockchip">${icon("lock")}${esc(this._t("locked"))}</span>` : ""}
+              ${grouped ? "" : this._htmlHost(d.host, "dip")}
             </span>${art}</span>
             ${preset !== undefined ? `<span class="armline"><b>${esc(this._t("armed_state"))}</b><span class="ell">${esc(this._srcName(proto, preset))}</span></span>` : ""}
           </button>
@@ -2131,6 +2152,7 @@ class AvMatrixCard extends HTMLElement {
                       ? `<span class="pstx"><b>${esc(this._t("armed_state"))}</b>${esc(this._srcName(proto, preset))}</span>`
                       : `<span class="cur">${esc(this._srcName(proto, d.current_source))}</span>${res ? `<span class="chip res mono">${esc(res)}</span>` : ""}${warn || sub ? `<span class="warnico" title="${esc(subTip)}">${icon("warn")}</span>` : ""}`
                 }</div>
+                ${grouped ? "" : this._htmlHost(d.host, "rhip")}
               </div>
               <div class="rtools">${this._htmlDestTools(d, true)}</div>
             </div>
@@ -2822,6 +2844,21 @@ button.chip.on { background: var(--p-accent); border-color: var(--p-accent); col
 .dtools { display: flex; gap: 4px; justify-content: flex-end; padding: 4px 6px; border-top: 1px solid var(--p-line);
   background: var(--p-surface-2); }
 .dtools .tv { margin-right: auto; }
+.dtools .web { margin-right: auto; }
+.dtools .web ~ .tv { margin-right: 0; }
+.narrow .dtools .ibtn.sm { flex: 0 1 var(--amx-hit-sm); min-width: 34px; }
+.narrow .dtools .web ~ .ibtn.tv { padding: 0; min-width: 34px; }
+a.ibtn { text-decoration: none; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+a.ibtn.sm:hover { color: var(--p-fg); background: var(--p-surface-3); border-color: var(--p-line-strong); }
+/* IP address of a device: quiet mono value, never a signal colour */
+.dip, .rhip, .gip { font-size: 13px; font-weight: 400; color: var(--p-muted); white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis; min-width: 0; max-width: 100%; text-transform: none; letter-spacing: 0; }
+.dip { flex: 1 1 100%; line-height: 1.3; }
+/* two tiles per row (phones): the address gets the full width, the illustration moves below it */
+.narrow .dfoot:has(.dip) { flex-wrap: wrap; row-gap: 0; }
+.narrow .dfoot:has(.dip) .dmeta { flex: 1 1 100%; }
+.narrow .dfoot:has(.dip) .dart { margin-top: -2px; }
+.rhip { line-height: 1.2; }
 .ibtn.sm { width: var(--amx-hit-sm); height: var(--amx-hit-sm); border-radius: 10px; background: transparent; border-color: transparent; color: var(--p-muted); }
 .ibtn.sm:hover:not([disabled]) { color: var(--p-fg); background: var(--p-surface-3); border-color: var(--p-line-strong); }
 .ibtn.sm .ic { width: 19px; height: 19px; }
@@ -3155,6 +3192,9 @@ fieldset.fld legend { padding: 0; margin-bottom: 6px; }
 .gtog .chev { width: 17px; height: 17px; flex: none; transition: transform .15s; color: var(--p-muted); }
 .gtog.closed .chev { transform: rotate(-90deg); }
 .gtog .led { width: 9px; height: 9px; }
+.gtog .gid { display: flex; flex-direction: column; min-width: 0; line-height: 1.15; }
+.mx thead .gtog .gip { display: none; }
+.ghead > a.ibtn.web, .rghw > a.ibtn.web { flex: none; }
 .gtog .gname { font-size: 14px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; white-space: nowrap;
   overflow: hidden; text-overflow: ellipsis; }
 .gtog .gcount, .gtog .gsub { font-family: var(--amx-mono); font-size: 14px; color: var(--p-muted); white-space: nowrap; }

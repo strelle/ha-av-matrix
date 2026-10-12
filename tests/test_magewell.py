@@ -350,3 +350,9 @@ async def test_not_a_magewell(session):
     session.get_(API, body="<html>hello</html>")
     with pytest.raises(CannotConnect):
         await driver(session).async_get_info()
+
+
+def test_web_ui_url(session):
+    assert driver(session).configuration_url == "http://192.0.2.20"
+    assert driver(session, port=8088).destination_url("main") == "http://192.0.2.20:8088"
+    assert driver(session).destination_host("main") == "192.0.2.20"

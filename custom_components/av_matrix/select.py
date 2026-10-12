@@ -66,6 +66,7 @@ class AvMatrixSourceSelect(AvMatrixDestinationEntity, SelectEntity):
                 if not registry.is_live(s)
             ],
             "source_address": record.address if record else None,
+            "host": self.dest.host,
             "locked": self.dest.uid in self.hub.locks,
             "can_undo": bool(self.hub.history.get(self.dest.uid)),
             "display_error": self.dest.display_error,

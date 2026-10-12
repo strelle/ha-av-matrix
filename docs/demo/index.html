@@ -95,7 +95,9 @@
     manufacturer: extra.manufacturer || "Magewell", model: extra.model || "Pro Convert NDI to AIO", icon_key: extra.icon || "magewell_ndi_aio",
     device_name: name, device_id: "dev-" + id, entry_id: "entry-" + id, driver: extra.driver || "magewell", protocol: "ndi",
     current_source: cur, current_source_live: true, status, resolution: extra.resolution === undefined ? "1920x1080p50" : extra.resolution,
-    available: status !== "offline", locked: !!extra.locked, can_undo: !!extra.can_undo, display: extra.display || null });
+    available: status !== "offline", locked: !!extra.locked, can_undo: !!extra.can_undo, display: extra.display || null,
+    host: extra.host === undefined ? "192.0.2." + (60 + id.length) : extra.host,
+    web_url: extra.web === null || extra.host === null ? null : "http://" + (extra.host || "192.0.2." + (60 + id.length)) });
   const dests = [
     D("foyer", "AIO-0A1B2C", "SIGNAGE-NUC (Loop)", "connected", {
       resolution: "1920x1080p30", label: "Foyer left",
@@ -104,7 +106,7 @@
     D("stage_left", "Stage Left", "TRICASTER (PGM 1)", "connected", { can_undo: true, resolution: "3840x2160p50" }),
     D("stage_right", "Stage Right", "STUDIO-PC (Slides)", "connecting", { resolution: null,
       model: "Pro Convert NDI to HDMI", icon: "magewell_pro_convert" }),
-    D("confidence", "PRO-CONVERT-3D4E", "STUDIO-PC (Notes)", "connected", { locked: true, resolution: "1280x720p50",
+    D("confidence", "PRO-CONVERT-3D4E", "STUDIO-PC (Notes)", "connected", { locked: true, resolution: "1280x720p50", host: "198.51.100.123",
       label: "Confidence", model: "Pro Convert NDI to HDMI", icon: "magewell_pro_convert" }),
     D("green_room", "PLAY-5F6A", "CAM-3 (Program)", "source_lost", { resolution: null, driver: "birddog",
       label: "Green Room", manufacturer: "BirdDog", model: "PLAY", icon: "birddog_play" }),
@@ -171,6 +173,7 @@
         manufacturer: dev.startsWith("WING") ? "Behringer" : dev.startsWith("AVIO") ? "Audinate" : null, model: DEV[dev].model,
         icon_key: DEV[dev].icon, channel: ch, group: dev, device_name: dev, device_id: "dev-" + dev, entry_id: "entry-dante",
         driver: "dante", protocol: "dante", current_source: cur, current_source_live: !!(src && src.live), status,
+        host: DEV[dev].host, web_url: null,
         resolution: "48 kHz", available: online, locked: dev === "AVIOAO2-7e8f90" && i === 1, can_undo: false, display: null,
         subscription: { state: sub, code: null, status: SUB[sub][0], detail: SUB[sub][1] } });
     });

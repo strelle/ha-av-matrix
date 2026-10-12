@@ -3,6 +3,19 @@
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- **IP address of every device.** In the card as a quiet mono value: NDI® decoders on their tile and matrix row,
+  Dante® devices under the device name in the group header (also in the tooltips). In Home Assistant as a
+  diagnostic `sensor` *IP address* per device (NDI® decoders and every Dante® device; it keeps its value while the
+  device is offline) and as attribute `host` of the *Source* `select`.
+- **Web interface with one click.** An "open externally" button (↗) per decoder opens the device's web UI in a
+  new tab; the device page in Home Assistant offers the same as *Visit*. The address comes from the driver
+  (Magewell `http://<host>[:port]`, BirdDog `http://<host>` – the dashboard on port 80, untested); Dante® devices
+  have no link. It is a local address: reachable in the device's network, not through remote access.
+- Frontend API: `host` and `web_url` per destination, see [docs/frontend-api.md](docs/frontend-api.md).
+
 ## [0.7.0] - 2026-10-07
 
 - feat: discovered receivers and "add receiver" right in the card (c4e4767)

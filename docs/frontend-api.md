@@ -68,6 +68,8 @@ const unsub = await hass.connection.subscribeMessage(
           "manufacturer": "Magewell",          // from the device / mDNS, may be null
           "model": "Pro Convert NDI to AIO",   // may be null
           "icon_key": "magewell_ndi_aio",      // device illustration
+          "host": "192.0.2.20",                // IP address / host name of the device (Dante®: of the Dante device), may be null
+          "web_url": "http://192.0.2.20",      // web UI of the device as the driver knows it, null if it has none (Dante®)
           "protocol": "ndi",
           "current_source": "STUDIO-PC (Slides)",   // source id or null (= None/off)
           "current_source_live": true,

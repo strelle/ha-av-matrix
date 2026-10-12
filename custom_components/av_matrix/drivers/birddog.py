@@ -123,6 +123,11 @@ class BirdDogDecoder(Driver):
     def _base(self) -> str:
         return f"http://{self.host}:{self.port or 8080}"
 
+    @property
+    def configuration_url(self) -> str | None:
+        """The web dashboard listens on port 80 (the API port 8080 has no pages)."""
+        return f"http://{self.host}"
+
     # ----------------------------------------------------------------- transport
     async def _login(self) -> None:
         password = self.config.get("password")

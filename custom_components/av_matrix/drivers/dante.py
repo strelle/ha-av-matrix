@@ -266,7 +266,11 @@ class DanteNetwork(Driver):
 
     @property
     def configuration_url(self) -> str | None:
-        return None
+        return None  # Dante devices are configured with Dante Controller; AVIO adapters have no web UI
+
+    def destination_host(self, destination: str) -> str | None:
+        dev = self.devices.get(split_dest(destination)[0])
+        return dev.host if dev else None
 
     def close(self) -> None:
         self.transport.close()

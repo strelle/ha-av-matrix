@@ -148,3 +148,10 @@ async def test_missing_endpoint_is_a_driver_error(session):
     session.get_(f"{B}/List", status=404)
     with pytest.raises(CannotConnect):
         await driver(session).async_get_sources()
+
+
+def test_web_ui_is_on_port_80(session):
+    """The dashboard is on port 80, also when the API port is configured explicitly."""
+    assert driver(session, port=8080).configuration_url == "http://192.0.2.30"
+    assert driver(session).destination_url("1") == "http://192.0.2.30"
+    assert driver(session).destination_host("1") == "192.0.2.30"

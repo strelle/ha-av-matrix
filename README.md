@@ -41,7 +41,8 @@ Dante device on the network is a source, every RX channel a destination – foun
   - BirdDog's `NDI_<id>` placeholders for names with umlauts are mapped to the real name.
 - **Entities per destination:** `select` *Source* (the crosspoint), `sensor` *Connection*
   (connected / connecting / no source / source not sending / offline), `sensor` *Resolution* (e.g. `1920x1080p50`),
-  `binary_sensor` *Connected*, `switch` *Route lock*; per device a *Refresh sources* `button`.
+  `binary_sensor` *Connected*, `switch` *Route lock*; per device a *Refresh sources* `button` and a diagnostic
+  `sensor` *IP address*. The device page links to the web UI of the decoder (*Visit*).
 - **Actions:** `av_matrix.route`, `av_matrix.salvo` (several routes at once, validated first),
   `av_matrix.lock` / `unlock`, `av_matrix.undo`, `av_matrix.refresh_sources`; event `av_matrix_routed`.
 - **Linked displays:** power on a TV/projector and switch its input when a destination is routed.
@@ -148,7 +149,7 @@ as soon as a Dante device announces itself). That single entry covers the whole 
 - **Entities per RX channel:** `select` *Source*, `sensor` *Subscription* (`subscribed`, `self`, `in_progress`,
   `unresolved`, `none`, `idle`, `warning`, `error`; attributes with Dante's status name and explanation, e.g.
   `UNRESOLVED – the transmitting device is not on the network`), `switch` *Route lock*.
-  **Per device:** *TX channels*, *RX channels*, *Sample rate*, *Online*. **Network:** *Dante devices online*, *Refresh*.
+  **Per device:** *TX channels*, *RX channels*, *Sample rate*, *IP address*, *Online*. **Network:** *Dante devices online*, *Refresh*.
 - **Big devices:** devices with more than 32 RX channels (e.g. a 64×64 console card) get their entities **disabled by
   default** – enable the ones you need. The card routes all channels anyway (by destination id, see
   [frontend API](docs/frontend-api.md)). Options: hide devices completely, or create entities only for selected RX
@@ -229,6 +230,10 @@ font service. Tally and preset colours can still be changed with the theme varia
   triangle connecting / source not sending, ring no source, red square device offline; resolution (e.g. `1080p50`).
 - **Lock** (padlock) protects a destination, **undo** (↶) restores its previous source; *Undo last* in the footer
   undoes the latest route made from the card. The **TV** button switches a linked display on/off and shows its input.
+- **IP address and web interface:** every device shows its IP address (NDI® decoders on the tile / matrix row,
+  Dante® devices under the device name). The ↗ button opens the web interface of a decoder in a new tab – only
+  where the driver knows one (Magewell, BirdDog; Dante® adapters have none). The link points to the local address
+  of the device, so it works in the device's network, not through a remote connection to Home Assistant.
 - **Search and tags** filter the sources; *Live only* hides offline sources.
 - **Add receivers (admins):** when Home Assistant has discovered a decoder (DHCP / mDNS) that is not set up yet, a
   banner *"1 new receiver found"* appears under the header. **Add** opens the setup right in the card: credentials
@@ -445,7 +450,10 @@ linked displays, config flow, services, WebSocket API).
   Benutzer, Tastatur (`/` Suche, Enter TAKE, Esc verwerfen, U Undo, L Sperre, N Namen). Namensanzeige wie bei Lawo
   umschaltbar: *Label | Original | Beide* (`name_mode`, im Browser gemerkt); Labels (Admin) auch für Ziele
   (Stift, dann Ziel antippen, oder Doppelklick / langes Drücken auf den Zielnamen). Jedes Gerät wird als kleine
-  Zeichnung mit Status-LED gezeigt. Optionen siehe Tabelle oben.
+  Zeichnung mit Status-LED gezeigt, dazu seine **IP-Adresse**; die Taste ↗ öffnet die **Weboberfläche** des
+  Decoders in einem neuen Tab (Magewell, BirdDog; nur im Netz des Geräts erreichbar, Dante®-Adapter haben keine).
+  In Home Assistant: Diagnose-Sensor *IP-Adresse* je Gerät und *Besuchen* auf der Geräteseite.
+  Optionen siehe Tabelle oben.
 - **HomeKit:** die Quellen-Auswahl über die HomeKit-Bridge freigeben (ein Schalter pro Quelle; neue Quellen erst nach Neuladen der Bridge).
 - **Updates** kommen über HACS (Update-Entität), danach Home Assistant neu starten.
 - **Dante®** (*experimentell*): Eintrag „Dante®-Netzwerk“ übernimmt alle Dante-Geräte im Netz automatisch (mDNS,

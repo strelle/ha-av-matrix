@@ -78,6 +78,16 @@ class Destination:
     def name(self) -> str:
         return f"{self.device_name} · {self.channel_name}" if self.channel_name else self.device_name
 
+    @property
+    def host(self) -> str | None:
+        """IP address / host name of the device (network entries: of the sub-device)."""
+        return self.coordinator.driver.destination_host(self.dest_id)
+
+    @property
+    def web_url(self) -> str | None:
+        """Web UI of the device as the driver knows it, None if it has none."""
+        return self.coordinator.driver.destination_url(self.dest_id)
+
 
 def _iso(ts: float | None) -> str | None:
     return datetime.fromtimestamp(ts, UTC).isoformat() if ts else None
@@ -585,6 +595,8 @@ class AvMatrixHub:
                         "manufacturer": manufacturer,
                         "model": model,
                         "icon_key": self.destination_icon(dest),
+                        "host": dest.host,
+                        "web_url": dest.web_url,
                         "protocol": key,
                         "current_source": current,
                         "current_source_live": registry.is_live(current),

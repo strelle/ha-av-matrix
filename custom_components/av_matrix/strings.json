@@ -251,6 +251,9 @@
       },
       "devices_online": {
         "name": "Dante devices online"
+      },
+      "ip_address": {
+        "name": "IP address"
       }
     },
     "binary_sensor": {

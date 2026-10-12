@@ -43,10 +43,13 @@ async def async_setup_entry(
             DanteDeviceSensor(coordinator, name, "tx_channels"),
             DanteDeviceSensor(coordinator, name, "rx_channels"),
             DanteDeviceSensor(coordinator, name, "sample_rate"),
+            IpAddressSensor(coordinator, name),
         ],
     )
     if coordinator.driver.NETWORK:
         async_add_entities([NetworkDevicesSensor(coordinator)])
+    else:
+        async_add_entities([IpAddressSensor(coordinator)])
 
 
 class ConnectionSensor(AvMatrixDestinationEntity, SensorEntity):
@@ -142,6 +145,34 @@ class DanteDeviceSensor(AvMatrixDeviceEntity, SensorEntity):
         if dev is None:
             return None
         return {"tx_channels": dev.tx_count, "rx_channels": dev.rx_count, "sample_rate": dev.sample_rate}[self.key]
+
+
+class IpAddressSensor(AvMatrixDeviceEntity, SensorEntity):
+    """IP address (or host name) the integration reaches the device at; Dante®: per Dante device."""
+
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_translation_key = "ip_address"
+
+    def __init__(self, coordinator: AvMatrixCoordinator, device: str | None = None) -> None:
+        super().__init__(coordinator, f"{device}_ip_address" if device else "ip_address", device)
+        self.device = device
+
+    @property
+    def available(self) -> bool:
+        return True  # the address matters most while the device is offline
+
+    @property
+    def native_value(self) -> str | None:
+        driver = self.coordinator.driver
+        if self.device is None:
+            return driver.host
+        dev = driver.device_for(self.device)  # type: ignore[attr-defined]
+        return dev.host if dev else None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """``web_url``: web UI of the device, None if it has none (Dante®)."""
+        return {"web_url": self.coordinator.driver.configuration_url}
 
 
 class NetworkDevicesSensor(AvMatrixDeviceEntity, SensorEntity):

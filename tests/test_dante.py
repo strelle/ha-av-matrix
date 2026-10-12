@@ -116,6 +116,9 @@ async def test_devices_entities_and_snapshot(hass: HomeAssistant) -> None:
     assert hass.states.get("sensor.avioaes3_0d0e0f_rx_channels").state == "2"
     assert float(hass.states.get("sensor.avioaes3_0d0e0f_sample_rate").state) == 48.0
     assert hass.states.get("binary_sensor.avioaes3_0d0e0f_online").state == "on"
+    ip = hass.states.get("sensor.avioaes3_0d0e0f_ip_address")
+    assert ip.state == "192.0.2.31" and ip.attributes["web_url"] is None
+    assert state.attributes["host"] == "192.0.2.31"
     assert hass.states.get("sensor.dante_network_dante_devices_online").state == "2"
     assert hass.states.get("switch.avioaes3_0d0e0f_ch1_route_lock") is not None
     assert hass.states.get("sensor.avioaes3_0d0e0f_ch1_connection") is None  # Dante: subscription sensor instead
@@ -131,6 +134,9 @@ async def test_devices_entities_and_snapshot(hass: HomeAssistant) -> None:
     d = snap["destinations"][0]
     assert (d["name"], d["group"], d["channel"], d["resolution"]) == (f"{AVIO} · CH1", AVIO, "CH1", "48 kHz")
     assert d["subscription"]["state"] == "unresolved" and d["status"] == "source_lost"
+    # the IP address of the Dante device is shown, but there is no web UI to link to
+    assert d["host"] == "192.0.2.31" and d["web_url"] is None
+    assert avio.configuration_url is None
     src = {s["id"]: s for s in snap["sources"]}
     assert src[f"CH1@{DA}"]["group"] == DA and src[f"CH1@{DA}"]["channel"] == "CH1" and src[f"CH1@{DA}"]["live"]
     assert not src["61@Example-WING-Fullsize"]["live"]
@@ -315,6 +321,7 @@ async def test_new_device_appears_and_offline(hass: HomeAssistant, dante_env) ->
     snap = hass.data[DATA_HUB].snapshot()["protocols"]["dante"]
     assert all(d["status"] == "offline" for d in snap["destinations"] if d["group"] == "STAGEBOX-64")
     assert hass.states.get("binary_sensor.avioaes3_0d0e0f_online").state == "on"
+    assert hass.states.get("sensor.stagebox_64_ip_address").state == "192.0.2.33"  # the address stays while offline
     # a device that left can be removed from the UI, a live one cannot
     dev_reg = dr.async_get(hass)
     from custom_components.av_matrix import async_remove_config_entry_device

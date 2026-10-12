@@ -12,6 +12,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from homeassistant import config_entries
 from homeassistant.config_entries import ConfigEntryState
+from homeassistant.const import EntityCategory
 from homeassistant.core import Context, HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
@@ -205,6 +206,12 @@ async def test_entities_and_options(hass: HomeAssistant) -> None:
     assert hass.states.get("switch.lobby_route_lock").state == "off"
     device = dr.async_get(hass).async_get(er.async_get(hass).async_get("select.lobby_source").device_id)
     assert device.manufacturer == "Magewell" and device.sw_version == "1.3.24"
+    # IP address: diagnostic sensor + attribute; the web UI is the "Visit" link of the device page
+    assert device.configuration_url == "http://192.0.2.20"
+    ip = hass.states.get("sensor.lobby_ip_address")
+    assert ip.state == "192.0.2.20" and ip.attributes["web_url"] == "http://192.0.2.20"
+    assert er.async_get(hass).async_get("sensor.lobby_ip_address").entity_category is EntityCategory.DIAGNOSTIC
+    assert state.attributes["host"] == "192.0.2.20"
 
 
 async def test_select_routes_fires_event_and_undo(hass: HomeAssistant) -> None:
@@ -480,6 +487,7 @@ async def test_websocket_state_subscribe_label(hass: HomeAssistant, hass_ws_clie
     assert dest["current_source"] == "OLD-PC (Gone)" and dest["current_source_live"] is False
     assert dest["status"] == "connected" and dest["locked"] is False and dest["display"] is None
     assert dest["device_name"] == "Lobby" and dest["protocol"] == "ndi" and dest["resolution"] == "1920x1080p50"
+    assert dest["host"] == "192.0.2.20" and dest["web_url"] == "http://192.0.2.20"  # URL comes from the driver
 
     await client.send_json({"id": 2, "type": "av_matrix/subscribe"})
     sub_id = 2

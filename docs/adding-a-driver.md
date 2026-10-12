@@ -34,6 +34,10 @@ each becomes a `select` entity and a row in the matrix.
        async def async_get_status(self, destination: str) -> DestinationStatus: ...   # optional
        async def async_refresh_sources(self) -> None: ...                             # optional
        def destinations(self) -> list[DestinationInfo]: ...                          # optional, default: one
+
+       @property
+       def configuration_url(self) -> str | None: ...   # web UI ("Visit" in HA, ↗ in the card); default
+                                                        # http://<host>, return None if the device has none
    ```
 
    Discovery (optional, recommended):
