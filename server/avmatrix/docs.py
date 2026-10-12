@@ -140,7 +140,8 @@ def openapi(info: dict[str, Any]) -> dict[str, Any]:
             "/api/nmos/check": {
                 "get": _op(
                     "ST 2110 prüfen: NMOS-Geräte suchen (mDNS, eingetragene Adressen/Registry) und lesen, was sie melden – schaltet nichts. "
-                    "Antwort: discovery, devices (Name, Typ, Adresse, PTP, Ein-/Ausgänge), findings [{level: ok|hinweis|problem, text}]",
+                    "Antwort: discovery, registry (Registry im Netz? antwortet sie?), clock (Taktgeber, hören alle auf denselben?), "
+                    "devices (Name, Typ, Adresse, PTP, Ein-/Ausgänge), findings [{level: ok|hinweis|problem, text}]",
                     [_q("raw", "1 = vollständige Rohdaten als JSON-Datei zum Herunterladen")],
                 )
             },

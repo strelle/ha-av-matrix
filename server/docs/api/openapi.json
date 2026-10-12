@@ -1236,7 +1236,7 @@
     },
     "/api/nmos/check": {
       "get": {
-        "summary": "ST 2110 prüfen: NMOS-Geräte suchen (mDNS, eingetragene Adressen/Registry) und lesen, was sie melden – schaltet nichts. Antwort: discovery, devices (Name, Typ, Adresse, PTP, Ein-/Ausgänge), findings [{level: ok|hinweis|problem, text}]",
+        "summary": "ST 2110 prüfen: NMOS-Geräte suchen (mDNS, eingetragene Adressen/Registry) und lesen, was sie melden – schaltet nichts. Antwort: discovery, registry (Registry im Netz? antwortet sie?), clock (Taktgeber, hören alle auf denselben?), devices (Name, Typ, Adresse, PTP, Ein-/Ausgänge), findings [{level: ok|hinweis|problem, text}]",
         "responses": {
           "200": {
             "description": "ok",

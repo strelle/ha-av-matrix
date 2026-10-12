@@ -81,7 +81,12 @@ async def test_device_metadata(studio) -> None:
     assert types[QUAD] == ("Blackmagic Design", QUAD, "multi", "st2110_multi")
     assert types[DECK] == ("Blackmagic Design", "Blackmagic DeckLink IP/SDI HD", "card", "st2110_card")
     assert driver.destination_host(HDMI) == "127.0.0.1"
-    assert driver.device_for(MINI).ptp == {"locked": True, "grandmaster": "7c-2e-0d-ff-fe-00-00-01", "traceable": False}
+    assert driver.device_for(MINI).ptp == {
+        "locked": True,
+        "grandmaster": "7c-2e-0d-ff-fe-00-00-01",
+        "traceable": False,
+        "is_grandmaster": False,
+    }
     info = await driver.async_get_info()
     assert info.model == "ST-2110-Netzwerk (NMOS)"
 
@@ -697,3 +702,172 @@ def test_urls_with_mdns_names_are_pinned_to_the_node_address() -> None:
 
 def test_video_helper_media_types() -> None:
     assert Video(codec="ip10").media_type == IP10 and Video().media_type == "video/raw"
+
+
+# ------------------------------------------------- zweiter Controller, Registry, Switch (Blackmagic Ethernet Switch)
+SWITCH = "Blackmagic Ethernet Switch 360P"
+
+
+async def test_foreign_controller_switch_shows_with_the_next_poll_and_is_reported(studio, session) -> None:
+    """Am Switch (oder einem anderen NMOS-Controller) wird umgeschaltet: nächste Abfrage zeigt es, eine Anfrage je Gerät."""
+    from nmos_sim.controller import ForeignController
+
+    net, driver = studio
+    await poll(driver)
+    assert driver.pop_external_changes() == []
+    foreign = ForeignController(session)
+    done = await foreign.take(net.node(MINI).url, "HDMI Out", net.node(QUAD).url, "SDI In 2")
+    assert done == ["HDMI Out Video", "HDMI Out Audio", "HDMI Out ANC"]
+    before = net.node(MINI).requests
+    state = (await poll(driver)).destinations[HDMI]
+    assert net.node(MINI).requests == before + 1  # weiterhin nur die eine kleine Abfrage
+    assert state.current == quad_in(2) and state.status.extra["partial"] is False
+    assert driver.pop_external_changes() == [(HDMI, None, quad_in(2))]
+    assert driver.pop_external_changes() == []
+
+    await foreign.take(net.node(MINI).url, "HDMI Out", None)  # am Switch getrennt
+    assert (await poll(driver)).destinations[HDMI].current is None
+    assert driver.pop_external_changes() == [(HDMI, quad_in(2), None)]
+
+
+async def test_own_switches_renames_and_offline_are_not_foreign(studio, monkeypatch) -> None:
+    monkeypatch.setattr(nmos_driver, "OFFLINE_RETRY_EVERY", 1)
+    net, driver = studio
+    await poll(driver)
+    await driver.async_route(HDMI, BIDI_IN)
+    await poll(driver, 2)
+    await driver.async_route(HDMI, None)
+    await poll(driver, 2)
+    assert driver.pop_external_changes() == []
+    await driver.async_route(HDMI, BIDI_IN)
+    net.node(BIDI).spec.label = "Kamera 1"  # Quelle umbenannt: andere Kennung, aber niemand hat geschaltet
+    await driver.async_refresh_sources()
+    assert (await poll(driver, 2)).destinations[HDMI].current == "SDI In@Kamera 1"
+    net.node(MINI).down = True
+    await poll(driver, 3)
+    net.node(MINI).down = False
+    await poll(driver, 2)
+    assert driver.pop_external_changes() == []
+
+
+async def test_foreign_switch_is_seen_at_once_when_only_the_version_moves(make_net: MakeNet, session) -> None:
+    """Gerät zieht in IS-04 nur den Versionsstempel nach, nicht ``subscription``: IS-05 wird sofort gefragt."""
+    spec = blackmagic.mini_ip_to_hdmi()
+    spec.quirks.add("stale_subscription")
+    net = await make_net([spec, blackmagic.mini_bidirect_12g()])
+    driver = driver_for(session, net)
+    await poll(driver, 2)
+    net.node(MINI).connect("HDMI Out Video", net.node(BIDI).sender("SDI In Video")["id"])
+    assert (await poll(driver)).destinations[HDMI].current == BIDI_IN
+    assert driver.device_for(MINI).is04_unreliable is True
+    assert driver.pop_external_changes() == [(HDMI, None, BIDI_IN)]
+
+
+async def test_registry_and_peer_to_peer_side_by_side_give_no_duplicates(make_net: MakeNet, session) -> None:
+    net = await make_net(blackmagic.studio_with_switch(), registry=True)
+    driver = driver_for(session, net, registries=[net.registry.url])  # jede Node doppelt bekannt: direkt und gelistet
+    result = await poll(driver, 2)
+    assert len(driver.devices) == 6 and len(result.sources) == 9 and len(result.destinations) == 10
+    assert all(n.via_registry for n in driver.devices.values())
+    assert driver.registries[net.registry.url]["nodes"] == 6 and driver.diagnostics()["pending"] == []
+    before = sum(n.requests for n in net.nodes)
+    await poll(driver, nmos_driver.REGISTRY_EVERY)  # die Registry wird wieder gefragt: nichts wird neu gelesen
+    assert sum(n.requests for n in net.nodes) == before + 6 * nmos_driver.REGISTRY_EVERY
+    assert net.registry.requests == 2
+
+
+async def test_registry_lists_several_addresses_and_one_is_unreachable(make_net: MakeNet, session) -> None:
+    """Ein Gerät mit Medien- und Steueranschluss nennt beide Adressen; von hier ist nur eine erreichbar."""
+    spec = blackmagic.converter_4x12g()
+    spec.extra_endpoints = [("127.0.0.1", 9)]  # dort antwortet nichts
+    net = await make_net([spec], registry=True)
+    driver = driver_for(session, registries=[net.registry.url])
+    await poll(driver, 2)
+    node = driver.device_for(QUAD)
+    assert node.online and node.port == net.node(QUAD).port and len(node.dests) == 4
+    await poll(driver, nmos_driver.REGISTRY_EVERY)
+    assert driver.diagnostics()["pending"] == [] and len(driver.devices) == 1
+
+
+async def test_same_node_under_a_second_address_is_one_device(make_net: MakeNet, session) -> None:
+    """mDNS nennt eine Adresse, eine feste Angabe eine andere (zweite Schnittstelle): ein Gerät, kein Hin und Her."""
+    net = await make_net([blackmagic.mini_ip_to_hdmi()])
+    port = net.node(MINI).port
+    driver = driver_for(session, static_hosts=[f"127.0.0.1:{port}"])
+    await poll(driver)
+    driver.add_host("localhost", port, {"api_proto": "http"}, mdns=True)
+    await poll(driver, 2)
+    node = driver.device_for(MINI)
+    assert len(driver.devices) == 1 and (node.host, node.via_mdns) == ("127.0.0.1", True)
+    assert node.as_dict()["other_addresses"] == [f"localhost:{port}"]
+    before = net.node(MINI).requests
+    driver.add_host("localhost", port, {"api_proto": "http"}, mdns=True)  # erneut angekündigt: schon bekannt
+    await poll(driver)
+    assert net.node(MINI).requests == before + 1 and driver.diagnostics()["pending"] == []
+
+
+async def test_registry_gone_keeps_the_devices(make_net: MakeNet, session) -> None:
+    net = await make_net(registry=True)
+    driver = driver_for(session, registries=[net.registry.url])
+    await poll(driver, 2)
+    net.registry.down = True
+    result = await poll(driver, nmos_driver.REGISTRY_EVERY)
+    assert driver.registries[net.registry.url]["error"] and len(result.sources) == 8
+    assert all(n.online for n in driver.devices.values())
+
+
+async def test_registry_address_without_scheme(session) -> None:
+    driver = driver_for(session, registries=["192.0.2.5:8010", "http://192.0.2.6:8010/"])
+    assert list(driver.registries) == ["http://192.0.2.5:8010", "http://192.0.2.6:8010"]
+    driver.add_registration("http://192.0.2.5:3210")
+    assert driver.diagnostics()["registrations"] == ["http://192.0.2.5:3210"]
+
+
+async def test_switch_is_a_device_of_its_own_kind_with_status_picture_and_monitor_output(make_net: MakeNet, session) -> None:
+    net = await make_net(blackmagic.studio_with_switch())
+    driver = driver_for(session, net)
+    result = await poll(driver)
+    node = driver.device_for(SWITCH)
+    assert (node.manufacturer, node.model, node.device_type, node.icon_key, node.device_type_title) == (
+        "Blackmagic Design",
+        "Blackmagic Ethernet Switch 360P",
+        "switch",
+        "st2110_switch",
+        "Netzwerk-Switch",
+    )
+    assert (node.tx_count, node.rx_count) == (1, 1)
+    assert f"Status@{SWITCH}" in [s.name for s in result.sources] and f"{SWITCH}:Monitor SDI" in result.destinations
+    assert driver.source_info(f"Status@{SWITCH}")["essences"] == ["video"]
+    # der Monitorausgang ist ein gewöhnliches Ziel; eine Quelle mit Ton verbindet nur das Bild
+    await driver.async_route(f"{SWITCH}:Monitor SDI", BIDI_IN)
+    assert net.node(SWITCH).active("Monitor SDI")["sender_id"] == net.node(BIDI).sender("SDI In Video")["id"]
+    # das Statusbild geht auf jeden Empfänger; Ton und Zusatzdaten des Ziels werden dabei getrennt
+    await driver.async_route(HDMI, f"Status@{SWITCH}")
+    state = (await poll(driver)).destinations[HDMI]
+    assert state.current == f"Status@{SWITCH}" and state.status.extra["layers"]["audio"] is None
+
+
+async def test_clock_summary_names_the_switch_as_grandmaster(make_net: MakeNet, session) -> None:
+    specs = blackmagic.studio_with_switch()
+    net = await make_net(specs)
+    driver = driver_for(session, net)
+    await poll(driver)
+    clock = driver.clock_summary()
+    assert clock["same"] is True and clock["unlocked"] == [] and clock["no_ptp"] == []
+    assert [(m["device"], len(m["followers"])) for m in clock["grandmasters"]] == [(SWITCH, 6)]
+    assert driver.device_for(SWITCH).ptp["is_grandmaster"] is True and driver.device_for(MINI).ptp["is_grandmaster"] is False
+
+    net.node(BIDI).spec.gmid = "7c-2e-0d-ff-fe-0a-0b-03"  # der Wandler hält sich selbst für den Taktgeber
+    net.node(DECK).spec.ptp_locked = False
+    await driver.async_refresh_sources()
+    await poll(driver)
+    clock = driver.clock_summary()
+    assert clock["same"] is False and clock["unlocked"] == [DECK]
+    assert [(m["device"], len(m["followers"])) for m in clock["grandmasters"]] == [(SWITCH, 5), (BIDI, 1)]
+
+
+def test_registry_endpoints_ipv4_first_and_href_fallback() -> None:
+    raw = {"api": {"endpoints": [{"host": "box.local", "port": 80}, {"host": "fe80::1", "port": 80}, {"host": "192.0.2.7", "port": 8090, "protocol": "http"}]}}  # fmt: skip
+    assert nmos_driver._node_endpoints(raw) == [("192.0.2.7", 8090, "http"), ("box.local", 80, "http")]
+    assert nmos_driver._node_endpoints({"href": "https://192.0.2.8:8443/"}) == [("192.0.2.8", 8443, "https")]
+    assert nmos_driver._node_endpoints("unsinn") == [] and nmos_driver._node_endpoints({"api": {"endpoints": [{"host": 1}]}}) == []

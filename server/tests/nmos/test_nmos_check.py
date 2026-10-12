@@ -84,3 +84,29 @@ async def test_direct_host_and_json(make_net: MakeNet, capsys: pytest.CaptureFix
     data = json.loads(capsys.readouterr().out.split("\n", 1)[1])
     assert code == 0 and data["devices"][0]["device_type"] == "multi" and len(data["devices"][0]["senders"]) == 12
     assert list(data["devices"][0]["destinations"]) == [f"SDI Out {n}" for n in (1, 2, 3, 4)]
+
+
+async def test_says_registry_clock_and_switch(make_net: MakeNet, capsys: pytest.CaptureFixture[str]) -> None:
+    net = await make_net(blackmagic.studio_with_switch(), mdns="127.0.0.1", registry=True)
+    assert await nmos_check.run(args("--timeout", "6")) == nmos_check.EXIT_OK
+    out = capsys.readouterr().out
+    assert "6 NMOS-Gerät(e) gefunden, 6 antworten." in out and "Netzwerk-Switch" in out
+    assert f"✔ Registry   Registry gefunden: {net.registry.url} (listet 6 Geräte)." in out
+    assert "✔ Takt       Taktgeber (PTP-Grandmaster): 7c-2e-0d-ff-fe-00-00-01 – das ist „Blackmagic Ethernet Switch 360P“." in out
+    assert "(dieses Gerät gibt den Takt)" in out and "kann selbst schalten (zweiter NMOS-Controller)" in out
+    assert "Status@Blackmagic Ethernet Switch 360P" in out and "Blackmagic Ethernet Switch 360P:Monitor SDI" in out
+
+
+def test_summary_words() -> None:
+    quiet = nmos_check.summary({}, {"devices": [], "registries": {}, "registrations": [], "clock": {}})
+    assert quiet["registry"]["found"] is False and quiet["clock"]["level"] == "hinweis"
+    silent = nmos_check.summary({}, {"devices": [], "registries": {"http://192.0.2.5:8010": {"version": None, "error": "antwortet nicht"}}})
+    assert silent["registry"]["level"] == "problem" and "antwortet aber nicht" in silent["registry"]["text"]
+    only = nmos_check.summary({}, {"devices": [], "registries": {}, "registrations": ["http://192.0.2.5:3210"]})
+    assert only["registry"]["found"] is True and only["registry"]["answering"] is False and "Feste Adressen" in only["registry"]["text"]
+    devices = [{"name": "Switch", "online": True, "device_type": "switch"}, {"name": "Wandler", "online": True, "device_type": "converter"}]
+    clock = {"grandmasters": [{"id": "aa", "device": "Wandler", "followers": ["Switch", "Wandler"]}], "same": True}
+    other = nmos_check.summary({}, {"devices": devices, "registries": {}, "clock": clock})
+    assert other["clock"]["level"] == "hinweis" and "ist nicht der Taktgeber" in other["clock"]["text"]
+    none = nmos_check.summary({}, {"devices": devices, "registries": {}, "clock": {"grandmasters": [], "no_ptp": ["Switch", "Wandler"]}})
+    assert none["clock"]["level"] == "hinweis" and "Kein Gerät meldet einen Taktgeber" in none["clock"]["text"]

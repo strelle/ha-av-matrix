@@ -96,6 +96,31 @@ def decklink_ip_sdi_hd(label: str = "DeckLink IP/SDI HD") -> Spec:
     )  # fmt: skip
 
 
+def ethernet_switch_360p(label: str = "Blackmagic Ethernet Switch 360P") -> Spec:
+    """Der Netzwerk-Switch als NMOS-Node (Handbuch „Blackmagic Ethernet Switch“, Abschnitte „Monitor Output“ und „2110“).
+
+    Belegt: Die Statusanzeige (Datenraten je Port) ist eine SMPTE-2110-Quelle im Netz, nur Bild, 1080p50/59,94/60,
+    in der Quellenliste des Switch heißt sie „Status“. Der SDI-Monitorausgang ist ein 2110-Ziel („Monitor SDI“).
+    Der Switch hat eine eigene PTP-Uhr und ist Taktgeber, solange er nicht auf „PTP follower only“ steht – hier
+    trägt er die Uhrenkennung, auf die alle simulierten Geräte hören.
+    Annahme: dass sich Sender und Empfänger anderen NMOS-Controllern genau so melden (Namen, nur Bild, kein
+    Gruppen-Tag), und dass die Uhrenkennung aus der MAC-Adresse gebildet ist.
+    """
+    return Spec(
+        label=label, description="Blackmagic Ethernet Switch 360P", hostname="Blackmagic-Ethernet-Switch-360P.local",
+        mac="7c-2e-0d-00-00-01", quirks={"no_grouphint"},
+        ports=[
+            Port("Status", "tx", HD50, audio_channels=0, anc=False, labels={"Video": "Status"}),
+            Port("Monitor SDI", "rx", audio_channels=0, anc=False, max_height=1080, codecs=("raw",), labels={"Video": "Monitor SDI"}),
+        ],
+    )  # fmt: skip
+
+
 def studio() -> list[Spec]:
     """Die Lieferung vom 10.10.2026."""
     return [mini_ip_to_hdmi(), presentation_converter(), mini_bidirect_12g(), converter_4x12g(), decklink_ip_sdi_hd()]
+
+
+def studio_with_switch() -> list[Spec]:
+    """Die fünf Geräte am Blackmagic Ethernet Switch 360P (der Switch ist selbst ein NMOS-Node und Taktgeber)."""
+    return [*studio(), ethernet_switch_360p()]

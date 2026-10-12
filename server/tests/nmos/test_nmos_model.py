@@ -411,3 +411,21 @@ def test_registry_describes_sources_and_says_no_preview() -> None:
     assert registry.describe("kaputt") == {"preview": "none"}
     names = ["SDI In 10@Box", "SDI In 2@Box", "Cam@Anlage"]
     assert sorted(names, key=registry.sort_key) == ["Cam@Anlage", "SDI In 2@Box", "SDI In 10@Box"]
+
+
+def test_ethernet_switch_is_its_own_device_type() -> None:
+    model = nmos.NodeModel(id="x", label="Regie Switch", hostname="Blackmagic-Ethernet-Switch-360P.local")
+    manufacturer, product, kind = nmos.classify_device(model)
+    assert (manufacturer, product, kind) == ("Blackmagic Design", "Blackmagic Ethernet Switch 360P", "switch")
+    assert nmos.DEVICE_TYPES[kind] == ("Netzwerk-Switch", "st2110_switch")
+    assert icon_key(protocol="st2110", model="Blackmagic Ethernet Switch 820") == "st2110_switch"
+    # ein Bildmischer („Switcher“) ist kein Switch
+    assert nmos.classify_device(nmos.NodeModel(id="y", label="ATEM Switcher"))[2] == "device"
+
+
+def test_grandmaster_id_is_matched_to_a_mac_address() -> None:
+    assert nmos.clock_id("7C-2E-0D-FF-FE-00-00-01") == nmos.clock_id("7c:2e:0d:ff:fe:00:00:01") == "7c2e0dfffe000001"
+    assert nmos.clock_id("kaputt") is None and nmos.clock_id(None) is None
+    assert nmos.is_own_clock("7c-2e-0d-ff-fe-00-00-01", ["7c:2e:0d:00:00:01"]) is True
+    assert nmos.is_own_clock("7c-2e-0d-ff-fe-00-00-01", ["7c:2e:0d:00:00:02"]) is False
+    assert nmos.is_own_clock(None, ["7c:2e:0d:00:00:01"]) is False

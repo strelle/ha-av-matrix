@@ -225,10 +225,16 @@ class Poller:
                 if state.current != device_source:
                     state.current = device_source
                     state.status = DestinationStatus(connected=False)
+            # Treiber, die es können (ST 2110), sagen, welche Ziele ein anderer Controller umgeschaltet hat
+            foreign = getattr(self.driver, "pop_external_changes", None)
+            external = [c for c in (foreign() if foreign else []) if c[0] not in self._optimistic]
+            before = {c[0]: self.hub.current_source_of(self, c[0]) for c in external}
             self.data = poll
             self.last_update_success = True
             registry.set_device_sightings(self.entry.id, poll.sources, self.driver.TRUSTED_SOURCE_LIST)
             self.hub.sync_destinations(self)
+            for dest_id, previous in before.items():
+                self.hub.note_external(self, dest_id, previous)
             self.hub.schedule_evaluate()
             self.hub.notify()
 
@@ -823,7 +829,7 @@ class Hub:
                         "static_hosts": list(entry.options.get(CONF_STATIC_HOSTS, [])),
                         "options": {k: v for k, v in entry.options.items() if k in NETWORK_OPTIONS},
                         "registries": [
-                            {"url": url, **{k: v for k, v in info.items() if k in ("mdns", "version", "error")}}
+                            {"url": url, **{k: v for k, v in info.items() if k in ("mdns", "version", "error", "nodes")}}
                             for url, info in getattr(poller.driver, "registries", {}).items()
                         ],
                         "devices": subs,
@@ -932,6 +938,44 @@ class Hub:
         if state is None:
             return None
         return self.registries[dest.protocol].real_name(dest.entry_id, state.current)
+
+    def current_source_of(self, poller: Poller, dest_id: str) -> str | None:
+        dest = self.destinations.get(f"{poller.entry.id}_{dest_id}")
+        return self.current_source(dest) if dest is not None else None
+
+    def note_external(self, poller: Poller, dest_id: str, previous: str | None) -> None:
+        """Ein Ziel wurde nicht von uns umgeschaltet (anderer NMOS-Controller, Bedienfeld am Switch, Gerätemenü).
+
+        Die Umschaltung erscheint im Verlauf mit Herkunft „extern“. „Rückgängig“ am Ziel führt zu dem Zustand
+        davor; ältere eigene Schaltungen dieses Ziels fallen aus „letzte Aktion rückgängig“ heraus, damit eine
+        Rücknahme nicht über die fremde Schaltung hinweg auf einen veralteten Stand springt.
+        """
+        dest = self.destinations.get(f"{poller.entry.id}_{dest_id}")
+        if dest is None:
+            return
+        source = self.current_source(dest)
+        if source == previous:
+            return
+        self.history.setdefault(dest.uid, deque(maxlen=HISTORY_SIZE)).append(previous)
+        for action in self.actions:
+            action["changes"] = [c for c in action["changes"] if c[0] != dest.uid]
+        if self.registries[dest.protocol].grouped:
+            self.remember(dest, previous)
+            self.remember(dest, source)
+        _LOGGER.info("Von außen geschaltet: %s → %s (extern)", source, dest.name)
+        event = {
+            "entity_id": None,
+            "destination": dest.uid,
+            "destination_name": self.dest_title(dest),
+            "protocol": dest.protocol,
+            "source": source,
+            "previous_source": previous,
+            "origin": "extern",
+            "time": datetime.now(UTC).isoformat(),
+        }
+        self.events.appendleft(event)
+        for listener in list(self._event_listeners):
+            listener(event)
 
     def _dest_state(self, dest: Destination) -> DestinationState | None:
         data = dest.poller.data

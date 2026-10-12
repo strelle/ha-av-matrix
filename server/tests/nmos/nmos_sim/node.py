@@ -11,6 +11,7 @@ https://specs.amwa.tv/bcp-004-01/
 ``sdp_required``    PATCH ohne ``transport_file`` wird mit 400 abgelehnt
 ``params_only``     PATCH mit ``transport_file`` wird mit 400 abgelehnt (nur ``transport_params``)
 ``stale_is04``      IS-04 ``subscription`` wird nach dem Schalten nicht aktualisiert
+``stale_subscription``  wie oben, aber der Versionsstempel des Empfängers ändert sich (nur ``subscription`` bleibt alt)
 ``senders_off``     Sender starten mit ``master_enable: false`` (laut Forum so bei Blackmagic)
 ``ignore``          PATCH wird mit 200 beantwortet, aber nie aktiv
 ``reject``          jeder PATCH an einen Empfänger → 500
@@ -94,6 +95,8 @@ class Spec:
     ptp_locked: bool = True
     gmid: str = "7c-2e-0d-ff-fe-00-00-01"
     tags: dict[str, list[str]] = field(default_factory=dict)
+    #: weitere Adressen, die der Node (in der Registry) VOR seiner erreichbaren nennt, z. B. ein Mediennetz
+    extra_endpoints: list[tuple[str, int]] = field(default_factory=list)
 
 
 class MockNode:
@@ -301,8 +304,11 @@ class MockNode:
         """IS-05 → IS-04: ``subscription`` und Versionsstempel nachziehen."""
         if "stale_is04" in self.spec.quirks:
             return
-        self.version = tai()
+        self.version = _later(self.version)
         active = self.conn[item_id]["active"]
+        if "stale_subscription" in self.spec.quirks:
+            (self.receivers if item_id in self.receivers else self.senders)[item_id]["version"] = self.version
+            return
         if item_id in self.receivers:
             self.receivers[item_id]["subscription"] = {"sender_id": active["sender_id"], "active": active["master_enable"]}
             self.receivers[item_id]["version"] = self.version
@@ -364,7 +370,11 @@ class MockNode:
         return {
             "id": self.node_id, "version": self.version, "label": spec.label, "description": spec.description,
             "tags": spec.tags, "href": f"{self.url}/", "hostname": spec.hostname or None,
-            "api": {"versions": NODE_VERSIONS, "endpoints": [{"host": self.host, "port": self.port, "protocol": "http"}]},
+            "api": {
+                "versions": NODE_VERSIONS,
+                # ein Gerät mit mehreren Schnittstellen nennt alle Adressen – nicht jede ist von überall erreichbar
+                "endpoints": [{"host": h, "port": p, "protocol": "http"} for h, p in [*spec.extra_endpoints, (self.host, self.port)]],
+            },
             "caps": {}, "services": [],
             "clocks": [{"name": "clk0", "ref_type": "ptp", "traceable": False, "version": "IEEE1588-2008", "gmid": spec.gmid, "locked": spec.ptp_locked}],
             "interfaces": [{"name": "eth0", "chassis_id": spec.mac, "port_id": spec.mac}],
@@ -628,6 +638,15 @@ def _static(payload: Any) -> Any:
         return web.json_response(payload)
 
     return handler
+
+
+def _later(version: str) -> str:
+    """Ein Versionsstempel, der sicher neuer ist als ``version`` (zwei Änderungen in derselben Nanosekunde)."""
+    now = tai()
+    if now != version:
+        return now
+    seconds, _, nanos = version.partition(":")
+    return f"{seconds}:{int(nanos) + 1}"
 
 
 def _no_activation() -> dict[str, Any]:

@@ -215,3 +215,96 @@ async def test_no_devices_stays_quiet(tmp_path):
     assert "nmos" not in again.entries  # wer ihn entfernt, bekommt ihn nicht wieder
     await hub.stop()
     await session.close()
+
+
+# --------------------------------------------------------------- Blackmagic Ethernet Switch, Registry, Taktgeber
+SWITCH = "Blackmagic Ethernet Switch 360P"
+
+
+@pytest.fixture
+async def switched(tmp_path, monkeypatch):
+    """Die fünf Geräte am Switch, mit Registry – gefunden nur über die von Hand eingetragene Registry."""
+    monkeypatch.setattr("avmatrix.hub.FOLLOWUP_DELAYS", ())
+    monkeypatch.setattr("avmatrix.drivers.nmos.VERIFY_DELAYS", (0.0,))
+    net = SimNetwork(blackmagic.studio_with_switch(), mdns=None, registry=True)
+    await net.start()
+    config = JsonFile(tmp_path / "config.json")
+    config.data = {"devices": [{"id": "nmos", "driver": "nmos", "title": "ST 2110", "data": {"host": "nmos"},
+                                "options": {"registries": [net.registry.url]}}]}  # fmt: skip
+    config.save_now()
+    session = aiohttp.ClientSession()
+    hub = Hub(config, JsonFile(tmp_path / "state.json"), session=session)
+    hub.load()
+    await hub.start()
+    await settle(hub)
+    token = TokenFile(tmp_path / "token")
+    token.load_or_create()
+    app = create_app(hub, token, FlowManager(hub, lambda: ""), lambda: INFO, lambda: {"localhost"})
+    async with TestClient(TestServer(app)) as client:
+        client.hub, client.net = hub, net
+        yield client
+    await hub.stop()
+    await session.close()
+    await net.stop()
+
+
+async def test_switch_appears_as_a_device_found_via_the_registry(switched):
+    devices = (await (await switched.get("/api/devices")).json())["devices"]
+    (entry,) = [d for d in devices if d["driver"] == "nmos"]
+    assert entry["registries"] == [{"url": switched.net.registry.url, "mdns": False, "version": "v1.3", "error": None, "nodes": 6}]
+    subs = {s["name"]: s for s in entry["devices"]}
+    assert len(subs) == 6 and all(s["found_via"] == "registry" and s["online"] for s in subs.values())
+    switch = subs[SWITCH]
+    assert (switch["device_type"], switch["device_type_title"], switch["icon_key"]) == ("switch", "Netzwerk-Switch", "st2110_switch")
+    assert (switch["tx_count"], switch["rx_count"], switch["host"]) == (1, 1, "127.0.0.1")
+    assert switch["ptp"]["is_grandmaster"] is True and subs[MINI]["ptp"]["is_grandmaster"] is False
+    assert (await switched.get(f"/static/devices/{switch['icon_key']}.svg")).status == 200
+    state = (await (await switched.get("/api/state")).json())["protocols"]["st2110"]
+    assert f"Status@{SWITCH}" in [s["id"] for s in state["sources"]]
+    monitor = next(d for d in state["destinations"] if d["id"] == f"nmos_{SWITCH}:Monitor SDI")
+    assert monitor["icon_key"] == "st2110_switch"
+
+
+async def test_check_says_registry_clock_and_second_controller_in_plain_words(switched):
+    result = await (await switched.get("/api/nmos/check")).json()
+    assert len(result["devices"]) == 6
+    assert result["registry"]["found"] is True and result["registry"]["answering"] is True
+    assert result["registry"]["text"] == f"Registry gefunden: {switched.net.registry.url} (listet 6 Geräte)."
+    assert (result["clock"]["level"], result["clock"]["device"], result["clock"]["same"]) == ("ok", SWITCH, True)
+    assert "das ist „Blackmagic Ethernet Switch 360P“. Alle Geräte, die einen Takt melden, hören auf ihn (6)." in result["clock"]["text"]
+    texts = " | ".join(f["text"] for f in result["findings"])
+    assert "kann selbst schalten (zweiter NMOS-Controller)" in texts and result["findings"][0]["level"] == "ok"
+
+    # ein Wandler hält sich selbst für den Taktgeber, einer ist nicht eingerastet, die Registry fällt aus
+    next(n for n in switched.net.nodes if n.spec.label == BIDI).spec.gmid = "7c-2e-0d-ff-fe-0a-0b-03"
+    next(n for n in switched.net.nodes if n.spec.label == DECK).spec.ptp_locked = False
+    result = await (await switched.get("/api/nmos/check")).json()
+    assert result["clock"]["level"] == "problem" and result["clock"]["same"] is False
+    assert "verschiedene Taktgeber" in result["clock"]["text"] and "PTP follower only" in result["clock"]["text"]
+    assert f"Nicht eingerastet: {DECK}." in result["clock"]["text"]
+    assert not any("nichts Auffälliges" in f["text"] for f in result["findings"])
+    assert any(f["level"] == "problem" and "verschiedene Taktgeber" in f["text"] for f in result["findings"])
+
+
+async def test_check_without_registry_says_peer_to_peer(env):
+    result = await (await env.get("/api/nmos/check")).json()
+    assert result["registry"]["found"] is False and "melden sich direkt (Peer-to-Peer)" in result["registry"]["text"]
+    assert result["clock"]["level"] == "ok" and result["clock"]["device"] is None
+    assert "nicht per NMOS meldet" in result["clock"]["text"]
+
+
+async def test_foreign_switch_reaches_state_status_and_event_log_over_http(switched):
+    from nmos_sim.controller import ForeignController
+
+    net = switched.net
+    node = {n.spec.label: n for n in net.nodes}
+    async with aiohttp.ClientSession() as session:
+        await ForeignController(session).take(node[MINI].url, "HDMI Out", node[QUAD].url, "SDI In 3")
+    await switched.hub.pollers["nmos"].refresh()
+    assert (await (await switched.get("/api/status")).json())["routes"][HDMI] == f"SDI In 3@{QUAD}"
+    state = (await (await switched.get("/api/state")).json())["protocols"]["st2110"]
+    assert next(d for d in state["destinations"] if d["id"] == HDMI)["current_source"] == f"SDI In 3@{QUAD}"
+    events = (await (await switched.get("/api/history")).json())["events"]
+    assert events[0]["origin"] == "extern" and events[0]["destination"] == HDMI
+    system = await (await switched.get("/api/system")).json()
+    assert system["activity"]["routes"][0]["origin"] == "extern"

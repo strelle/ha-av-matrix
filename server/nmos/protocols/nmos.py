@@ -29,6 +29,9 @@ from .base import SourceRegistry, natural_key
 PROTOCOL = "st2110"
 NODE_SERVICE_TYPE = "_nmos-node._tcp.local."
 QUERY_SERVICE_TYPE = "_nmos-query._tcp.local."
+#: A registry also announces where nodes register (IS-04 v1.3; ``_nmos-registration`` up to v1.2). The matrix
+#: only notes that one exists – it reads through the Query API.
+REGISTER_SERVICE_TYPES = ("_nmos-register._tcp.local.", "_nmos-registration._tcp.local.")
 #: IS-04 versions this implementation understands, best first (v1.0 has no receiver caps worth using).
 NODE_API_VERSIONS = ("v1.3", "v1.2", "v1.1")
 #: IS-05 versions, best first.
@@ -387,9 +390,10 @@ def parse_node(
         tags=_tags(node.get("tags")),
     )
     for iface in node.get("interfaces") if isinstance(node.get("interfaces"), list) else []:
-        mac = str(iface.get("port_id") or "").lower() if isinstance(iface, dict) else ""
-        if re.fullmatch(r"([0-9a-f]{2}-){5}[0-9a-f]{2}", mac):
-            model.macs.append(mac.replace("-", ":"))
+        for key in ("port_id", "chassis_id"):
+            mac = str(iface.get(key) or "").lower() if isinstance(iface, dict) else ""
+            if re.fullmatch(r"([0-9a-f]{2}-){5}[0-9a-f]{2}", mac) and mac.replace("-", ":") not in model.macs:
+                model.macs.append(mac.replace("-", ":"))
     for clk in node.get("clocks") if isinstance(node.get("clocks"), list) else []:
         if isinstance(clk, dict):
             locked = clk.get("locked")
@@ -751,9 +755,30 @@ def is_sdp(text: Any) -> bool:
     return isinstance(text, str) and text.lstrip().startswith("v=0")
 
 
+# ------------------------------------------------------------------------ PTP
+def clock_id(text: Any) -> str | None:
+    """A PTP clock identity (``7C-2E-0D-FF-FE-00-00-01``, any separators) as 16 lower-case hex digits."""
+    digits = re.sub(r"[^0-9a-f]", "", str(text or "").lower())
+    return digits if len(digits) == 16 else None
+
+
+def is_own_clock(gmid: Any, macs: list[str]) -> bool:
+    """Is the grandmaster ``gmid`` one of the interfaces ``macs``? A PTP clock identity is usually built from a
+    MAC address with ``ff-fe`` in the middle (IEEE 1588 / EUI-64). No match proves nothing – then nobody is named."""
+    wanted = clock_id(gmid)
+    if wanted is None:
+        return False
+    for mac in macs:
+        digits = re.sub(r"[^0-9a-f]", "", mac.lower())
+        if len(digits) == 12 and digits[:6] + "fffe" + digits[6:] == wanted:
+            return True
+    return False
+
+
 # ------------------------------------------------------- what kind of device?
 #: Device types of the matrix (label, illustration under ``devices/<icon>.svg``).
 DEVICE_TYPES: dict[str, tuple[str, str]] = {
+    "switch": ("Netzwerk-Switch", "st2110_switch"),
     "converter": ("Konverter", "st2110_converter"),
     "presentation": ("Präsentationswandler", "st2110_presentation"),
     "multi": ("Mehrkanal-Konverter", "st2110_multi"),
@@ -761,12 +786,14 @@ DEVICE_TYPES: dict[str, tuple[str, str]] = {
     "device": ("ST-2110-Gerät", "st2110_device"),
 }
 _TYPE_RULES: tuple[tuple[str, str], ...] = (
+    # a network switch that is an NMOS node itself (Blackmagic Ethernet Switch: status picture out, monitor in)
+    ("switch", r"ethernet[ -]switch|netzwerk[ -]?switch|\bswitch\b"),
     ("presentation", r"presentation"),
     ("multi", r"\b4\s*x\s*12g|\b8\s*x\s*12g|\b3\s*x\s*3g"),
     ("card", r"decklink|\bcard\b|karte"),
     ("converter", r"\bmini\b|bidirect|ip to hdmi|hdmi to ip|converter|konverter|opengear"),
 )
-_MODEL_HINT = re.compile(r"blackmagic|2110 ip|decklink", re.IGNORECASE)
+_MODEL_HINT = re.compile(r"blackmagic|2110 ip|decklink|ethernet[ -]switch", re.IGNORECASE)
 
 
 def classify_device(model: NodeModel) -> tuple[str | None, str | None, str]:
@@ -785,7 +812,8 @@ def classify_device(model: NodeModel) -> tuple[str | None, str | None, str]:
         manufacturer = next(
             (OUI_MANUFACTURERS[m.replace(":", "")[:6]] for m in model.macs if m.replace(":", "")[:6] in OUI_MANUFACTURERS), None
         )
-    texts = [model.description, model.label, *(d.label for d in model.devices.values()), model.hostname or ""]
+    hostname = (model.hostname or "").removesuffix(".").removesuffix(".local").replace("-", " ")
+    texts = [model.description, model.label, *(d.label for d in model.devices.values()), hostname]
     product = next(iter(tags.get(TAG_PRODUCT, [])), None)
     if not product:
         product = next((" ".join(t.split()) for t in texts if t and _MODEL_HINT.search(t)), None)

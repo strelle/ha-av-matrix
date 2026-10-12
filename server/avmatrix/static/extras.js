@@ -9,7 +9,7 @@
     return d ? `${d} T ${h} h` : h ? `${h} h ${m} min` : m ? `${m} min` : `${Math.round(s)} s`;
   };
   const clock = (iso) => { try { return new Date(iso).toLocaleTimeString("de-AT"); } catch (_e) { return ""; } };
-  const ORIGIN = { panel: "Panel", companion: "Companion", http: "HTTP", mcp: "MCP", preset: "Preset", salvo: "Salve", undo: "Rückgängig", api: "API" };
+  const ORIGIN = { panel: "Panel", companion: "Companion", http: "HTTP", mcp: "MCP", preset: "Preset", salvo: "Salve", undo: "Rückgängig", api: "API", extern: "Extern" };
   const WARN_ICON = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"><path d="M12 3 2.5 20h19zM12 10v4.5M12 17.6v.2"/></svg>`;
 
   /* ---------------------------------------------------------------- Anzeige in der Kopfzeile */

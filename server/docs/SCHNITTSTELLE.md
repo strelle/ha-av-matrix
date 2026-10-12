@@ -209,14 +209,27 @@ eingetragene Adressen. Gesteuert wird über IS-04 (lesen) und IS-05 (schalten); 
   `registries` (`http://<adresse>:<port>`), `audio_breakaway` (je Ziel mit Ton ein zweites Ziel „… · nur Ton“; ab
   Werk aus), `check_compat` (ab Werk an), `enable_senders` (ab Werk an), `scan_interval`.
 - **Geräte:** `GET /api/devices` liefert im Eintrag `nmos` je Gerät `name`, `host`, `online`, `manufacturer`,
-  `model`, `device_type` (`converter` | `presentation` | `multi` | `card` | `device`), `device_type_title`,
-  `icon_key` (`st2110_*`), `web_url`, `ptp` (`{locked, grandmaster, traceable}` oder `null`), `found_via`
-  (`mdns` | `registry` | `static`), `tx_count`, `rx_count`, `last_error`. `POST /api/devices/nmos/forget` mit
+  `model`, `device_type` (`switch` | `converter` | `presentation` | `multi` | `card` | `device`),
+  `device_type_title`, `icon_key` (`st2110_*`), `web_url`, `ptp` (`{locked, grandmaster, traceable,
+  is_grandmaster}` oder `null`; `is_grandmaster` = dieses Gerät gibt den Takt), `found_via`
+  (`mdns` | `registry` | `static`), `tx_count`, `rx_count`, `last_error`. Der Eintrag selbst nennt unter
+  `registries` jede Registry als `{url, mdns, version, error, nodes}`. `POST /api/devices/nmos/forget` mit
   `{device}` nimmt ein nicht antwortendes Gerät aus der Liste (400, solange es antwortet).
+- **Ein Netzwerk-Switch, der selbst NMOS spricht** (Blackmagic Ethernet Switch), ist ein Gerät vom Typ `switch`.
+  Meldet er Sender oder Empfänger (Statusbild, Monitorausgang), sind das gewöhnliche Quellen und Ziele.
+- **Andere Controller:** Schaltet jemand an der Kreuzschiene vorbei (Bedienfeld am Switch, Videohub-Pult,
+  Gerätemenü), zeigen `/api/state`, `/api/status` und der Ereignisstrom das mit der nächsten Abfrage
+  (`scan_interval`, ab Werk 5 s). Im Verlauf (`/api/history`, `activity.routes`, `av_matrix_routed`) steht die
+  Umschaltung mit `origin: "extern"`. `POST /api/undo` mit Ziel führt danach zum Zustand vor der fremden
+  Schaltung; „letzte Aktion rückgängig“ lässt ein fremd umgeschaltetes Ziel aus.
 - **Prüfen ohne zu schalten:** `GET /api/nmos/check` → `{ok, time, configured, discovery: {mdns, mdns_error,
-  announced, registries}, registries, pending, devices: [{name, host, port, online, manufacturer, model,
+  announced, registries}, registries, registry: {found, answering, urls, level, text}, clock: {grandmaster,
+  device, same, level, text}, pending, devices: [{name, host, port, online, manufacturer, model,
   device_type, icon_key, api, found_via, ptp, last_error, sources: [{name, essences, grouped_by_device}],
   destinations: […], senders, receivers}], findings: [{level: "ok"|"hinweis"|"problem", text}], note}`.
+  `registry` sagt, ob eine NMOS-Registry im Netz ist und antwortet; `clock`, welche Uhr den Takt gibt
+  (`grandmaster` = PTP-Kennung, `device` = Name, falls es eines der gefundenen Geräte ist) und ob alle Geräte
+  auf dieselbe hören (`same`: `true` | `false` | `null` = zu wenige Angaben). `text` ist jeweils Klartext.
   Mit `?raw=1` die vollständigen Rohdaten als JSON-Datei (`Content-Disposition: attachment`).
 - **Systemanzeige:** `activity.devices` hat je NMOS-Gerät eine Zeile (mit `ptp`); Warnungen `ptp_unlocked` und
   `ptp_split` (verschiedene Taktgeber).
@@ -292,7 +305,7 @@ Lesend, ohne Schlüssel; enthält keine Kommandozeilen, Pfade aus Benutzerverzei
     "testpattern": {"enabled": true, "running": true, "connections": 1, "frames_sent": 120},
     "clients": {"panels": 2, "event_streams": 1, "mcp_calls": 4, "mcp_last_s": 30},
     "devices": [{"name": "…", "online": true, "detail": "…", "last_poll_s": 2.9, "error": null}],
-    "routes": [{"time": "<ISO 8601>", "origin": "panel|companion|http|mcp|preset|salvo|undo", "destination": "…", "source": "…"}],
+    "routes": [{"time": "<ISO 8601>", "origin": "panel|companion|http|mcp|preset|salvo|undo|extern", "destination": "…", "source": "…"}],
     "errors": [{"time": "<ISO 8601>", "level": "warning|error", "where": "…", "message": "…"}]
   },
   "history": [{"t": 1790000000, "cpu": 4.1, "mem": 30.9, "temp": 50.1, "matrix": 2.4, "companion": 13.0}],

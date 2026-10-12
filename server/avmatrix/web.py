@@ -322,12 +322,14 @@ async def api_device_forget(request: web.Request) -> web.Response:
 
 
 # ----------------------------------------------------- ST 2110 prüfen (NMOS)
-def _nmos_findings(stats: dict[str, Any], diag: dict[str, Any]) -> list[dict[str, str]]:
+def _nmos_findings(stats: dict[str, Any], diag: dict[str, Any], summary: dict[str, Any]) -> list[dict[str, str]]:
     """Was am Ergebnis auffällt – in Klartext, mit Einstufung (ok | hinweis | problem)."""
     devices = diag.get("devices", [])
     out: list[dict[str, str]] = []
     if stats.get("mdns_error"):
         out.append({"level": "problem", "text": f"mDNS-Suche nicht möglich: {stats['mdns_error']}"})
+    if summary["registry"]["found"] or not devices:
+        out.append({"level": summary["registry"]["level"], "text": summary["registry"]["text"]})
     if not devices:
         if stats.get("announced") or diag.get("pending"):
             out.append({"level": "problem", "text": f"{stats.get('announced', 0)} Gerät(e) haben sich angekündigt, aber keines antwortet auf der "
@@ -340,22 +342,21 @@ def _nmos_findings(stats: dict[str, Any], diag: dict[str, Any]) -> list[dict[str
     for d in devices:
         if not d["online"]:
             out.append({"level": "problem", "text": f"{d['name']} ({d['host']}) antwortet nicht: {d.get('last_error') or 'keine Antwort'}"})
-    unlocked = [d["name"] for d in online if d.get("ptp") and d["ptp"].get("locked") is False]
-    if unlocked:
-        out.append({"level": "problem", "text": f"PTP nicht eingerastet: {', '.join(unlocked)} – ohne gemeinsamen Takt gibt es kein stabiles Bild."})
-    masters = sorted({d["ptp"]["grandmaster"] for d in online if d.get("ptp") and d["ptp"].get("grandmaster")})
-    if len(masters) > 1:
-        out.append({"level": "problem", "text": f"Die Geräte hören auf verschiedene PTP-Taktgeber ({', '.join(masters)})."})
-    no_ptp = [d["name"] for d in online if not d.get("ptp")]
-    if no_ptp:
-        out.append({"level": "hinweis", "text": f"Kein PTP-Zustand gemeldet: {', '.join(no_ptp)}"})
+    if summary["clock"]["level"] != "ok":
+        out.append({"level": summary["clock"]["level"], "text": summary["clock"]["text"]})
+    for name in summary["switches"]:
+        out.append({"level": "hinweis", "text": f"{name} kann selbst schalten (zweiter NMOS-Controller). Was dort geschaltet wird, "
+                    "erscheint hier nach wenigen Sekunden, im Verlauf mit der Herkunft „Extern“."})  # fmt: skip
     for d in online:
         loose = [n for n, g in {**d.get("sources", {}), **d.get("destinations", {})}.items() if not g.get("hinted", True)]
         if loose and (len(d.get("sources", {})) > 1 or len(d.get("destinations", {})) > 1):
             out.append({"level": "hinweis", "text": f"{d['name']}: Bild/Ton/Zusatzdaten wurden über die Namen zusammengefasst (keine Gruppen-Angabe des Geräts) – "
                         "bitte prüfen, ob die Ein-/Ausgänge stimmen."})  # fmt: skip
         if not d.get("sources") and not d.get("destinations"):
-            out.append({"level": "problem", "text": f"{d['name']} meldet weder Sender noch Empfänger."})
+            if d.get("device_type") == "switch":
+                out.append({"level": "hinweis", "text": f"{d['name']} meldet keine eigenen Ein-/Ausgänge – für einen Switch in Ordnung."})
+            else:
+                out.append({"level": "problem", "text": f"{d['name']} meldet weder Sender noch Empfänger."})
         off = [s["label"] for s in d.get("senders", []) if s.get("active") is False]
         if off:
             out.append({"level": "hinweis", "text": f"{d['name']}: {len(off)} Sender sind ausgeschaltet – sie werden beim Schalten eingeschaltet."})
@@ -382,6 +383,7 @@ async def api_nmos_check(request: web.Request) -> web.Response:
     driver, stats = await nmos_check.discover(args, hub.session)
     diag = json.loads(json.dumps(driver.diagnostics(), default=str))
     driver.close()
+    summary = nmos_check.summary(stats, diag)
     stamp = datetime.now(UTC).isoformat(timespec="seconds")
     if request.query.get("raw") in ("1", "true"):  # Rohdaten für die Fehlersuche, als Datei
         body = json.dumps({"time": stamp, "discovery": stats, **diag}, ensure_ascii=False, indent=2)
@@ -405,9 +407,11 @@ async def api_nmos_check(request: web.Request) -> web.Response:
             "configured": entry is not None,
             "discovery": stats,
             "registries": diag.get("registries", {}),
+            "registry": summary["registry"],
+            "clock": summary["clock"],
             "pending": diag.get("pending", []),
             "devices": devices,
-            "findings": _nmos_findings(stats, diag),
+            "findings": _nmos_findings(stats, diag, summary),
             "note": "Es wurde nichts geschaltet oder verändert.",
         }
     )

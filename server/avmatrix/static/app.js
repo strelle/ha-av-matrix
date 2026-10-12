@@ -351,7 +351,7 @@
     const opt = d.options || {};
     const found = { mdns: "per mDNS gefunden", registry: "aus der Registry", static: "von Hand eingetragen", remembered: "zuletzt im Netz gesehen" };
     const rows = d.devices.map((s) => {
-      const ptp = s.ptp ? (s.ptp.locked ? `<span class="chip ok" title="Taktgeber ${esc(s.ptp.grandmaster || "–")}">PTP eingerastet</span>` : `<span class="chip warnchip" title="Ohne gemeinsamen Takt gibt es kein stabiles Bild">PTP nicht eingerastet</span>`) : nmos ? `<span class="chip">kein PTP-Zustand</span>` : "";
+      const ptp = s.ptp ? (s.ptp.is_grandmaster ? `<span class="chip ok" title="Dieses Gerät gibt den Takt (PTP-Grandmaster ${esc(s.ptp.grandmaster || "–")})">Taktgeber</span>` : s.ptp.locked ? `<span class="chip ok" title="Taktgeber ${esc(s.ptp.grandmaster || "–")}">PTP eingerastet</span>` : `<span class="chip warnchip" title="Ohne gemeinsamen Takt gibt es kein stabiles Bild">PTP nicht eingerastet</span>`) : nmos ? `<span class="chip">kein PTP-Zustand</span>` : "";
       const what = nmos
         ? `${esc(s.device_type_title || "ST-2110-Gerät")} · ${esc([s.manufacturer, s.model].filter(Boolean).join(" ") || "–")} · ${s.tx_count} Eingänge / ${s.rx_count} Ausgänge · ${found[s.found_via] || ""}`
         : `${esc([s.manufacturer, s.model].filter(Boolean).join(" ") || "Dante-Gerät")} · ${s.tx_count} TX / ${s.rx_count} RX${s.sample_rate ? ` · ${s.sample_rate / 1000} kHz` : ""}`;
@@ -392,10 +392,12 @@
     const list = (items) => items.map((g) => `${esc(g.name)} <span class="muted">(${g.essences.map((k) => ess[k.replace(/\d+$/, "")] || k).join(" + ")})</span>`).join(", ") || "–";
     $(".dbody", dlg).innerHTML = `
       <div>${r.findings.map((f) => `<div class="row" style="padding:5px 0;align-items:flex-start">${mark[f.level] || ""}<span class="grow">${esc(f.text)}</span></div>`).join("")}</div>
-      <p class="muted" style="margin:0">Gefunden: ${r.devices.length} Gerät${r.devices.length === 1 ? "" : "e"} · per mDNS angekündigt: ${r.discovery.announced} · Registries: ${Object.keys(r.registries).length}${r.configured ? "" : " · ST 2110 ist in der Kreuzschiene noch nicht eingerichtet"}</p>
+      <dl class="kv"><dt>Registry</dt><dd>${mark[r.registry.level] || ""} ${esc(r.registry.text)}</dd>
+        <dt>Taktgeber</dt><dd>${mark[r.clock.level] || ""} ${esc(r.clock.text)}</dd></dl>
+      <p class="muted" style="margin:0">Gefunden: ${r.devices.length} Gerät${r.devices.length === 1 ? "" : "e"} · per mDNS angekündigt: ${r.discovery.announced}${r.configured ? "" : " · ST 2110 ist in der Kreuzschiene noch nicht eingerichtet"}</p>
       ${r.devices.map((d) => `<div class="panel" style="padding:12px"><div class="row"><img src="/static/devices/${esc(d.icon_key)}.svg" alt="" width="60" height="40">
           <div class="grow"><b>${esc(d.name)}</b> ${d.online ? `<span class="chip ok">antwortet</span>` : `<span class="chip err">antwortet nicht</span>`}
-            ${d.ptp ? (d.ptp.locked ? `<span class="chip ok">PTP eingerastet</span>` : `<span class="chip warnchip">PTP nicht eingerastet</span>`) : ""}<br>
+            ${d.ptp ? (d.ptp.is_grandmaster ? `<span class="chip ok">Taktgeber</span>` : d.ptp.locked ? `<span class="chip ok">PTP eingerastet</span>` : `<span class="chip warnchip">PTP nicht eingerastet</span>`) : ""}<br>
             <span class="muted">${esc([d.manufacturer, d.model].filter(Boolean).join(" ") || "Hersteller/Modell nicht gemeldet")} · <span class="mono">${esc(d.host)}:${d.port}</span> · ${esc(d.api)}</span></div></div>
         <dl class="kv"><dt>Eingänge (Quellen)</dt><dd>${list(d.sources)}</dd><dt>Ausgänge (Ziele)</dt><dd>${list(d.destinations)}</dd>
           <dt>Ströme</dt><dd>${d.senders} Sender, ${d.receivers} Empfänger${d.ptp && d.ptp.grandmaster ? ` · Taktgeber <span class="mono">${esc(d.ptp.grandmaster)}</span>` : ""}</dd></dl></div>`).join("")}
@@ -580,7 +582,7 @@ Beschreibung der HTTP-Schnittstelle, falls du sie brauchst: ${first.replace(/mcp
       if (d.nmosCheck !== undefined) return nmosCheck();
       if (d.netopt) { await api("PATCH", `/api/devices/${encodeURIComponent(d.netopt)}`, { [d.key]: d.val === "true" }); toast("Gespeichert", "ok"); return setTimeout(loadDevices, 1200); }
       if (d.registry) {
-        const v = await textDialog("NMOS-Registry", "Adresse(n), durch Komma getrennt", d.urls, "Speichern", "z. B. http://192.0.2.5:8010 – nur nötig, wenn die Geräte in einem anderen Netz/VLAN stehen und sich dort an einer Registry anmelden.");
+        const v = await textDialog("NMOS-Registry", "Adresse(n), durch Komma getrennt", d.urls, "Speichern", "z. B. http://192.0.2.5:8010 – eine Registry im selben Netz wird von selbst gefunden. Nur nötig, wenn die Geräte in einem anderen Netz/VLAN stehen und sich dort an einer Registry anmelden.");
         if (v !== null) { await api("PATCH", `/api/devices/${encodeURIComponent(d.registry)}`, { registries: v }); setTimeout(loadDevices, 1200); }
         return;
       }

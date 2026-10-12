@@ -78,6 +78,75 @@ async def discover(args: argparse.Namespace, session: aiohttp.ClientSession) -> 
     return driver, stats
 
 
+def summary(stats: dict[str, Any], diag: dict[str, Any]) -> dict[str, Any]:
+    """Die zwei Fragen des Liefertags in Klartext: Gibt es eine Registry? Wer gibt den Takt, hören alle auf ihn?
+
+    → ``{"registry": {found, answering, urls, level, text}, "clock": {grandmaster, device, same, level, text},
+    "switches": [Namen]}``; ``level`` ist ``ok`` | ``hinweis`` | ``problem``.
+    """
+    registries: dict[str, dict[str, Any]] = diag.get("registries") or {}
+    answering = [url for url, state in registries.items() if state.get("version") and not state.get("error")]
+    silent = [url for url in registries if url not in answering]
+    hosts = {url.split("//", 1)[-1].split(":")[0] for url in registries}
+    announced_only = [url for url in diag.get("registrations") or [] if url.split("//", 1)[-1].split(":")[0] not in hosts]
+    if answering:
+        listed = sum(registries[url].get("nodes") or 0 for url in answering)
+        level, text = "ok", f"Registry gefunden: {', '.join(answering)} (listet {listed} Gerät{'' if listed == 1 else 'e'})."
+        if silent:
+            level, text = "hinweis", text + f" Antwortet nicht: {', '.join(silent)}."
+    elif silent:
+        level = "problem"
+        text = f"Registry eingetragen oder angekündigt, antwortet aber nicht: {', '.join(silent)}. Geräte, die sich nur dort anmelden, fehlen dann."
+    elif announced_only:
+        level = "hinweis"
+        text = (
+            f"Im Netz kündigt sich eine Registry an ({', '.join(announced_only)}), aber ohne Abfrage-Schnittstelle. "
+            "Fehlt ein Gerät, seine Adresse unter „Feste Adressen“ eintragen."
+        )
+    else:
+        level, text = "ok", "Keine Registry im Netz – die Geräte melden sich direkt (Peer-to-Peer). Ohne eigene Registry ist das der Normalfall."
+    registry = {"found": bool(registries or announced_only), "answering": bool(answering), "urls": [*registries, *announced_only], "level": level, "text": text}  # fmt: skip
+
+    devices = [d for d in diag.get("devices", []) if d.get("online")]
+    switches = [d["name"] for d in devices if d.get("device_type") == "switch"]
+    info: dict[str, Any] = diag.get("clock") or {}
+    masters: list[dict[str, Any]] = info.get("grandmasters") or []
+    clock: dict[str, Any] = {"grandmaster": None, "device": None, "same": info.get("same"), "level": "ok", "text": ""}
+    if not devices:
+        clock.update(level="hinweis", text="Kein Gerät antwortet – über den Takt ist nichts bekannt.")
+    elif not masters:
+        clock.update(level="hinweis", text="Kein Gerät meldet einen Taktgeber (PTP). Ob der Takt stimmt, zeigt dann nur das Bild am Ausgang.")
+    elif len(masters) > 1:
+        parts = [f"{m['id']}{' = ' + m['device'] if m['device'] else ''} ({', '.join(m['followers'])})" for m in masters]
+        clock.update(
+            level="problem",
+            text="Die Geräte hören auf verschiedene Taktgeber: " + "; ".join(parts) + ". So gibt es kein stabiles Bild – "
+            "es darf nur einen Taktgeber geben, alle anderen Geräte auf „PTP follower only“ stellen.",
+        )
+    else:
+        master = masters[0]
+        who = f"„{master['device']}“" if master["device"] else "ein Gerät, das sich hier nicht per NMOS meldet"
+        count = len(master["followers"])
+        text = f"Taktgeber (PTP-Grandmaster): {master['id']} – das ist {who}. "
+        text += "Alle Geräte, die einen Takt melden, hören auf ihn" if count > 1 else "Bisher meldet nur ein Gerät seinen Takt"
+        text += f" ({count})."
+        clock.update(grandmaster=master["id"], device=master["device"], text=text)
+        if switches and master["device"] and master["device"] not in switches:
+            clock.update(
+                level="hinweis",
+                text=text + f" Der Switch ({', '.join(switches)}) ist nicht der Taktgeber. Soll er es sein: an allen anderen Geräten "
+                "„PTP follower only“ einschalten, am Switch ausgeschaltet lassen.",
+            )
+    extra = []
+    if info.get("unlocked"):
+        clock["level"] = "problem"
+        extra.append(f"Nicht eingerastet: {', '.join(info['unlocked'])}.")
+    if info.get("no_ptp") and masters:
+        extra.append(f"Ohne Angabe zum Takt: {', '.join(info['no_ptp'])}.")
+    clock["text"] = " ".join([clock["text"], *extra]).strip()
+    return {"registry": registry, "clock": clock, "switches": switches}
+
+
 def describe_node(driver: NmosNetwork, node: NmosNode) -> None:
     how = ", ".join(w for w, on in (("mDNS", node.via_mdns), ("Registry", node.via_registry), ("von Hand", node.static)) if on)
     say(f"\n■ {node.name}")
@@ -95,7 +164,8 @@ def describe_node(driver: NmosNetwork, node: NmosNode) -> None:
         say("  PTP          Gerät meldet keine PTP-Uhr")
     else:
         lock = {True: "eingerastet", False: "NICHT eingerastet", None: "unbekannt"}[ptp["locked"]]
-        say(f"  PTP          {lock}, Taktgeber {ptp['grandmaster'] or '?'}")
+        own = " (dieses Gerät gibt den Takt)" if ptp.get("is_grandmaster") else ""
+        say(f"  PTP          {lock}, Taktgeber {ptp['grandmaster'] or '?'}{own}")
     assert node.data is not None
     say(f"  Sender ({len(node.data.senders)})")
     for sender in sorted(node.data.senders.values(), key=lambda s: nmos.natural_key(s.label)):
@@ -247,6 +317,8 @@ async def run(args: argparse.Namespace) -> int:
             say(f"mDNS nicht verfügbar: {stats['mdns_error']}")
         if not nodes:
             say("\nKeine NMOS-Geräte gefunden.")
+            if driver.registries or driver.registrations:
+                say(f"  {summary(stats, driver.diagnostics())['registry']['text']}")
             if stats["announced"] or driver._pending:
                 say(f"  {stats['announced']} Gerät(e) haben sich angekündigt, aber keines antwortet auf der NMOS-Schnittstelle:")
                 for host, port in driver._pending:
@@ -258,21 +330,19 @@ async def run(args: argparse.Namespace) -> int:
             say("       nmos-check --host <Adresse>          probiert die üblichen Ports (8090, 80, 3212, 8080)")
             return EXIT_OK
         online = [n for n in nodes if n.online]
-        say(
-            f"\n{len(nodes)} NMOS-Gerät(e) gefunden, {len(online)} antworten."
-            + (f"  Registry im Netz: {', '.join(driver.registries)}" if driver.registries else "")
-        )
+        say(f"\n{len(nodes)} NMOS-Gerät(e) gefunden, {len(online)} antworten.")
         for node in nodes:
             describe_node(driver, node)
         describe_matrix(driver)
-        grandmasters = {n.ptp["grandmaster"] for n in online if n.ptp and n.ptp["grandmaster"]}
-        unlocked = [n.name for n in online if n.ptp and n.ptp["locked"] is False]
-        if len(grandmasters) > 1:
+        result = summary(stats, json.loads(json.dumps(driver.diagnostics(), default=str)))
+        marks = {"ok": "✔", "hinweis": "ℹ", "problem": "⚠"}
+        say(f"\n{marks[result['registry']['level']]} Registry   {result['registry']['text']}")
+        say(f"{marks[result['clock']['level']]} Takt       {result['clock']['text']}")
+        if result["switches"]:
             say(
-                f"\n⚠ Die Geräte hören auf verschiedene PTP-Taktgeber ({', '.join(sorted(grandmasters))}) – so gibt es kein stabiles Bild."
+                f"ℹ Switch     {', '.join(result['switches'])} kann selbst schalten (zweiter NMOS-Controller). "
+                "Was dort geschaltet wird, zeigt die Kreuzschiene nach wenigen Sekunden."
             )
-        if unlocked:
-            say(f"\n⚠ PTP nicht eingerastet: {', '.join(unlocked)}")
         if args.probe:
             return await probe(driver, args)
         say("\nNichts verändert. Probe-Schaltvorgang: nmos-check --probe")

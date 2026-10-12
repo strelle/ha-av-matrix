@@ -102,3 +102,35 @@ async def test_registry_announced_via_mdns(make_net: MakeNet, session, zc) -> No
 def test_txt_decoding() -> None:
     assert txt({b"api_proto": b"http", b"flag": None, b"bad": b"\xff\xfe"}) == {"api_proto": "http", "flag": ""}
     assert txt(None) == {}
+
+
+async def test_registered_nodes_registry_announces_both_services(make_net: MakeNet, session, zc) -> None:
+    """Betrieb mit Registry: Query- und Registration-API sind angekündigt, die Geräte ohne Änderungszähler."""
+    net = await make_net(blackmagic.studio_with_switch(), mdns=LOOP, registry=True, registered=True)
+    driver = driver_for(session)
+    browser = NmosBrowser(zc.zeroconf, lambda: driver)
+    await browser.async_start()
+    try:
+        await until(lambda: len(browser.registries) == 1 and len(browser.registrations) == 1 and len(browser.nodes) == 6)
+        assert list(driver.registries) == [net.registry.url] and driver.registrations == {net.registry.url}
+        result = await driver.async_poll()
+        assert len(driver.devices) == 6 and len(result.destinations) == 10  # beide Wege, jedes Gerät einmal
+        assert all(n.via_mdns and n.via_registry and "ver_rcv" not in n.txt for n in driver.devices.values())
+    finally:
+        await browser.async_stop()
+
+
+async def test_devices_only_known_to_the_registry_and_registry_found_by_itself(make_net: MakeNet, session, zc) -> None:
+    """Die Geräte kündigen sich nicht selbst an (anderes Netz): die per mDNS gefundene Registry reicht."""
+    net = await make_net(mdns=LOOP, registry=True, p2p=False)
+    driver = driver_for(session)
+    browser = NmosBrowser(zc.zeroconf, lambda: driver)
+    await browser.async_start()
+    try:
+        await until(lambda: len(browser.registries) == 1)
+        assert browser.nodes == {}
+        await driver.async_poll()  # die neu gefundene Registry wird sofort gefragt, nicht erst nach einer halben Minute
+        assert len(driver.devices) == 5 and all(n.via_registry and not n.via_mdns for n in driver.devices.values())
+        assert driver.registries[net.registry.url] == {"mdns": True, "version": "v1.3", "error": None, "nodes": 5}
+    finally:
+        await browser.async_stop()

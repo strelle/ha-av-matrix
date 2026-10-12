@@ -55,6 +55,7 @@ def main(root: Path) -> None:
             (
                 "    # --- NDI decoders\n",
                 "    # --- SMPTE ST 2110 (NMOS): der Treiber leitet den Typ zusätzlich aus dem Aufbau des Geräts ab\n"
+                '    _rule("st2110_switch", r"ethernet[ -]switch", protocols={"st2110"}),\n'
                 '    _rule("st2110_presentation", r"presentation", protocols={"st2110"}),\n'
                 '    _rule("st2110_multi", r"\\b[48]\\s*x\\s*12g|\\b3\\s*x\\s*3g", protocols={"st2110"}),\n'
                 '    _rule("st2110_card", r"decklink", protocols={"st2110"}),\n'

@@ -182,3 +182,64 @@ async def test_device_overview(env) -> None:
     assert (subs[QUAD]["tx_count"], subs[QUAD]["rx_count"], subs[QUAD]["host"], subs[QUAD]["online"]) == (4, 4, "127.0.0.1", True)
     assert subs[QUAD]["manufacturer"] == "Blackmagic Design" and subs[QUAD]["icon_key"] == "st2110_multi"
     assert subs[DECK]["icon_key"] == "st2110_card"
+
+
+# --------------------------------------------------- zweiter Controller (Bedienfeld am Switch, Videohub-Pult …)
+async def foreign_take(net: SimNetwork, dest: str, port: str, source: str | None, source_port: str | None = None) -> None:
+    """So schaltet ein anderer NMOS-Controller: über HTTP an den Geräten, an der Kreuzschiene vorbei."""
+    from nmos_sim.controller import ForeignController
+
+    async with aiohttp.ClientSession() as session:
+        await ForeignController(session).take(net.node(dest).url, port, net.node(source).url if source else None, source_port)
+
+
+async def test_foreign_switch_is_shown_logged_and_undo_stays_sane(env) -> None:
+    hub, net = env
+    seen: list[dict] = []
+    hub.add_event_listener(seen.append)
+    await hub.route(HDMI, BIDI_IN, origin="panel")
+    await settle(hub)
+    revision = hub.revision
+
+    await foreign_take(net, MINI, "HDMI Out", QUAD, "SDI In 2")  # jemand schaltet am Switch
+    await hub.pollers["nmos"].refresh()  # eine einzige Abfrage genügt
+    assert hub.status()["routes"][HDMI] == f"SDI In 2@{QUAD}" and hub.revision > revision
+    event = hub.events[0]
+    assert (event["origin"], event["source"], event["previous_source"]) == ("extern", f"SDI In 2@{QUAD}", BIDI_IN)
+    assert [e["origin"] for e in seen] == ["panel", "extern"]  # Companion/MCP bekommen dasselbe Ereignis
+    dest = {d["id"]: d for d in hub.snapshot()["protocols"]["st2110"]["destinations"]}[HDMI]
+    assert dest["current_source"] == f"SDI In 2@{QUAD}" and dest["can_undo"] is True
+
+    # „letzte Aktion rückgängig“ springt nicht über die fremde Schaltung hinweg auf einen veralteten Stand …
+    with pytest.raises(MatrixError, match="nichts rückgängig"):
+        await hub.undo_last()
+    assert hub.status()["routes"][HDMI] == f"SDI In 2@{QUAD}"
+    # … „Rückgängig“ am Ziel führt zum Zustand vor der fremden Schaltung, ein zweites Mal zu dem davor
+    await hub.undo(HDMI)
+    await settle(hub)
+    assert hub.status()["routes"][HDMI] == BIDI_IN
+    await hub.undo(HDMI)
+    await settle(hub)
+    assert hub.status()["routes"][HDMI] is None
+    assert [e["origin"] for e in seen] == ["panel", "extern", "undo", "undo"]  # eigene Schaltungen gelten nie als fremd
+
+
+async def test_foreign_switch_leaves_presets_and_other_destinations_alone(env) -> None:
+    hub, net = env
+    bidi_out = f"nmos_{BIDI}:SDI Out"
+    await hub.salvo([(HDMI, BIDI_IN), (bidi_out, f"SDI In 1@{QUAD}")])
+    await settle(hub)
+    hub.snapshot_preset("Show", [HDMI, bidi_out])
+    assert hub.status()["presets"]["show"] is True
+    await foreign_take(net, MINI, "HDMI Out", None)  # am Switch getrennt
+    await settle(hub)
+    assert hub.status()["routes"][HDMI] is None and hub.events[0]["origin"] == "extern"
+    assert hub.status()["presets"]["show"] is False  # das Preset selbst bleibt, es ist nur nicht mehr aktiv
+    await hub.undo_last()  # nimmt von der Salve nur noch zurück, was niemand sonst angefasst hat
+    await settle(hub)
+    routes = hub.status()["routes"]
+    assert routes[bidi_out] is None and routes[HDMI] is None
+    await hub.recall_preset("Show")  # und das Preset stellt beides wieder her
+    await settle(hub)
+    assert hub.status()["routes"][HDMI] == BIDI_IN and hub.status()["routes"][bidi_out] == f"SDI In 1@{QUAD}"
+    assert hub.status()["presets"]["show"] is True

@@ -10,6 +10,10 @@
 The driver only talks to the control plane (HTTP). It never joins a media stream, so there is no preview.
 Light on a Raspberry Pi: one small GET per node and poll, a full re-read once a minute or when mDNS says
 something changed.
+
+Other controllers (a Blackmagic Ethernet Switch, a Videohub panel, the devices' own menus) may switch the same
+receivers at any time. Their changes show up with the next poll; ``pop_external_changes()`` tells the hub which
+destinations were switched by someone else, so that it can log them and keep undo consistent.
 """
 
 from __future__ import annotations
@@ -132,6 +136,8 @@ class NmosNode:
     last_seen: float = 0.0
     full_due: bool = True
     txt: dict[str, str] = field(default_factory=dict)
+    #: further addresses the same node answers on (second interface, registry lists another one than mDNS)
+    alt: set[tuple[str, int]] = field(default_factory=set)
     data: nmos.NodeModel | None = None
     sources: dict[str, nmos.Group] = field(default_factory=dict)
     dests: dict[str, nmos.Group] = field(default_factory=dict)
@@ -174,11 +180,21 @@ class NmosNode:
 
     @property
     def ptp(self) -> dict[str, Any] | None:
-        """PTP state as the node reports it (IS-04 clocks): locked? to which grandmaster?"""
+        """PTP state as the node reports it (IS-04 clocks): locked? to which grandmaster? is that this device?"""
         for clock in self.data.clocks if self.data else []:
             if clock.ref_type == "ptp":
-                return {"locked": clock.locked, "grandmaster": clock.gmid, "traceable": clock.traceable}
+                return {
+                    "locked": clock.locked,
+                    "grandmaster": clock.gmid,
+                    "traceable": clock.traceable,
+                    "is_grandmaster": nmos.is_own_clock(clock.gmid, self.data.macs if self.data else []),
+                }
         return None
+
+    def answers_on(self, host: str, port: int | None) -> bool:
+        if self.host == host and (port is None or self.port == port):
+            return True
+        return any(h == host and (port is None or p == port) for h, p in self.alt)
 
     def as_dict(self) -> dict[str, Any]:
         """Diagnostics / ``nmos-check --json``."""
@@ -199,6 +215,7 @@ class NmosNode:
             "mdns": self.via_mdns,
             "registry": self.via_registry,
             "static": self.static,
+            "other_addresses": sorted(f"{h}:{p}" for h, p in self.alt),
             "last_error": self.last_error,
             "ptp": self.ptp,
             "patch_mode": self.patch_mode,
@@ -279,18 +296,26 @@ class NmosNetwork(Driver):
         self.check_compat = bool(options.get(CONF_CHECK_COMPAT, True))
         self.enable_senders = bool(options.get(CONF_ENABLE_SENDERS, True))
         self.devices: dict[str, NmosNode] = {}  # by name
-        #: registries: base URL → {"mdns": bool, "version": str | None, "error": str | None}
+        #: registries (IS-04 Query API): base URL → {"mdns", "version", "error", "nodes": listed nodes | None}
         self.registries: dict[str, dict[str, Any]] = {
-            str(url).rstrip("/"): {"mdns": False, "version": None, "error": None}
+            _registry_url(url): {"mdns": False, "version": None, "error": None, "nodes": None}
             for url in options.get(CONF_REGISTRIES, [])
             if url
         }
+        #: registries seen only by their Registration API announcement (``_nmos-register._tcp``); not queried
+        self.registrations: set[str] = set()
+        self._registry_ids: dict[str, set[str]] = {}  # registry URL → node ids it listed last time
+        #: destination id → ((sender id, enabled) of its primary receiver, matrix source) as of the last poll
+        self._seen: dict[str, tuple[tuple[str | None, bool], str | None]] = {}
+        self._own: set[str] = set()  # receivers this driver switched itself since the last poll
+        self._external: list[tuple[str, str | None, str | None]] = []
         self._pending: dict[tuple[str, int | None], dict[str, Any]] = {}
         self._senders: dict[str, tuple[NmosNode, str]] = {}  # sender id → (node, source group name)
         self._remembered: dict[str, Conn] = {}  # placeholder source id → connection to restore it
         #: senders this driver switched on because a route needed them: (device name, sender id)
         self.switched_on: list[tuple[str, str]] = []
         self._polls = 0
+        self._registry_due = False
         self._poll_lock = asyncio.Lock()
 
     # ----------------------------------------------------------------- basics
@@ -342,11 +367,12 @@ class NmosNetwork(Driver):
         *,
         mdns: bool = False,
         registry: bool = False,
+        node_id: str | None = None,
     ) -> None:
         """A node was announced (mDNS), listed (registry) or configured (static). It is read on the next poll."""
         props = dict(props or {})
         for node in self.devices.values():
-            if node.host == host and (port is None or node.port == port):
+            if node.answers_on(host, port):
                 node.via_mdns = node.via_mdns or mdns
                 node.via_registry = node.via_registry or registry
                 if mdns and props and any(props.get(k) != node.txt.get(k) for k in props if k.startswith("ver_")):
@@ -360,6 +386,7 @@ class NmosNetwork(Driver):
         entry["mdns"] |= mdns
         entry["registry"] |= registry
         entry["props"] = props or entry["props"]
+        entry["node_id"] = node_id or entry.get("node_id")
         if mdns:
             entry["next"] = 0  # announced (again): try right away
 
@@ -367,16 +394,29 @@ class NmosNetwork(Driver):
         """mDNS goodbye: the node is checked on the next poll (and goes offline if it does not answer)."""
         self._pending.pop((host or "", port), None)
         for node in self.devices.values():
-            if host and node.host == host and (port is None or node.port == port):
+            if host and node.answers_on(host, port):
                 node.via_mdns = False
                 node.polls = 0
 
     def add_registry(self, url: str, *, mdns: bool = True) -> None:
-        self.registries.setdefault(url.rstrip("/"), {"mdns": mdns, "version": None, "error": None})
+        url = _registry_url(url)
+        if url not in self.registries:
+            self.registries[url] = {"mdns": mdns, "version": None, "error": None, "nodes": None}
+            self._registry_due = True  # ask it with the next poll, not only when its turn comes
 
     def remove_registry(self, url: str) -> None:
-        if self.registries.get(url.rstrip("/"), {}).get("mdns"):
-            self.registries.pop(url.rstrip("/"), None)
+        url = _registry_url(url)
+        if self.registries.get(url, {}).get("mdns"):
+            self.registries.pop(url, None)
+            if self._registry_ids.pop(url, None) is not None:
+                self._mark_registered()
+
+    def add_registration(self, url: str) -> None:
+        """A registry announced its Registration API (mDNS). Only noted: the matrix reads via the Query API."""
+        self.registrations.add(_registry_url(url))
+
+    def remove_registration(self, url: str) -> None:
+        self.registrations.discard(_registry_url(url))
 
     # ------------------------------------------------------------------ HTTP
     async def _get(self, url: str, *, text: bool = False, timeout: float | None = None) -> Any:
@@ -436,14 +476,26 @@ class NmosNetwork(Driver):
                 node.label, node.hostname = str(me.get("label") or ""), _hostname(me)
                 self.devices[node.name] = node
                 _LOGGER.info("NMOS node %s found at %s:%s", node.label or host, host, candidate)
-            node.host, node.port, node.scheme, node.api_version = host, candidate, scheme, version
             node.via_mdns |= info["mdns"]
             node.via_registry |= info["registry"]
             node.static |= not (info["mdns"] or info["registry"])
+            if node.online and (node.host, node.port) != (host, candidate):
+                # the same device under a second address (mDNS and registry name different interfaces): the
+                # address that works stays, the other one is remembered – no duplicate, no flip-flopping
+                node.alt.add((host, candidate))
+                return
+            node.alt.discard((host, candidate))
+            node.host, node.port, node.scheme, node.api_version = host, candidate, scheme, version
             node.txt = props or node.txt
             node.full_due, node.polls = True, 0
+            self._drop_registry_candidates(node.node_id)
             return
         _LOGGER.debug("NMOS host %s does not answer: %s", host, last)
+
+    def _drop_registry_candidates(self, node_id: str) -> None:
+        """A node is read: the other addresses a registry listed for it need not be tried any more."""
+        for key in [k for k, info in self._pending.items() if info.get("node_id") == node_id and not info["mdns"]]:
+            del self._pending[key]
 
     def _free_name(self, node: NmosNode) -> str:
         """Name of a node = its label. Nodes that share a label are told apart by host name, else by their id.
@@ -511,11 +563,25 @@ class NmosNetwork(Driver):
             except CannotConnect as err:
                 state["error"], state["version"] = short(err), None
                 continue
-            state["error"] = None
-            for raw in nodes if isinstance(nodes, list) else []:
-                endpoint = _node_endpoint(raw)
-                if endpoint:
-                    self.add_host(endpoint[0], endpoint[1], {"api_proto": endpoint[2]}, registry=True)
+            listed = [raw for raw in nodes if isinstance(raw, dict)] if isinstance(nodes, list) else []
+            state["error"], state["nodes"] = None, len(listed)
+            self._registry_ids[url] = {raw["id"] for raw in listed if nmos.is_uuid(raw.get("id"))}
+            known = {node.node_id: node for node in self.devices.values()}
+            for raw in listed:
+                node = known.get(raw.get("id") or "")
+                if node is not None and node.online:
+                    self._drop_registry_candidates(node.node_id)
+                    continue  # already read (found via mDNS or by hand): the registry adds nothing but its mark
+                for host, port, proto in _node_endpoints(raw):  # every address it lists: one of them is reachable
+                    if node is None or not node.answers_on(host, port):
+                        self.add_host(host, port, {"api_proto": proto}, registry=True, node_id=raw.get("id"))
+        self._mark_registered()
+
+    def _mark_registered(self) -> None:
+        """``via_registry`` = a registry lists the node right now (not: has listed it at some point)."""
+        listed: set[str] = set().union(*self._registry_ids.values())
+        for node in self.devices.values():
+            node.via_registry = node.node_id in listed
 
     async def _read_all(self, node: NmosNode) -> None:
         """Full read: the six IS-04 lists, groups, then the IS-05 ``active`` state of every receiver."""
@@ -560,6 +626,7 @@ class NmosNetwork(Driver):
         if not isinstance(raw, list):
             raise CannotConnect(f"{node.host}: receivers ist keine Liste")
         seen: set[str] = set()
+        touched: list[nmos.Receiver] = []
         for item in raw:
             if not isinstance(item, dict) or not nmos.is_uuid(item.get("id")):
                 continue
@@ -569,11 +636,23 @@ class NmosNetwork(Driver):
                 node.full_due = True  # a receiver appeared or was renamed
                 continue
             fresh = nmos.parse_receiver(item)
+            if fresh.version != known.version and (fresh.sender_id, fresh.active) == (known.sender_id, known.active):
+                touched.append(known)  # the resource changed, its subscription did not: ask IS-05 what happened
             known.sender_id, known.active, known.version = fresh.sender_id, fresh.active, fresh.version
             if not node.is04_unreliable:
                 node.conn[known.id] = _keep_sdp(Conn(fresh.sender_id, fresh.active), node.conn.get(known.id))
         if seen != set(node.data.receivers):
             node.full_due = True
+        for receiver in touched if not node.is04_unreliable else []:
+            try:
+                active = await self._read_active(node, receiver)
+            except CannotConnect:
+                continue
+            if (active.sender_id, active.enabled) != (receiver.sender_id, receiver.active):
+                # someone switched, the device raised the version but left ``subscription`` as it was
+                _LOGGER.info("%s: IS-04 subscription lags behind IS-05 active; reading IS-05 on every poll", node.name)
+                node.conn[receiver.id] = active
+                node.is04_unreliable = True
         if node.is04_unreliable:
             for receiver in node.data.receivers.values():
                 try:
@@ -628,6 +707,12 @@ class NmosNetwork(Driver):
                 node.online = False
             elif node.data is None:
                 node.online = False
+            if not node.online and node.alt:  # the device has another address: try that one next time
+                other = sorted(node.alt)[0]
+                node.alt.discard(other)
+                node.alt.add((node.host, node.port))
+                node.host, node.port = other
+                node.full_due, node.polls = True, 0
             return
         if not node.online and node.failures:
             _LOGGER.info("NMOS node %s is back online", node.name)
@@ -763,7 +848,8 @@ class NmosNetwork(Driver):
 
     async def async_poll(self) -> DevicePoll:
         async with self._poll_lock:
-            if self.registries and self._polls % REGISTRY_EVERY == 0:
+            if self.registries and (self._registry_due or self._polls % REGISTRY_EVERY == 0):
+                self._registry_due = False
                 await self._poll_registries()
             self._polls += 1
             await self._discover_pending()
@@ -783,11 +869,66 @@ class NmosNetwork(Driver):
             await asyncio.gather(*(one(n) for n in list(self.devices.values()) if n.name not in self.hidden))
             self._name_all()  # labels may have changed (renamed in the device's setup tool)
             self._reindex()
+            self._note_external()
         poll = DevicePoll(sources=await self.async_get_sources())
         for info in self.destinations():
             node, group, audio = self._dest(info.id)
             poll.destinations[info.id] = DestinationState(self._current(node, group, audio), self._status(node, group, audio))
         return poll
+
+    def _note_external(self) -> None:
+        """Which destinations were switched since the last poll by someone else (another NMOS controller, the
+        device's own menu)? Compared is the primary receiver's ``(sender, enabled)``, never names – a renamed
+        device or a sender that only now became known is not a switch."""
+        seen: dict[str, tuple[tuple[str | None, bool], str | None]] = {}
+        for info in self.destinations():
+            node, group, audio = self._dest(info.id)
+            targets = self._targets(group, audio)
+            conn = node.conn.get(targets[0][1]) if targets else None
+            if conn is None or not node.online:
+                if info.id in self._seen:
+                    seen[info.id] = self._seen[info.id]  # offline: nothing is known, nothing changed
+                continue
+            rid = targets[0][1]
+            key = (conn.sender_id if conn.enabled else None, conn.enabled)
+            source = self._source_of(node, rid)
+            before = self._seen.get(info.id)
+            if before is not None and before[0] != key and rid not in self._own:
+                self._external.append((info.id, before[1], source))
+                _LOGGER.info("%s was switched by another controller: %s → %s", info.id, before[1], source)
+            seen[info.id] = (key, source)
+        self._seen = seen
+        self._own.clear()
+        del self._external[:-64]
+
+    def pop_external_changes(self) -> list[tuple[str, str | None, str | None]]:
+        """``(destination id, source before, source now)`` for every switch this driver did not make itself,
+        since the last call. The hub logs them (origin "extern") and keeps its undo history in step."""
+        changes, self._external = self._external, []
+        return changes
+
+    def clock_summary(self) -> dict[str, Any]:
+        """PTP as the devices report it (IS-04 ``clocks``): who is the grandmaster, do all follow the same one?"""
+        online = [n for n in self.visible_devices() if n.online]
+        reporting = [(n, n.ptp) for n in online if n.ptp]
+        masters: dict[str, dict[str, Any]] = {}
+        for node, ptp in reporting:
+            cid = nmos.clock_id(ptp["grandmaster"])
+            if cid is None:
+                continue
+            entry = masters.setdefault(cid, {"id": ptp["grandmaster"], "device": None, "followers": []})
+            entry["followers"].append(node.name)
+        for cid, entry in masters.items():  # is the grandmaster one of the devices we see?
+            owner = next((n for n in online if n.data and nmos.is_own_clock(cid, n.data.macs)), None)
+            entry["device"] = owner.name if owner else None
+        return {
+            "grandmasters": sorted(masters.values(), key=lambda m: -len(m["followers"])),
+            # None = fewer than two devices report a grandmaster: nothing to compare
+            "same": (len(masters) == 1) if sum(len(m["followers"]) for m in masters.values()) >= 2 else None,
+            "unlocked": [n.name for n, ptp in reporting if ptp["locked"] is False],
+            "no_ptp": [n.name for n in online if not n.ptp],
+            "no_grandmaster": [n.name for n, ptp in reporting if nmos.clock_id(ptp["grandmaster"]) is None],
+        }
 
     # --------------------------------------------------------------- routing
     def find_source(self, source: str) -> tuple[NmosNode, nmos.Group] | None:
@@ -997,6 +1138,7 @@ class NmosNetwork(Driver):
                     problem = f"{node.name}: Zustand nicht lesbar ({short(err, 60)})"
                     continue
                 if active.enabled == enabled and (not enabled or active.sender_id == sender_id):
+                    self._own.add(receiver.id)
                     node.conn[receiver.id] = active
                     receiver.sender_id, receiver.active = active.sender_id, active.enabled
                     return mode
@@ -1096,6 +1238,8 @@ class NmosNetwork(Driver):
         return {
             "devices": [node.as_dict() for node in self.visible_devices()],
             "registries": self.registries,
+            "registrations": sorted(self.registrations),
+            "clock": self.clock_summary(),
             "pending": [f"{host}:{port or '?'}" for host, port in self._pending],
             "options": {
                 CONF_AUDIO_BREAKAWAY: self.audio_breakaway,
@@ -1138,20 +1282,33 @@ def _error_text(payload: Any) -> str:
     return "ohne Begründung"
 
 
-def _node_endpoint(raw: Any) -> tuple[str, int, str] | None:
-    """Host, port and protocol of a node as a registry lists it (``api.endpoints``, IPv4 preferred)."""
+def _registry_url(url: Any) -> str:
+    """``"192.0.2.5:8010"`` or ``"http://192.0.2.5:8010/"`` → ``"http://192.0.2.5:8010"``."""
+    text = str(url).strip().rstrip("/")
+    return text if text.startswith(("http://", "https://")) else f"http://{text}"
+
+
+def _node_endpoints(raw: Any) -> list[tuple[str, int, str]]:
+    """Every address of a node as a registry lists it (``api.endpoints``; IPv4 literals first, no IPv6).
+
+    A device with several interfaces (media ports and a control port) lists them all, and not every one is
+    reachable from here – so all are tried. ``href`` is the fallback for registries that leave ``api`` out."""
     if not isinstance(raw, dict):
-        return None
+        return []
     endpoints = (raw.get("api") or {}).get("endpoints") if isinstance(raw.get("api"), dict) else None
-    best: tuple[str, int, str] | None = None
+    out: list[tuple[str, int, str]] = []
     for ep in endpoints if isinstance(endpoints, list) else []:
-        if not isinstance(ep, dict) or not ep.get("host") or not ep.get("port"):
+        if not isinstance(ep, dict) or not ep.get("host") or not ep.get("port") or ":" in str(ep["host"]):
             continue
-        candidate = (str(ep["host"]), int(ep["port"]), str(ep.get("protocol") or "http"))
-        if candidate[0].replace(".", "").isdigit():
-            return candidate
-        best = best or candidate
-    if best is None and isinstance(raw.get("href"), str):
+        try:
+            candidate = (str(ep["host"]), int(ep["port"]), str(ep.get("protocol") or "http"))
+        except (TypeError, ValueError):
+            continue
+        if candidate not in out:
+            out.append(candidate)
+    out.sort(key=lambda c: not c[0].replace(".", "").isdigit())
+    if not out and isinstance(raw.get("href"), str):
         host, port = split_host(raw["href"])
-        return (host, port or 80, "https" if raw["href"].startswith("https") else "http") if host else None
-    return best
+        if host:
+            out.append((host, port or 80, "https" if raw["href"].startswith("https") else "http"))
+    return out[:8]

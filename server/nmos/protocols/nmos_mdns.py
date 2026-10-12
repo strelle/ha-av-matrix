@@ -3,6 +3,8 @@
 * ``_nmos-node._tcp``  – every instance is a node (IS-04 peer-to-peer mode); TXT: ``api_proto``, ``api_ver``,
   ``api_auth`` and, without a registry, the change counters ``ver_slf`` … ``ver_rcv``.
 * ``_nmos-query._tcp`` – an IS-04 registry offering the Query API (optional).
+* ``_nmos-register._tcp`` (``_nmos-registration._tcp`` up to v1.2) – where nodes register. Only noted, so that
+  "is there a registry in this network?" has an answer even if its Query API is not announced.
 
 Works with a zeroconf instance of its own (stand-alone server, ``nmos-check``) or a shared one (Home Assistant:
 pass ``(await zeroconf.async_get_async_instance(hass)).zeroconf``). Imports nothing but zeroconf, and is only
@@ -19,7 +21,7 @@ from typing import Any, Protocol
 from zeroconf import IPVersion, ServiceStateChange, Zeroconf
 from zeroconf.asyncio import AsyncServiceBrowser, AsyncServiceInfo
 
-from .nmos import NODE_SERVICE_TYPE, QUERY_SERVICE_TYPE
+from .nmos import NODE_SERVICE_TYPE, QUERY_SERVICE_TYPE, REGISTER_SERVICE_TYPES
 
 _LOGGER = logging.getLogger(__name__)
 RESOLVE_TIMEOUT_MS = 3000
@@ -65,9 +67,13 @@ class NmosBrowser:
         self.nodes: dict[str, tuple[str, int, dict[str, str]]] = {}
         #: mDNS instance name → base URL
         self.registries: dict[str, str] = {}
+        #: mDNS instance name → base URL of a Registration API (a registry exists; nodes may sit behind it)
+        self.registrations: dict[str, str] = {}
 
     async def async_start(self) -> None:
-        self._browser = AsyncServiceBrowser(self._zc, [NODE_SERVICE_TYPE, QUERY_SERVICE_TYPE], handlers=[self._handler])
+        self._browser = AsyncServiceBrowser(
+            self._zc, [NODE_SERVICE_TYPE, QUERY_SERVICE_TYPE, *REGISTER_SERVICE_TYPES], handlers=[self._handler]
+        )
 
     async def async_stop(self) -> None:
         for task in list(self._tasks):
@@ -82,6 +88,8 @@ class NmosBrowser:
             sink.add_host(host, port, props, mdns=True)
         for url in self.registries.values():
             sink.add_registry(url, mdns=True)
+        for url in self.registrations.values():
+            _call(sink, "add_registration", url)
 
     def _handler(self, zeroconf: Zeroconf, service_type: str, name: str, state_change: ServiceStateChange) -> None:
         if state_change is ServiceStateChange.Removed:
@@ -90,10 +98,14 @@ class NmosBrowser:
                 gone = self.nodes.pop(name, None)
                 if gone and sink is not None:
                     sink.mdns_removed(gone[0], gone[1])
-            else:
+            elif service_type == QUERY_SERVICE_TYPE:
                 url = self.registries.pop(name, None)
                 if url and sink is not None:
                     sink.remove_registry(url)
+            else:
+                url = self.registrations.pop(name, None)
+                if url and sink is not None:
+                    _call(sink, "remove_registration", url)
             self._on_change()
             return
         task = asyncio.ensure_future(self._resolve(service_type, name))
@@ -121,7 +133,19 @@ class NmosBrowser:
         else:
             scheme = "https" if props.get("api_proto") == "https" else "http"
             url = f"{scheme}://{addresses[0]}:{info.port}"
-            self.registries[name] = url
-            if sink is not None:
-                sink.add_registry(url, mdns=True)
+            if service_type == QUERY_SERVICE_TYPE:
+                self.registries[name] = url
+                if sink is not None:
+                    sink.add_registry(url, mdns=True)
+            else:
+                self.registrations[name] = url
+                if sink is not None:
+                    _call(sink, "add_registration", url)
         self._on_change()
+
+
+def _call(sink: Any, method: str, url: str) -> None:
+    """Optional sink methods (a driver without them simply does not hear about Registration APIs)."""
+    func = getattr(sink, method, None)
+    if func is not None:
+        func(url)

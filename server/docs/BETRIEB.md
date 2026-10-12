@@ -54,6 +54,23 @@ welche Ein- und Ausgänge sie melden, ob PTP eingerastet ist und was auffällt. 
 „Rohdaten herunterladen“ liefert alles für die Fehlersuche. Im Terminal dasselbe mit
 `.venv/bin/python -m avmatrix.nmos_check` (mit `--probe` ein Probe-Schaltvorgang samt Zurückschalten).
 
+Für den Tag, an dem Switch und Wandler kommen, gibt es eine eigene Liste: [INBETRIEBNAHME-ST2110.md](INBETRIEBNAHME-ST2110.md).
+
+**Was „ST 2110 prüfen“ außerdem sagt.** *Registry:* ob eine NMOS-Registry im Netz ist und antwortet. Ohne
+Registry melden sich die Geräte direkt (Peer-to-Peer) – das ist der Normalfall und kein Fehler. *Taktgeber:*
+welche Uhr den Takt gibt (PTP-Grandmaster, mit Gerätenamen, wenn es eines der gefundenen Geräte ist) und ob alle
+Geräte auf dieselbe hören. Verschiedene Taktgeber oder „nicht eingerastet“ heißt: kein stabiles Bild.
+
+**Schalten an anderer Stelle.** Die Kreuzschiene ist nicht der einzige Ort, an dem geschaltet werden kann: Ein
+Blackmagic Ethernet Switch hat ein eigenes Bedienfeld, die Wandler haben ein Menü. Was dort geschaltet wird,
+zeigt die Kreuzschiene nach wenigen Sekunden (Panel, Companion-Tasten, Schnittstellen); im Verlauf auf der Seite
+*System* steht es mit der Herkunft „Extern“. „Rückgängig“ am Ziel stellt den Zustand vor dieser Umschaltung
+wieder her. Wer das Schalten am Switch verhindern will: dort die Taste LOCK eine Sekunde halten.
+
+**Switch auf der Geräteseite.** Ein Switch, der selbst NMOS spricht, steht im Block „ST 2110 (NMOS)“ als
+„Netzwerk-Switch“ mit Adresse und online/offline; gibt er den Takt, trägt er die Marke „Taktgeber“. Sein
+Statusbild und sein Monitorausgang erscheinen als Quelle und Ziel, wenn er sie meldet.
+
 **Eigenes Netz / VLAN für ST 2110.** mDNS geht nicht über Netzgrenzen. Steht der Rechner nicht im selben Netz wie
 die Geräte, findet er sie nicht von selbst. Dann eines von beidem:
 
@@ -64,7 +81,7 @@ die Geräte, findet er sie nicht von selbst. Dann eines von beidem:
 2. Ohne zweite Adresse, wenn das Netz geroutet wird (der Rechner erreicht die Geräte per IP): im Panel unter
    **Geräte → ST 2110 → Feste Adressen** die Adressen der Geräte eintragen (`192.0.2.31` oder `192.0.2.31:8090`;
    ohne Port werden 8090, 80, 3212 und 8080 probiert) oder unter **Registry** die Adresse einer NMOS-Registry
-   (`http://192.0.2.5:8010`). In der Datei: `devices` → Eintrag `nmos` → `options.static_hosts` /
+   (`http://192.0.2.5:8010`; eine Registry im selben Netz wird per mDNS von selbst gefunden). In der Datei: `devices` → Eintrag `nmos` → `options.static_hosts` /
    `options.registries`.
 
 Schalten braucht nur HTTP zum Gerät (Steuerebene); die Medienströme laufen zwischen den Geräten und nie über
@@ -78,6 +95,10 @@ diesen Rechner. Weitere Optionen des Eintrags: `audio_breakaway` (Ton getrennt s
 - **Gerät „offline“:** Seite *Geräte* zeigt die letzte Fehlermeldung; „Anmeldung abgelehnt“ → Gerät entfernen
   und mit den richtigen Zugangsdaten neu hinzufügen.
 - **ST-2110-Gerät fehlt oder schaltet nicht:** *Geräte → ST 2110 prüfen*; steht es in einem anderen Netz, siehe oben.
+- **ST 2110: Bild ruckelt, friert ein oder fehlt trotz Verbindung:** *ST 2110 prüfen* → Zeile „Taktgeber“. Es darf
+  nur einen geben; an allen anderen Geräten „PTP follower only“ einschalten.
+- **Ein ST-2110-Ziel steht plötzlich auf einer anderen Quelle:** Seite *System* → Verlauf; „Extern“ heißt, es wurde
+  am Switch oder an einem anderen Pult geschaltet.
 - **Dante-Gerät fehlt:** es meldet sich nicht per mDNS → *Geräte → Feste Adressen*.
 - **Companion-Tasten ohne Rückmeldung:** in Companion unter *Connections* muss „avmatrix“ grün sein.
 - **Vorschau zeigt nichts:** `curl http://127.0.0.1:8088/api/preview` – `available: false` nennt den Grund.
