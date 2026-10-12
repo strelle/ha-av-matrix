@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>AV Matrix card demo</title>
+<title>Strelle AV Matrix card demo</title>
 <!--
   Runs custom:av-matrix-card against a mocked Home Assistant (no HA needed).
   Serve the repository root and open /docs/demo/:
@@ -15,6 +15,10 @@
                     names=label|original|both (name display; overrides the choice stored in the browser)
                     edit=1 (label edit mode)  dlabel=<destination id> / slabel=<source id> (open the label editor)
                     frame=390 (phone-wide frame)
+                    preview=0 (no preview server configured: the card as before)  preview=down (server not reachable)
+                    preview=nosdk (server cannot receive NDI)  live=<source id> (open the live preview)
+                    brand=auto|full|compact|off (card option brand)  third=1 (a third protocol without preview)
+  The preview pictures are drawn in the page (no NDI, no server): colour bars with the source name and a clock.
 -->
 <style>
   :root {
@@ -71,24 +75,29 @@
   const iso = (secAgo) => new Date(Date.now() - secAgo * 1000).toISOString();
 
   /* ---------------- fake data: 12 sources (2 offline), 6 destinations */
+  // device types as the rule table (source_types.py) gives them; the preview server adds the web interface
+  const TYPE_ICON = { camera: "ndi_camera", computer: "ndi_computer", encoder: "ndi_encoder", testpattern: "ndi_testpattern", unknown: "ndi_source" };
   const S = (id, opts = {}) => ({ id, name: opts.label || id, label: opts.label || null, original_name: id,
-    icon_key: opts.icon || (/CAM|PTZ/.test(id) ? "ndi_camera" : "ndi_computer"), tags: opts.tags || [],
+    device_type: opts.type || (/CAM|PTZ/.test(id) ? "camera" : "unknown"),
+    icon_key: TYPE_ICON[opts.type || (/CAM|PTZ/.test(id) ? "camera" : "unknown")], web_url: opts.web || null, tags: opts.tags || [],
     live: opts.live !== false, host: opts.host || "192.0.2." + (40 + Math.floor(Math.random() * 40)),
     address: null, last_seen: opts.live === false ? iso(opts.ago || 420) : iso(2), first_seen: iso(7200) });
   const sources = [
-    S("CAM-1 (Program)", { label: "Camera 1 · Wide", tags: ["camera"] }),
+    S("CAM-1 (Program)", { label: "Camera 1 · Wide", tags: ["camera"], host: "192.0.2.41", web: "http://192.0.2.41/" }),
     S("CAM-2 (Program)", { label: "Camera 2 · Lectern", tags: ["camera"] }),
     S("CAM-3 (Program)", { label: "Camera 3 · Audience", tags: ["camera"], live: false, ago: 380 }),
     S("PTZ-STAGE (Main)", { label: "PTZ Stage", tags: ["camera", "stage"] }),
-    S("STUDIO-PC (Slides)", { label: "Slides", tags: ["presentation"] }),
-    S("STUDIO-PC (Notes)", { label: "Confidence notes", tags: ["presentation", "stage"] }),
-    S("TRICASTER (PGM 1)", { label: "Program mix", tags: ["mix"] }),
-    S("TRICASTER (Multiview)", { label: "Multiview", tags: ["mix"] }),
-    S("SIGNAGE-NUC (Loop)", { tags: ["signage"] }),
+    S("STUDIO-PC (Slides)", { label: "Slides", tags: ["presentation"], type: "computer" }),
+    S("STUDIO-PC (Notes)", { label: "Confidence notes", tags: ["presentation", "stage"], type: "computer" }),
+    S("TRICASTER (PGM 1)", { label: "Program mix", tags: ["mix"], type: "computer" }),
+    S("TRICASTER (Multiview)", { label: "Multiview", tags: ["mix"], type: "computer" }),
+    S("SIGNAGE-NUC (Loop)", { tags: ["signage"], type: "computer" }),
     S("BIRDDOG-P200 (CAM)", { tags: ["camera"] }),
     S("LAPTOP-GUEST (Display 1)", { tags: ["presentation"] }),
     S("NDI_0A1B2C3D4E", { live: false, ago: 5400 }),
     S("REPLAY (Out A)", { label: "Replay", tags: ["mix"] }),
+    S("192.0.2.77 (HDMI 1)", { tags: ["stage"], type: "encoder", host: "192.0.2.77", web: "http://192.0.2.77/" }),
+    S("MATRIX (Strelle AV Matrix Testbild)", { type: "testpattern", host: "192.0.2.8" }),
   ];
   const D = (id, name, cur, status, extra = {}) => ({ id, entity_id: `select.${id}_source`, name: extra.label || name,
     label: extra.label || null, original_name: name, tags: [], channel: null,
@@ -178,8 +187,77 @@
         subscription: { state: sub, code: null, status: SUB[sub][0], detail: SUB[sub][1] } });
     });
   }
-  const snap = { version: "0.3.0", protocols: { ndi: { title: "NDI®", sources, destinations: dests },
-    dante: { title: "Dante®", sources: dSources, destinations: dDests } } };
+  /* ---------------- preview: what the integration reports when a preview server is configured */
+  const pvMode = q.get("preview") || "1"; // 1 | 0 | down | nosdk
+  const pvOn = pvMode !== "0";
+  const snap = { version: "0.9.0",
+    preview: { configured: pvOn, reachable: pvOn ? pvMode !== "down" : null, available: pvOn && pvMode !== "down" ? pvMode !== "nosdk" : null,
+      reason: pvMode === "nosdk" ? "NDI SDK not installed" : null, hx_decoder: pvOn ? false : null,
+      server: pvOn ? { name: "Strelle AV Matrix", version: "1.0.0" } : null, protocols: pvOn ? ["ndi"] : [],
+      still_url: "/api/av_matrix/preview.jpg", stream_url: "/api/av_matrix/preview.mjpeg", status_url: "/api/av_matrix/preview" },
+    protocols: { ndi: { title: "NDI®", video: true, preview: pvOn, sources, destinations: dests },
+      dante: { title: "Dante®", video: false, preview: false, sources: dSources, destinations: dDests } } };
+  if (!pvOn) for (const s of sources) s.web_url = null; // only the preview server knows the web interfaces of sources
+  if (q.get("third") === "1") {
+    // a protocol the card has never heard of: its tab, tiles and "no preview available" come from the snapshot alone
+    const tS = ["CAM A", "CAM B", "Playout 1"].map((n, i) => ({ id: `st2110:${n}`, name: n, label: null, original_name: `st2110:${n}`,
+      icon_key: "ndi_source", tags: [], live: true, host: "192.0.2." + (150 + i), address: null, last_seen: iso(2), first_seen: iso(900) }));
+    const tD = ["Monitor wall 1", "Monitor wall 2"].map((n, i) => ({ id: "st2110_rx" + i, entity_id: null, name: n, label: null, original_name: n,
+      tags: [], channel: null, manufacturer: null, model: "ST 2110 receiver", icon_key: "ndi_decoder", device_name: n, device_id: null,
+      entry_id: "entry-2110", driver: "nmos", protocol: "st2110", current_source: i ? null : tS[0].id, current_source_live: true,
+      status: i ? "no_source" : "connected", resolution: i ? null : "1920x1080p50", available: true, locked: false, can_undo: false,
+      display: null, host: "192.0.2." + (160 + i), web_url: null }));
+    snap.protocols.st2110 = { title: "ST 2110", video: true, preview: false, sources: tS, destinations: tD };
+  }
+  /** Picture of a source, drawn here: colour bars, name, running clock. */
+  const NO_PICTURE = { "REPLAY (Out A)": [503, "no_signal"], "LAPTOP-GUEST (Display 1)": [415, "unsupported_codec"] };
+  const draw = (id, w) => {
+    const c = document.createElement("canvas");
+    c.width = w;
+    c.height = Math.round((w * 9) / 16);
+    const g = c.getContext("2d");
+    const hue = [...id].reduce((a, ch) => (a * 31 + ch.charCodeAt(0)) % 360, 7);
+    const bars = ["#bfbfbf", "#bfbf00", "#00bfbf", "#00bf00", "#bf00bf", "#bf0000", "#0000bf"];
+    if (/Testbild/.test(id)) bars.forEach((col, i) => ((g.fillStyle = col), g.fillRect((i * c.width) / 7, 0, c.width / 7 + 1, c.height)));
+    else {
+      const grad = g.createLinearGradient(0, 0, c.width, c.height);
+      grad.addColorStop(0, `hsl(${hue} 55% 34%)`);
+      grad.addColorStop(1, `hsl(${(hue + 50) % 360} 60% 12%)`);
+      g.fillStyle = grad;
+      g.fillRect(0, 0, c.width, c.height);
+      g.fillStyle = "rgba(255,255,255,.14)";
+      for (let i = 0; i < 5; i++) g.fillRect(((hue * (i + 3)) % c.width) - 20, c.height * (0.2 + 0.13 * i), c.width * 0.3, c.height * 0.05);
+    }
+    g.fillStyle = "rgba(0,0,0,.6)";
+    g.fillRect(0, c.height * 0.72, c.width, c.height * 0.28);
+    g.fillStyle = "#fff";
+    g.font = `700 ${Math.round(c.height * 0.085)}px system-ui, sans-serif`;
+    g.fillText(id, c.width * 0.04, c.height * 0.84, c.width * 0.92);
+    g.font = `${Math.round(c.height * 0.07)}px ui-monospace, monospace`;
+    g.fillText(new Date().toLocaleTimeString("de-AT", { hour12: false }), c.width * 0.04, c.height * 0.95);
+    return c;
+  };
+  const jsonRes = (status, state) => new Response(JSON.stringify({ ok: false, error: state, message: state }),
+    { status, headers: { "Content-Type": "application/json", "X-Preview-State": state } });
+  const fetchWithAuth = async (path) => {
+    const url = new URL(path, location.href);
+    const id = url.searchParams.get("source") || "";
+    await sleep(120 + Math.random() * 160);
+    if (!pvOn) return jsonRes(404, "not_configured");
+    if (pvMode === "down") return jsonRes(502, "unreachable");
+    if (url.pathname.endsWith("/preview")) return new Response(JSON.stringify({ available: true, hx_decoder: false,
+      source: { id, state: "ok" }, live: [{ source: id, clients: 1, seconds: (Date.now() - t0) / 1000, frames: Math.round((Date.now() - t0) / 80), state: "ok" }] }),
+      { status: 200, headers: { "Content-Type": "application/json" } });
+    if (pvMode === "nosdk") return jsonRes(501, "unavailable");
+    const src = sources.find((s) => s.id === id);
+    if (!src) return jsonRes(404, "unknown_source");
+    if (!src.live) return jsonRes(404, "offline");
+    if (NO_PICTURE[id]) return jsonRes(...NO_PICTURE[id]);
+    const blob = await new Promise((res) => draw(id, 320).toBlob(res, "image/jpeg", 0.8));
+    return new Response(blob, { status: 200, headers: { "Content-Type": "image/jpeg", "X-Preview-State": "ok", "X-Preview-Age": "0.4",
+      "X-Preview-Size": "640x360", "X-Preview-Origin": src.device_type === "encoder" ? "device" : "ndi" } });
+  };
+  const t0 = Date.now();
   const allDests = () => [...dests, ...dDests];
   const allSources = () => [...sources, ...dSources];
   const history = { }; // dest id → stack
@@ -355,7 +433,11 @@
         throw new Error("unknown command");
       },
     },
+    fetchWithAuth,
+    // the "live" picture of the demo is one drawn frame (a real stream needs Home Assistant and the server)
+    hassUrl: (path) => (path.includes("preview.mjpeg") ? draw(new URL(path, location.href).searchParams.get("source") || "", 960).toDataURL("image/jpeg", 0.85) : path),
     async callWS(msg) {
+      if (msg.type === "auth/sign_path") return { path: msg.path + "&authSig=demo" };
       if (msg.type === "config/auth/list") return users;
       if (msg.type === "frontend/get_translations") return translations();
       if (msg.type === "config_entries/ignore_flow") return found.splice(0, found.length), flowChanged(), null;
@@ -398,12 +480,13 @@
   const card = document.createElement("av-matrix-card");
   card.setConfig({
     type: "custom:av-matrix-card",
-    title: q.get("title") || "Video routing · Hall A",
+    title: q.get("title") ?? "Video routing · Hall A",
     mode: q.get("mode") || "panel",
     take_mode: q.get("take") || "direct",
     compact: q.get("compact") === "1",
     ...(q.get("cardtheme") ? { theme: q.get("cardtheme") } : {}),
     ...(q.get("proto") ? { protocol: q.get("proto") } : {}),
+    ...(q.get("brand") ? { brand: q.get("brand") } : {}),
   });
   if (["label", "original", "both"].includes(q.get("names"))) card._nameMode = q.get("names");
   if (q.get("edit") === "1") card._editMode = true;
@@ -486,6 +569,7 @@
       }
     }
     if (q.get("slabel")) card._openLabel("source", q.get("slabel"));
+    if (q.get("live")) card._openLive(q.get("live"));
     if (q.get("hover")) {
       const [r, c] = q.get("hover").split(",");
       card._setCross(r, c);

@@ -1,11 +1,13 @@
 /*
- * AV Matrix card - a broadcast-style crosspoint router panel for the av_matrix integration.
+ * Strelle AV Matrix card - a broadcast-style crosspoint router panel for the av_matrix integration.
  *
  *  - Panel mode (X-Y): destinations on top, sources below. Pick destination(s), then a source.
  *  - Matrix mode: destinations x sources grid with crosshair, sticky headers.
  *  - Take modes: Direct (tap = switch) or Preset + TAKE (arm one or many, TAKE = salvo).
  *  - Lock, undo, labels/tags (admin), linked displays, routing history, keyboard control.
  *  - Admin: hint for discovered receivers + "add receiver" dialog (drives the config flow in the card).
+ *  - NDI® preview: a picture in every source tile, each destination shows the picture of its source, live on
+ *    click. The pictures come from a Strelle AV Matrix server and are relayed by Home Assistant (optional).
  *
  * Data: WebSocket "av_matrix/subscribe" (docs/frontend-api.md); falls back to the select entities.
  * Plain web component, no build step. Served and registered by the integration itself.
@@ -88,9 +90,9 @@ const STRINGS = {
     armed: "{n} armed",
     nothing_armed: "Nothing armed",
     arm_hint: "Pick a destination, then a source",
-    loading: "Connecting to AV Matrix…",
-    no_devices: "No devices yet. Add one under Settings → Devices & services → AV Matrix.",
-    not_loaded: "AV Matrix integration not loaded",
+    loading: "Connecting to Strelle AV Matrix…",
+    no_devices: "No devices yet. Add one under Settings → Devices & services → Strelle AV Matrix.",
+    not_loaded: "Strelle AV Matrix integration not loaded",
     basic_mode: "Basic mode",
     basic_mode_tip: "WebSocket API unavailable - using the select entities",
     route_failed: "Switching failed",
@@ -105,7 +107,7 @@ const STRINGS = {
     origin_salvo: "salvo",
     origin_undo: "undo",
     origin_service: "service",
-    shortcuts: "Keys: / search · arrows move · Enter TAKE · Esc clear · U undo · L lock · N names · 1-9 destination",
+    shortcuts: "Keys: / search · arrows move · Enter TAKE · Esc clear · U undo · L lock · N names · V preview · 1-9 destination",
     dest_label: "Destination",
     source_label: "Source",
     no_match: "No source matches the filter.",
@@ -138,6 +140,37 @@ const STRINGS = {
     flow_settings: "Settings",
     flow_settings_tip: "Open Settings → Devices & services",
     flow_settings_needed: "This step needs the Home Assistant settings.",
+    pv_loading: "Loading…",
+    pv_no_signal: "No signal",
+    pv_offline: "Offline",
+    pv_impossible: "Preview not possible",
+    pv_unsupported_codec_tip: "NDI|HX source (H.264/HEVC): the decoder is missing on the preview server",
+    pv_unavailable_tip: "The preview server cannot receive NDI® (NDI SDK missing or preview switched off)",
+    pv_unreachable: "Preview not reachable",
+    pv_unreachable_tip: "The preview server does not answer. Switching is not affected.",
+    pv_unknown_source: "Unknown",
+    pv_unknown_source_tip: "The preview server does not know this source",
+    pv_stale: "No update",
+    pv_none: "No source",
+    pv_na: "No preview available",
+    pv_na_tip: "There is no picture preview for {p}",
+    pv_device: "from device",
+    pv_device_tip: "Still picture from the device itself, not from the NDI feed",
+    pv_open: "Live preview",
+    pv_kicker: "Live preview · {p} · low bandwidth",
+    pv_connecting: "Connecting…",
+    pv_ended: "Preview ended",
+    pv_paused: "Paused",
+    pv_source_offline: "Source is offline",
+    pv_no_server: "No connection to the preview server",
+    pv_hx_missing: "No picture - NDI|HX source? The decoder is missing on the server",
+    pv_retry: "Try again",
+    pv_frames: "{n} frames · {s} s",
+    type_camera: "Camera",
+    type_computer: "Computer",
+    type_encoder: "Encoder / converter",
+    type_testpattern: "Test pattern",
+    type_unknown: "NDI source",
   },
   de: {
     sources_live: "{live}/{total} Quellen live",
@@ -213,9 +246,9 @@ const STRINGS = {
     armed: "{n} vorgemerkt",
     nothing_armed: "Nichts vorgemerkt",
     arm_hint: "Ziel wählen, dann Quelle",
-    loading: "Verbinde mit AV Matrix…",
-    no_devices: "Noch keine Geräte. Unter Einstellungen → Geräte & Dienste → AV Matrix hinzufügen.",
-    not_loaded: "AV-Matrix-Integration nicht geladen",
+    loading: "Verbinde mit Strelle AV Matrix…",
+    no_devices: "Noch keine Geräte. Unter Einstellungen → Geräte & Dienste → Strelle AV Matrix hinzufügen.",
+    not_loaded: "Strelle-AV-Matrix-Integration nicht geladen",
     basic_mode: "Basismodus",
     basic_mode_tip: "WebSocket-API nicht verfügbar - Daten aus den Select-Entitäten",
     route_failed: "Schalten fehlgeschlagen",
@@ -230,7 +263,7 @@ const STRINGS = {
     origin_salvo: "Salvo",
     origin_undo: "Undo",
     origin_service: "Dienst",
-    shortcuts: "Tasten: / Suche · Pfeile navigieren · Enter TAKE · Esc verwerfen · U Undo · L Sperre · N Namen · 1-9 Ziel",
+    shortcuts: "Tasten: / Suche · Pfeile navigieren · Enter TAKE · Esc verwerfen · U Undo · L Sperre · N Namen · V Vorschau · 1-9 Ziel",
     dest_label: "Ziel",
     source_label: "Quelle",
     no_match: "Keine Quelle passt zum Filter.",
@@ -263,6 +296,37 @@ const STRINGS = {
     flow_settings: "Einstellungen",
     flow_settings_tip: "Einstellungen → Geräte & Dienste öffnen",
     flow_settings_needed: "Dieser Schritt geht nur in den Home-Assistant-Einstellungen.",
+    pv_loading: "Lade …",
+    pv_no_signal: "Kein Signal",
+    pv_offline: "Offline",
+    pv_impossible: "Vorschau nicht möglich",
+    pv_unsupported_codec_tip: "NDI|HX-Quelle (H.264/HEVC): Der Decoder fehlt auf dem Vorschau-Server",
+    pv_unavailable_tip: "Der Vorschau-Server kann kein NDI® empfangen (NDI SDK fehlt oder Vorschau abgeschaltet)",
+    pv_unreachable: "Vorschau nicht erreichbar",
+    pv_unreachable_tip: "Der Vorschau-Server antwortet nicht. Das Schalten ist davon nicht betroffen.",
+    pv_unknown_source: "Unbekannt",
+    pv_unknown_source_tip: "Der Vorschau-Server kennt diese Quelle nicht",
+    pv_stale: "Keine Aktualisierung",
+    pv_none: "Keine Quelle",
+    pv_na: "Keine Vorschau verfügbar",
+    pv_na_tip: "Für {p} gibt es keine Bildvorschau",
+    pv_device: "vom Gerät",
+    pv_device_tip: "Standbild vom Gerät selbst, nicht aus dem NDI-Feed",
+    pv_open: "Live-Vorschau",
+    pv_kicker: "Live-Vorschau · {p} · niedrige Bandbreite",
+    pv_connecting: "Verbinde …",
+    pv_ended: "Vorschau beendet",
+    pv_paused: "Pausiert",
+    pv_source_offline: "Quelle ist offline",
+    pv_no_server: "Keine Verbindung zum Vorschau-Server",
+    pv_hx_missing: "Kein Bild – NDI|HX-Quelle? Der Decoder fehlt auf dem Server",
+    pv_retry: "Erneut versuchen",
+    pv_frames: "{n} Bilder · {s} s",
+    type_camera: "Kamera",
+    type_computer: "Rechner",
+    type_encoder: "Encoder / Wandler",
+    type_testpattern: "Testbild",
+    type_unknown: "NDI-Quelle",
   },
 };
 /** Config-flow texts of the integration per language (frontend/get_translations), shared by all cards. */
@@ -294,6 +358,7 @@ const ICON_PATHS = {
   preset: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2.5"/>',
   keyboard:
     '<rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/>',
+  expand: '<path d="M15 4h5v5"/><path d="M9 20H4v-5"/><path d="M20 4l-6.5 6.5"/><path d="M4 20l6.5-6.5"/>',
 };
 const icon = (name, cls = "") =>
   `<svg class="ic ${cls}" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${ICON_PATHS[name] || ""}</svg>`;
@@ -352,6 +417,189 @@ const DEVICE_BASE = (() => {
     /* no document (tests) */
   }
 })();
+
+/**
+ * Brand: the original word mark (light / dark ground) and picture mark of Strelle GmbH, unchanged, served by
+ * the integration next to the device illustrations (./brand/). See NOTICE.
+ */
+const BRAND_NAME = "Strelle AV Matrix";
+const BRAND_BASE = (() => {
+  try {
+    return new URL("../brand/", DEVICE_BASE).href;
+  } catch (_e) {
+    return "/av_matrix_static/brand/";
+  }
+})();
+/** Titles that only repeat the product name: not shown a second time under the brand line. */
+const BRAND_TITLES = ["", "av matrix", "strelle av matrix"];
+
+/* ------------------------------------------------------------------ preview pictures (NDI®)
+ * Home Assistant does not receive NDI. If a Strelle AV Matrix server is configured in the integration, HA relays
+ * its pictures (snapshot: preview.still_url / stream_url / status_url, protocols.<key>.preview). The card is
+ * frugal with them - the server opens a real NDI receiver for every still and allows one live preview at a time:
+ *   - only tiles that are on screen, only while the tab is visible, never while the big live preview is open,
+ *   - every 4.5 s per source (heavy sources every 20 s, sources without a picture once a minute),
+ *     at most two requests at a time for all cards on the page together,
+ *   - if the server does not answer: one probe with a growing pause (5 … 60 s) instead of one per tile.
+ * A picture is never left standing when it is not current: the tile shows the state instead. */
+const PV_REFRESH_MS = 4500;
+const PV_SLOW_MS = 20000; // NDI|HX in full resolution and stills from the device (the server buffers them 20 s)
+const PV_RETRY_MS = 60000; // no signal / no decoder / unknown: the server caches the failure for a minute
+const PV_OFFLINE_MS = 15000;
+const PV_STALE_MS = 16000;
+const PV_SLOW_STALE_MS = 60000;
+const PV_PARALLEL = 2;
+const PV_WIDTH = 320;
+const PV_LIVE_WIDTH = 640;
+const PV_LIVE_FPS = 12.5;
+const PV_TIMEOUT_MS = 20000;
+const PV_HTTP_STATE = { 404: "unknown_source", 415: "unsupported_codec", 501: "unavailable", 503: "no_signal" };
+/** States that mean "the server (or the way to it) does not work", not "this source has no picture". */
+const PV_DOWN_STATES = ["unreachable", "bad_response", "not_configured"];
+const PREVIEW = {
+  items: new Map(), // source id → { state, url, at, tried, busy, origin, slow }
+  cards: new Set(),
+  loading: 0,
+  live: 0, // open live previews: the tiles rest meanwhile
+  down: 0, // failed requests in a row
+  downUntil: 0,
+  snapDown: false,
+  timer: null,
+  frame: 0,
+};
+
+function pvItem(id) {
+  let it = PREVIEW.items.get(id);
+  if (!it) PREVIEW.items.set(id, (it = { state: "loading", url: null, at: 0, tried: 0, busy: false, origin: null, slow: false }));
+  return it;
+}
+
+function pvDrop(it) {
+  if (it.url) URL.revokeObjectURL(it.url);
+  it.url = null;
+}
+
+/** Re-render all cards that show previews (once per frame, however many pictures arrived). */
+function pvRerender() {
+  if (PREVIEW.frame) return;
+  const run = () => {
+    PREVIEW.frame = 0;
+    for (const card of PREVIEW.cards) if (card.isConnected) card._render();
+  };
+  PREVIEW.frame = typeof requestAnimationFrame === "function" ? requestAnimationFrame(run) : setTimeout(run, 16);
+}
+
+function pvServerDown() {
+  return PREVIEW.down > 0 || PREVIEW.snapDown;
+}
+
+async function pvLoad(card, id) {
+  const it = pvItem(id);
+  it.busy = true;
+  it.tried = Date.now();
+  PREVIEW.loading++;
+  const before = `${it.state}|${it.url}|${it.origin}|${pvServerDown()}`;
+  let state = "unreachable";
+  let res = null;
+  try {
+    res = await card._pvFetch(`${card._pvUrl("still")}?source=${encodeURIComponent(id)}&w=${PV_WIDTH}`);
+    state = res.ok ? "ok" : res.headers.get("X-Preview-State") || PV_HTTP_STATE[res.status] || "unreachable";
+    if (res.ok) {
+      const blob = await res.blob();
+      const old = it.url;
+      it.url = URL.createObjectURL(blob);
+      if (old) setTimeout(() => URL.revokeObjectURL(old), 1500); // after the <img> has switched
+      it.origin = res.headers.get("X-Preview-Origin") || "ndi";
+      it.slow = it.origin === "device" || parseInt(res.headers.get("X-Preview-Size") || "0", 10) > 960;
+      it.at = Date.now();
+    }
+  } catch (_e) {
+    state = "unreachable"; // network error, timeout, Home Assistant restarting
+  }
+  if (PV_DOWN_STATES.includes(state)) {
+    PREVIEW.down++;
+    PREVIEW.downUntil = Date.now() + Math.min(60000, 5000 * 2 ** (PREVIEW.down - 1));
+    // a picture that is still current stays until it is stale; everything else shows "not reachable"
+  } else {
+    PREVIEW.down = 0;
+    PREVIEW.downUntil = 0;
+    if (state !== "ok") pvDrop(it);
+    it.state = state;
+    if (state !== "ok") it.at = Date.now();
+  }
+  it.busy = false;
+  PREVIEW.loading--;
+  if (before !== `${it.state}|${it.url}|${it.origin}|${pvServerDown()}`) pvRerender();
+}
+
+function pvWait(it) {
+  if (it.state === "ok" || it.state === "loading") return it.slow ? PV_SLOW_MS : PV_REFRESH_MS;
+  return it.state === "offline" ? PV_OFFLINE_MS : PV_RETRY_MS;
+}
+
+function pvTick() {
+  const now = Date.now();
+  const wanted = new Map(); // source id → a card that shows it
+  let snapDown = false;
+  for (const card of PREVIEW.cards) {
+    if (!card.isConnected) continue;
+    const pv = card._snap && card._snap.preview;
+    if (pv && pv.configured && pv.reachable === false) snapDown = true;
+    for (const id of card._pvVisible()) if (!wanted.has(id)) wanted.set(id, card);
+  }
+  if (PREVIEW.snapDown !== snapDown) {
+    PREVIEW.snapDown = snapDown;
+    if (!snapDown) PREVIEW.downUntil = 0; // Home Assistant reaches the server again: try right away
+    else if (!PREVIEW.down) PREVIEW.downUntil = now + 15000;
+    pvRerender();
+  }
+  let changed = false;
+  for (const [id, it] of PREVIEW.items) {
+    const limit = it.slow ? PV_SLOW_STALE_MS : PV_STALE_MS;
+    if (it.busy) continue;
+    if (!wanted.has(id) && now - Math.max(it.at, it.tried) > limit) {
+      pvDrop(it); // nobody shows it any more
+      PREVIEW.items.delete(id);
+    } else if (it.url && now - it.at > limit) {
+      pvDrop(it); // too old to pass as the current picture
+      changed = true;
+    }
+  }
+  if (changed) pvRerender();
+  if (typeof document !== "undefined" && document.visibilityState !== "visible") return; // hidden tab: nothing
+  if (PREVIEW.live || now < PREVIEW.downUntil) return;
+  const due = [...wanted]
+    .map(([id, card]) => [id, card, pvItem(id)])
+    .filter(([, , it]) => !it.busy && now - it.tried > pvWait(it))
+    .sort((a, b) => a[2].tried - b[2].tried);
+  const parallel = pvServerDown() ? 1 : PV_PARALLEL;
+  for (const [id, card] of due) {
+    if (PREVIEW.loading >= parallel) break;
+    pvLoad(card, id);
+  }
+}
+
+function pvAttach(card) {
+  PREVIEW.cards.add(card);
+  if (!PREVIEW.timer) {
+    PREVIEW.timer = setInterval(pvTick, 500);
+    if (typeof document !== "undefined") document.addEventListener("visibilitychange", pvVisibility);
+  }
+}
+
+function pvDetach(card) {
+  PREVIEW.cards.delete(card);
+  if (!PREVIEW.cards.size && PREVIEW.timer) {
+    clearInterval(PREVIEW.timer);
+    PREVIEW.timer = null;
+    if (typeof document !== "undefined") document.removeEventListener("visibilitychange", pvVisibility);
+  }
+}
+
+function pvVisibility() {
+  for (const card of PREVIEW.cards) card._liveVisibility();
+  pvTick();
+}
 
 function parseDeviceSvg(key, text) {
   const t = String(text)
@@ -547,6 +795,9 @@ class AvMatrixCard extends HTMLElement {
     this._width = 0;
     this._nameMode = "both"; // label | original | both
     this._sprited = new Set(); // device art keys already in this card's sprite
+    this._pvSeen = new Set(); // preview boxes that are on screen (IntersectionObserver)
+    this._pvWatched = new WeakSet();
+    this._live = null; // open live preview: { id, timer, missing, paused }
     this._onArt = () => {
       this._lastHtml = "";
       this._render();
@@ -576,7 +827,9 @@ class AvMatrixCard extends HTMLElement {
   }
 
   _storeKey() {
-    return `av-matrix-card:collapsed:${(this._config && this._config.title) || ""}`;
+    // cards without a title of their own keep the key they had before the product was renamed
+    const title = (this._config && this._config.title) || "";
+    return `av-matrix-card:collapsed:${title === BRAND_NAME ? "AV Matrix" : title}`;
   }
 
   _saveCollapsed() {
@@ -604,15 +857,20 @@ class AvMatrixCard extends HTMLElement {
     const c = { ...config };
     if (c.show_offline === undefined && c.show_offline_sources !== undefined) c.show_offline = c.show_offline_sources;
     this._config = {
-      title: "AV Matrix",
+      title: BRAND_NAME,
       mode: "panel",
       take_mode: "direct",
       show_offline: true,
       compact: false,
       columns: 0,
       theme: "auto",
+      brand: "auto",
+      preview: true,
       ...c,
     };
+    if (this._config.brand === true) this._config.brand = "full";
+    if (this._config.brand === false) this._config.brand = "off";
+    if (!["auto", "full", "compact", "off"].includes(this._config.brand)) this._config.brand = "auto";
     if (!["panel", "matrix"].includes(this._config.mode)) this._config.mode = "panel";
     if (!["direct", "preset"].includes(this._config.take_mode)) this._config.take_mode = "direct";
     this._take = this._config.take_mode;
@@ -659,11 +917,18 @@ class AvMatrixCard extends HTMLElement {
         this._render();
       }, 15000);
     DEVICE_LISTENERS.add(this._onArt);
+    pvAttach(this);
     this._render();
   }
 
   disconnectedCallback() {
     this._unsubscribe();
+    this._closeLive();
+    pvDetach(this);
+    if (this._pvIo) this._pvIo.disconnect();
+    this._pvIo = null;
+    this._pvSeen = new Set();
+    this._pvWatched = new WeakSet();
     DEVICE_LISTENERS.delete(this._onArt);
     if (this._ro) this._ro.disconnect();
     clearInterval(this._tick);
@@ -685,7 +950,7 @@ class AvMatrixCard extends HTMLElement {
   }
 
   static getStubConfig() {
-    return { title: "AV Matrix", mode: "panel", take_mode: "direct", name_mode: "both" };
+    return { title: BRAND_NAME, mode: "panel", take_mode: "direct", name_mode: "both" };
   }
 
   /* ---------------- data */
@@ -994,9 +1259,307 @@ class AvMatrixCard extends HTMLElement {
   _srcTip(src, id) {
     if (!src) return id || this._t("off");
     const orig = src.original_name || src.id;
-    return [src.label && src.label !== orig ? src.label : "", orig + (src.host ? ` · ${src.host}` : "")]
+    const type = src.device_type && src.device_type !== "unknown" ? this._t("type_" + src.device_type) : "";
+    return [src.label && src.label !== orig ? src.label : "", orig + (src.host ? ` · ${src.host}` : ""), type]
       .filter(Boolean)
       .join("\n");
+  }
+
+  /* ---------------- brand */
+  /** "full" (word mark + name), "compact" (picture mark + name) or "" (off). */
+  _brandMode() {
+    const b = this._config.brand;
+    if (b === "off") return "";
+    if (b === "full" || b === "compact") return b;
+    // auto: not a second time if the page around the card already carries the marks (e.g. the server's panel)
+    if (!this._brandHost) {
+      try {
+        this._brandHost = !!document.querySelector('img[src*="wortmarke-"], img[src*="strelle-icon"]');
+      } catch (_e) {
+        /* no document */
+      }
+    }
+    if (this._brandHost) return "";
+    return this._narrow || this._config.compact ? "compact" : "full";
+  }
+
+  _htmlBrand() {
+    const mode = this._brandMode();
+    if (!mode) return "";
+    const mark =
+      mode === "full"
+        ? `<img class="bwm" src="${esc(BRAND_BASE)}wortmarke-${this._isLight() ? "dunkel" : "hell"}.svg" alt="Strelle" width="338" height="51" draggable="false">`
+        : `<img class="bmk" src="${esc(BRAND_BASE)}strelle-icon.svg" alt="" width="32" height="32" draggable="false">`;
+    return `<div class="brand ${mode}" data-k="brand">${mark}<span class="bname">${esc(BRAND_NAME)}</span></div>`;
+  }
+
+  /** The card title, unless it only repeats the product name the brand line already shows. */
+  _title() {
+    const title = String(this._config.title || "").trim();
+    return this._brandMode() && BRAND_TITLES.includes(title.toLowerCase()) ? "" : title;
+  }
+
+  /* ---------------- preview pictures */
+  /** The protocol has pictures (a preview server is configured and delivers them for it). */
+  _pvOn(proto) {
+    return !!proto && proto.preview === true && this._config.preview !== false && !this._fallback;
+  }
+
+  /** A picture protocol without preview (while others have one): the box says so, neutrally. */
+  _pvNa(proto) {
+    const pv = this._snap && this._snap.preview;
+    return !!proto && proto.video === true && proto.preview === false && !!pv && pv.configured && this._config.preview !== false;
+  }
+
+  _pvUrl(kind) {
+    const pv = (this._snap && this._snap.preview) || {};
+    return pv[`${kind}_url`] || { still: "/api/av_matrix/preview.jpg", stream: "/api/av_matrix/preview.mjpeg", status: "/api/av_matrix/preview" }[kind];
+  }
+
+  /** GET with the Home Assistant login (the relay needs it), aborted after 20 s. */
+  async _pvFetch(path) {
+    const ctl = typeof AbortController === "function" ? new AbortController() : null;
+    const timer = ctl ? setTimeout(() => ctl.abort(), PV_TIMEOUT_MS) : null;
+    const init = { cache: "no-store", ...(ctl ? { signal: ctl.signal } : {}) };
+    try {
+      const h = this._hass;
+      if (h && typeof h.fetchWithAuth === "function") return await h.fetchWithAuth(path, init);
+      return await fetch(path, { ...init, credentials: "same-origin" });
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  /** Source ids of the preview boxes that are on screen right now. */
+  _pvVisible() {
+    const proto = this._currentProtocol();
+    const pv = this._snap && this._snap.preview;
+    if (!this._pvOn(proto) || !pv || pv.available === false || this._mode() !== "panel") return [];
+    if (!this._root || this.offsetParent === null) return []; // card not shown (other dashboard view, hidden tab)
+    const boxes = this._pvIo ? [...this._pvSeen] : [...this._root.querySelectorAll("[data-pv]")];
+    const ids = new Set();
+    for (const el of boxes) {
+      if (!el.isConnected) this._pvSeen.delete(el);
+      else if (el.dataset.pv && el.dataset.pvload === "1") ids.add(el.dataset.pv);
+    }
+    return [...ids];
+  }
+
+  /** Watch the preview boxes: only those on screen (plus a little margin) are refreshed. */
+  _pvObserve() {
+    if (typeof IntersectionObserver !== "function" || !this._root) return;
+    if (!this._pvIo)
+      this._pvIo = new IntersectionObserver(
+        (entries) => {
+          for (const e of entries) {
+            if (e.isIntersecting) this._pvSeen.add(e.target);
+            else this._pvSeen.delete(e.target);
+          }
+        },
+        { rootMargin: "160px" }
+      );
+    for (const el of this._root.querySelectorAll("[data-pv]")) {
+      if (this._pvWatched.has(el)) continue;
+      this._pvWatched.add(el);
+      this._pvIo.observe(el);
+    }
+  }
+
+  /**
+   * The 16:9 box of a tile. id: source id, "" = the Off key, null = destination without a source.
+   * The box is always there (reserved space), whatever the state - a tile never changes its height.
+   */
+  _pvBox(proto, id, src, forDest = false) {
+    const box = (state, text, tip = "", inner = "", attrs = "") =>
+      `<span class="prv st-${state}"${attrs}${tip ? ` title="${esc(tip)}"` : ""}>${text ? `<span class="prvmsg">${esc(text)}</span>` : ""}${inner}</span>`;
+    if (!this._pvOn(proto)) return this._pvNa(proto) ? box("na", this._t("pv_na"), this._t("pv_na_tip", { p: proto.title })) : "";
+    if (id === "") return box("off", this._t("off"));
+    if (id == null) return box("none", this._t("pv_none"));
+    const pv = this._snap.preview || {};
+    const name = src ? this._names(src, id)[0] : id;
+    const web =
+      !forDest && src && typeof src.web_url === "string" && /^https?:\/\//i.test(src.web_url)
+        ? `<span class="prvbtn prvweb" data-prvweb="${esc(src.web_url)}" role="link" title="${esc(`${this._t("web_ui")}\n${src.web_url}`)}" aria-label="${esc(this._t("web_ui"))} · ${esc(name)}">${icon("external")}</span>`
+        : "";
+    const attrs = (load) => ` data-pv="${esc(id)}" data-pvload="${load ? 1 : 0}"`;
+    if (pv.available === false) return box("unavailable", this._t("pv_impossible"), pv.reason || this._t("pv_unavailable_tip"), web, attrs(false));
+    if (!src || !src.live) return box("offline", this._t("pv_offline"), "", web, attrs(false)); // not sending: do not even ask
+    const it = pvItem(id);
+    const open = `<span class="prvbtn prvopen" data-prvopen="${esc(id)}" role="button" title="${esc(`${this._t("pv_open")}: ${name} (V)`)}" aria-label="${esc(this._t("pv_open"))} · ${esc(name)}">${icon("expand")}</span>`;
+    const fresh = it.state === "ok" && it.url && Date.now() - it.at <= (it.slow ? PV_SLOW_STALE_MS : PV_STALE_MS);
+    if (fresh) {
+      const tag = it.origin === "device" ? `<span class="prvtag" title="${esc(this._t("pv_device_tip"))}">${esc(this._t("pv_device"))}</span>` : "";
+      return box("ok", "", "", `<img alt="" draggable="false" src="${esc(it.url)}">${tag}${web}${open}`, attrs(true));
+    }
+    if (pvServerDown()) return box("unreachable", this._t("pv_unreachable"), this._t("pv_unreachable_tip"), web, attrs(true));
+    switch (it.state) {
+      case "loading":
+        return box("loading", this._t("pv_loading"), "", web + open, attrs(true));
+      case "ok":
+        return box("stale", this._t("pv_stale"), "", web + open, attrs(true));
+      case "offline":
+        return box("offline", this._t("pv_offline"), "", web, attrs(true));
+      case "unsupported_codec":
+      case "unavailable":
+        return box(it.state, this._t("pv_impossible"), this._t(`pv_${it.state}_tip`), web, attrs(true));
+      case "unknown_source":
+        return box("unknown_source", this._t("pv_unknown_source"), this._t("pv_unknown_source_tip"), web, attrs(true));
+      default:
+        return box("no_signal", this._t("pv_no_signal"), "", web + open, attrs(true));
+    }
+  }
+
+  /* ---------------- live preview (the one source somebody looks at) */
+  _openLive(id) {
+    const proto = this._currentProtocol();
+    if (!id || !this._pvOn(proto) || !this.shadowRoot) return;
+    const src = this._srcById(proto, id);
+    const dlg = this.shadowRoot.querySelector("dialog.livedlg");
+    if (!dlg) return;
+    this._closeLive();
+    const [name] = src ? this._names(src, id) : [id];
+    const sub = [src ? src.original_name || src.id : id, src && src.host].filter(Boolean).join(" · ");
+    dlg.innerHTML = `
+      <div class="dlg-body">
+        <div class="dlg-head">
+          <div class="dlg-id"><div class="dlg-kicker">${esc(this._t("pv_kicker", { p: proto.title }))}</div>
+          <div class="dlg-title">${esc(name)}</div></div>
+          <button type="button" class="btn" data-live="close">${esc(this._t("flow_close"))}</button>
+        </div>
+        <div class="livebox"></div>
+        <div class="dlg-actions"><span class="livestate mono grow">${esc(sub)}</span><button type="button" class="btn" data-live="retry" hidden>${esc(this._t("pv_retry"))}</button></div>
+      </div>`;
+    this._live = { id, sub, timer: null, missing: 0, paused: false, run: 0 };
+    PREVIEW.live++;
+    dlg.showModal();
+    this._liveStart();
+  }
+
+  _liveBox() {
+    const dlg = this.shadowRoot && this.shadowRoot.querySelector("dialog.livedlg");
+    return dlg ? dlg.querySelector(".livebox") : null;
+  }
+
+  /** Stop the stream (closing the connection frees the receiver on the server) and show a text instead. */
+  _liveShow(text, retry = true) {
+    const live = this._live;
+    const box = this._liveBox();
+    if (!live || !box) return;
+    live.run++;
+    clearInterval(live.timer);
+    live.timer = null;
+    const img = box.querySelector("img");
+    if (img) img.removeAttribute("src");
+    box.innerHTML = `<div class="livemsg">${esc(text)}</div>`; // never leave a frozen picture
+    const btn = box.parentNode.querySelector('[data-live="retry"]');
+    if (btn) btn.hidden = !retry;
+    const st = box.parentNode.querySelector(".livestate");
+    if (st) st.textContent = live.sub;
+  }
+
+  async _liveStart() {
+    const live = this._live;
+    const box = this._liveBox();
+    if (!live || !box) return;
+    const run = ++live.run;
+    live.missing = 0;
+    live.paused = false;
+    clearInterval(live.timer);
+    box.parentNode.querySelector('[data-live="retry"]').hidden = true;
+    box.innerHTML = `<div class="livemsg">${esc(this._t("pv_connecting"))}</div>`;
+    let path = `${this._pvUrl("stream")}?source=${encodeURIComponent(live.id)}&w=${PV_LIVE_WIDTH}&fps=${PV_LIVE_FPS}`;
+    try {
+      // an <img> cannot send the login: Home Assistant signs the path for half a minute
+      const signed = await this._hass.callWS({ type: "auth/sign_path", path, expires: 30 });
+      if (signed && signed.path) path = signed.path;
+    } catch (_e) {
+      /* no auth/sign_path (demo page): plain path */
+    }
+    if (this._live !== live || live.run !== run) return;
+    const img = document.createElement("img");
+    img.alt = `${this._t("pv_open")} ${live.id}`;
+    img.draggable = false;
+    img.onerror = () => this._live === live && live.run === run && this._liveCheck(true);
+    box.appendChild(img);
+    const tag = document.createElement("span");
+    tag.className = "livetag";
+    tag.textContent = "LIVE";
+    box.appendChild(tag);
+    img.src = this._hass && typeof this._hass.hassUrl === "function" ? this._hass.hassUrl(path) : path;
+    // browsers do not report a stalled MJPEG picture: ask the server every 2 s whether the receiver still runs
+    live.timer = setInterval(() => this._liveCheck(false), 2000);
+  }
+
+  async _liveCheck(failed) {
+    const live = this._live;
+    if (!live || live.checking) return;
+    const run = live.run;
+    live.checking = true;
+    let text = null;
+    try {
+      const res = await this._pvFetch(`${this._pvUrl("status")}?source=${encodeURIComponent(live.id)}`);
+      if (!res.ok) text = this._t("pv_no_server");
+      else {
+        const st = await res.json();
+        const rx = (st.live || []).find((l) => l.source === live.id);
+        const state = st.source && st.source.state;
+        if (state && state !== "ok") text = this._t(state === "offline" ? "pv_source_offline" : state === "unavailable" ? "pv_impossible" : "pv_no_signal");
+        else if (!rx && st.hx_decoder === false && live.missing >= 1) text = this._t("pv_hx_missing");
+        else {
+          live.missing = rx ? 0 : live.missing + 1;
+          if (live.missing >= 3 || (failed && !rx)) text = this._t(failed ? "pv_no_signal" : "pv_ended");
+          else if (rx) {
+            const el = this._liveBox() && this._liveBox().parentNode.querySelector(".livestate");
+            if (el) el.textContent = `${live.sub} · ${this._t("pv_frames", { n: rx.frames, s: Math.round(rx.seconds) })}`;
+          }
+        }
+      }
+    } catch (_e) {
+      text = this._t("pv_no_server");
+    }
+    live.checking = false;
+    if (this._live !== live || live.run !== run) return;
+    if (text) this._liveShow(text);
+  }
+
+  /** Hidden tab: the stream stops (nobody watches), it comes back with the tab. */
+  _liveVisibility() {
+    const live = this._live;
+    if (!live) return;
+    if (document.visibilityState !== "visible") {
+      if (this._liveBox() && this._liveBox().querySelector("img")) {
+        this._liveShow(this._t("pv_paused"), false);
+        live.paused = true;
+      }
+    } else if (live.paused) this._liveStart();
+  }
+
+  _closeLive() {
+    const live = this._live;
+    if (!live) return;
+    this._live = null;
+    clearInterval(live.timer);
+    PREVIEW.live = Math.max(0, PREVIEW.live - 1);
+    const dlg = this.shadowRoot && this.shadowRoot.querySelector("dialog.livedlg");
+    if (dlg) {
+      const img = dlg.querySelector("img");
+      if (img) img.removeAttribute("src");
+      dlg.innerHTML = "";
+      if (dlg.open) dlg.close();
+    }
+    for (const it of PREVIEW.items.values()) it.tried = Math.min(it.tried, Date.now() - PV_REFRESH_MS + 600); // tiles catch up
+  }
+
+  _bindLiveDialog(dlg) {
+    dlg.addEventListener("click", (e) => {
+      if (e.target === dlg) return void this._closeLive();
+      const b = e.target.closest("[data-live]");
+      if (!b) return;
+      if (b.dataset.live === "close") this._closeLive();
+      else if (b.dataset.live === "retry") this._liveStart();
+    });
+    dlg.addEventListener("close", () => this._closeLive());
+    dlg.addEventListener("keydown", (e) => e.stopPropagation());
   }
 
   /* ---------------- device illustrations */
@@ -1709,7 +2272,7 @@ class AvMatrixCard extends HTMLElement {
     const sr = this.shadowRoot || this.attachShadow({ mode: "open" });
     sr.innerHTML = `<style>${CSS_TEXT}</style><style class="hover"></style>
       <ha-card><svg class="sprite" aria-hidden="true" focusable="false"></svg><div class="root" tabindex="-1"></div><div class="toasts" aria-live="polite"></div></ha-card>
-      <dialog class="dlg"></dialog><dialog class="dlg flowdlg" aria-label="AV Matrix"></dialog>`;
+      <dialog class="dlg"></dialog><dialog class="dlg flowdlg" aria-label="${BRAND_NAME}"></dialog><dialog class="dlg livedlg" aria-label="${BRAND_NAME}"></dialog>`;
     this._root = sr.querySelector(".root");
     this._card = sr.querySelector("ha-card");
     this._sprite = sr.querySelector("svg.sprite");
@@ -1719,6 +2282,7 @@ class AvMatrixCard extends HTMLElement {
     this._bind(sr);
     this._bindDialog(sr.querySelector("dialog"));
     this._bindFlowDialog(sr.querySelector("dialog.flowdlg"));
+    this._bindLiveDialog(sr.querySelector("dialog.livedlg"));
   }
 
   _render() {
@@ -1735,6 +2299,7 @@ class AvMatrixCard extends HTMLElement {
     this._lastHtml = html;
     this._tpl.innerHTML = html;
     morphChildren(this._root, this._tpl.content, this.shadowRoot);
+    this._pvObserve();
   }
 
   _html() {
@@ -1746,9 +2311,10 @@ class AvMatrixCard extends HTMLElement {
       else if (!this._snap) msg = `<div class="msg"><span class="spinner"></span><span>${esc(this._t("loading"))}</span></div>`;
       else msg = `<div class="msg">${esc(this._t("no_devices"))}</div>`;
       const add = this._snap ? this._htmlAddBtn() : "";
-      return `${
-        this._config.title || add
-          ? `<div class="hdr" data-k="hdr"><div class="ttl">${this._config.title ? `<h2>${esc(this._config.title)}</h2>` : ""}</div><div class="ctrls">${add}</div></div>`
+      const title = this._title();
+      return `${this._htmlBrand()}${
+        title || add
+          ? `<div class="hdr" data-k="hdr"><div class="ttl">${title ? `<h2>${esc(title)}</h2>` : ""}</div><div class="ctrls">${add}</div></div>`
           : ""
       }${this._snap ? this._htmlFound() : ""}${msg}`;
     }
@@ -1760,6 +2326,7 @@ class AvMatrixCard extends HTMLElement {
     const sources = this._sources(proto);
     const mode = this._mode();
     return `
+      ${this._htmlBrand()}
       ${this._htmlHeader(protos, proto, dests)}
       ${this._htmlFound()}
       ${this._editMode ? `<div class="edit-hint" data-k="edithint">${icon("pencil")}<span>${esc(this._t("edit_hint"))}</span></div>` : ""}
@@ -1800,7 +2367,7 @@ class AvMatrixCard extends HTMLElement {
     return `
       <div class="hdr" data-k="hdr">
         <div class="ttl">
-          ${this._config.title ? `<h2>${esc(this._config.title)}</h2>` : ""}
+          ${this._title() ? `<h2>${esc(this._title())}</h2>` : ""}
           <div class="stats">
             <span class="stat">${this._ledChain(live, proto.sources.length)}<b class="num">${esc(this._t("sources_live", { live, total: proto.sources.length }))}</b></span>
             <span class="stat">${this._ledChain(okDests, dests.length, "lc-dst")}<span class="num">${esc(this._t("destinations", { n: dests.length }))}</span></span>
@@ -1962,6 +2529,7 @@ class AvMatrixCard extends HTMLElement {
         <div class="dest st-${status} ${sel ? "sel" : ""} ${d.locked ? "locked" : ""} ${pend ? "pending" : ""} ${preset !== undefined ? "armed" : ""} ${art ? "has-art" : ""}" data-k="d-${esc(d.id)}" data-shake="${esc(d.id)}">
           <button type="button" class="dest-main" data-act="dest" data-d="${esc(d.id)}" data-nav="d" data-key="${esc(d.id)}" tabindex="${d.id === this._navKey.d ? "0" : "-1"}" aria-pressed="${sel}" title="${esc(this._dTip(d))}" aria-label="${esc(this._t("dest_label"))} ${esc(this._dTitle(d))}: ${esc(cur)}">
             <span class="dtop"><i class="led ${status}" title="${esc(this._t("status_" + status))}"></i><span class="dno mono">${String(dests.indexOf(d) + 1).padStart(2, "0")}</span><span class="dres mono">${esc(res || this._t("status_" + status))}</span>${multi ? `<span class="selno">${this._sel.indexOf(d.id) + 1}</span>` : ""}</span>
+            ${grouped ? "" : this._pvBox(proto, d.current_source || null, this._srcById(proto, d.current_source), true)}
             <span class="dband"><span class="dname" data-dl="${esc(d.id)}">${esc(dn)}</span></span>
             ${dorig ? `<span class="dorig mono">${esc(dorig)}</span>` : ""}
             <span class="dsrc ${d.current_source ? "" : "none"}">${pend ? `<span class="spinner sm"></span><span class="ell">${esc(this._t("switching"))}</span>` : `<span class="ell">${esc(cur)}</span>`}</span>
@@ -2013,16 +2581,19 @@ class AvMatrixCard extends HTMLElement {
       const foot = !live
         ? `<span class="offl">${esc(this._t("offline_since", { t: this._ago(s.last_seen) }))}</span>`
         : tags;
-      const cls = ["src", id === "" ? "black" : "", id !== "" && !grouped && s.icon_key ? "has-art" : "", isPgm ? "pgm" : "", isPst ? "pst" : "", isPend ? "pend" : "", live ? "" : "dead"]
+      const pvBox = grouped ? "" : this._pvBox(proto, id, s);
+      // with a picture on the tile the address of the sender is shown like on the destinations
+      const shost = pvBox && id !== "" && s.host && !String(secondary).includes(s.host) && !String(primary).includes(s.host) ? this._htmlHost(s.host, "shost") : "";
+      const cls = ["src", id === "" ? "black" : "", id !== "" && !grouped && s.icon_key ? "has-art" : "", pvBox ? "has-pv" : "", isPgm ? "pgm" : "", isPst ? "pst" : "", isPend ? "pend" : "", live ? "" : "dead"]
         .filter(Boolean)
         .join(" ");
       const titleTxt = id === "" ? primary : this._srcTip(s, id);
       const art = id === "" || grouped ? "" : this._art(s.icon_key, this._protocol, live ? "connected" : "no_source", "sart");
       return `
         <button type="button" class="${cls}" data-k="s-${esc(id)}" data-act="src" data-s="${esc(id)}" data-nav="s" data-key="${esc(id)}" data-flash="${esc(flashKey(id))}" tabindex="${id === this._navKey.s ? "0" : "-1"}" aria-pressed="${isPgm}" title="${esc(titleTxt)}" aria-label="${esc(this._t("source_label"))} ${esc(primary)}${live ? "" : " (offline)"}">
-          <span class="tally"></span>
+          <span class="tally"></span>${pvBox}
           <span class="sname">${esc(primary)}</span>
-          <span class="sid mono">${esc(secondary)}</span>
+          <span class="sid mono">${esc(secondary)}</span>${shost}
           <span class="sfoot">${isPend || isPgm || isPst ? `<span class="sstate">${esc(this._t(isPend ? "switching" : isPgm ? "on_air" : "armed_state"))}</span>` : ""}<span class="stags">${foot}</span>${used && id !== "" ? `<span class="use" title="${esc(this._t("in_use", { n: used }))}"><i></i>${used}</span>` : ""}${art}</span>
         </button>`;
     };
@@ -2271,6 +2842,15 @@ class AvMatrixCard extends HTMLElement {
     };
 
     sr.addEventListener("click", (e) => {
+      // the two buttons on a picture (live preview, web interface) do NOT switch the tile they sit on
+      const pv = e.target.closest && e.target.closest("[data-prvopen],[data-prvweb]");
+      if (pv && this._root.contains(pv)) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (pv.dataset.prvweb) window.open(pv.dataset.prvweb, "_blank", "noopener,noreferrer");
+        else this._openLive(pv.dataset.prvopen);
+        return;
+      }
       const el = e.target.closest("[data-act]");
       if (!el || el.disabled) return;
       if (this._suppressClick) {
@@ -2440,6 +3020,7 @@ class AvMatrixCard extends HTMLElement {
       const el = nameEl || e.target.closest('[data-act="dest"],[data-act="src"]');
       clearTimeout(this._lp);
       if (!el || (e.pointerType === "mouse" && e.button !== 0)) return;
+      if (e.target.closest("[data-prvopen],[data-prvweb]")) return; // no long press on the picture buttons
       const x = e.clientX;
       const y = e.clientY;
       this._lpStart = { x, y };
@@ -2561,6 +3142,22 @@ class AvMatrixCard extends HTMLElement {
         this._setNameMode(NAME_MODES[(NAME_MODES.indexOf(this._nameMode) + 1) % NAME_MODES.length]);
         handled();
         return;
+      case "v":
+      case "V": {
+        // live preview of the focused source, or of what the focused / selected destination shows
+        if (!this._pvOn(proto)) return;
+        let id = t && t.dataset ? t.dataset.s : "";
+        if (!id) {
+          const d = this._focusedDests(t)[0];
+          id = d ? d.current_source : "";
+        }
+        const src = id ? this._srcById(proto, id) : null;
+        if (src && src.live) {
+          this._openLive(id);
+          handled();
+        }
+        return;
+      }
       case "l":
       case "L": {
         const dests = this._focusedDests(t);
@@ -3289,6 +3886,63 @@ span.dev.wait { visibility: hidden; }
 .xs .chl { max-height: 120px; }
 .xs .mod-h > span { display: none; }
 
+/* ---------------- brand line: original word mark (or picture mark) + product name, centred on top */
+.brand { display: flex; align-items: center; justify-content: center; gap: 22px; min-width: 0; padding: 8px 22px 6px; }
+.brand img { display: block; flex: none; user-select: none; pointer-events: none; }
+.brand .bwm { width: 138px; height: auto; }
+.brand .bmk { width: 28px; height: 28px; }
+.brand .bname { font-size: 20px; font-weight: 800; line-height: 1.1; letter-spacing: .005em; white-space: nowrap; color: var(--p-fg);
+  overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.brand.compact { gap: 10px; padding: 0 0 2px; }
+.brand.compact .bname { font-size: 18px; }
+.compact .brand.compact .bmk { width: 24px; height: 24px; }
+.compact .brand.compact .bname { font-size: 16px; }
+
+/* ---------------- preview pictures: a reserved 16:9 monitor per tile, whatever the state */
+.prv { position: relative; display: block; width: 100%; aspect-ratio: 16 / 9; flex: none; overflow: hidden; border-radius: 8px;
+  background: #050505; border: 1px solid var(--p-line-strong); }
+.src .prv { margin: 2px 0 6px; }
+.dest-main .prv { margin: 6px 0 2px; }
+.prv img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; display: block; pointer-events: none; }
+.prvmsg { position: absolute; inset: 0; display: grid; place-items: center; padding: 4px 6px; text-align: center; font-family: var(--amx-mono);
+  font-size: 12px; font-weight: 700; line-height: 1.25; letter-spacing: .08em; text-transform: uppercase; color: #a3a19c;
+  background: repeating-linear-gradient(135deg, #131416 0 8px, #0b0b0c 8px 16px); }
+.prv.st-no_signal .prvmsg, .prv.st-stale .prvmsg { color: #ffb020; }
+.prv.st-offline .prvmsg { color: #ff8a84; }
+.prv.st-loading .prvmsg { background: #0b0b0c; color: #6d7178; }
+/* server not reachable / protocol without pictures: quiet, no signal colour, no stripes */
+.prv.st-unreachable .prvmsg, .prv.st-na .prvmsg { background: #0d0e10; color: #7d828a; font-size: 11px; font-weight: 500; letter-spacing: .05em; }
+.prv.st-unsupported_codec .prvmsg, .prv.st-unavailable .prvmsg, .prv.st-unknown_source .prvmsg { font-size: 11px; }
+.prvbtn { position: absolute; right: 4px; bottom: 4px; width: 34px; height: 34px; display: grid; place-items: center; border-radius: 8px;
+  background: rgba(10,10,10,.78); border: 1px solid rgba(255,255,255,.45); color: #fff; cursor: zoom-in; }
+.prvbtn .ic { width: 18px; height: 18px; stroke-width: 2.2; }
+.prvbtn:hover { background: var(--p-accent); border-color: var(--p-accent); }
+.prvbtn.prvweb { right: auto; left: 4px; cursor: pointer; }
+@media (pointer: coarse) { .prvbtn { width: 42px; height: 42px; } }
+.prvtag { position: absolute; left: 4px; top: 4px; padding: 1px 6px; border-radius: 5px; background: rgba(10,10,10,.8); color: #fff;
+  font-family: var(--amx-mono); font-size: 11px; letter-spacing: .04em; }
+/* the function colours stay readable: frame around the picture in the colour of the key */
+.src.pgm .prv { border-color: var(--p-on-signal); box-shadow: 0 0 0 2px var(--p-live); }
+.src.pst .prv { border-color: var(--p-on-signal); box-shadow: 0 0 0 2px var(--p-cue); }
+.src.dead .prv { opacity: .8; }
+.src.has-pv { padding-top: 12px; }
+.shost { font-size: 13px; font-weight: 400; color: var(--p-muted); max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.src.pgm .shost, .src.pst .shost { color: var(--p-on-signal); opacity: .8; }
+.src.dead .shost { opacity: .5; }
+/* live preview dialog */
+dialog.livedlg { width: min(1040px, calc(100vw - 24px)); max-height: calc(100vh - 24px); }
+.livedlg .dlg-title { word-break: break-word; font-size: 20px; }
+.livedlg .dlg-head { align-items: center; }
+.livebox { position: relative; aspect-ratio: 16 / 9; background: #050505; border-radius: 10px; overflow: hidden; border: 1px solid var(--p-line-strong); }
+.livebox img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; display: block; }
+.livemsg { position: absolute; inset: 0; display: grid; place-items: center; padding: 12px; text-align: center; font-family: var(--amx-mono);
+  font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #a3a19c; }
+.livetag { position: absolute; right: 8px; top: 8px; padding: 2px 8px; border-radius: 6px; background: var(--p-live); color: var(--p-on-signal);
+  font-family: var(--amx-mono); font-size: 12px; font-weight: 700; letter-spacing: .08em; }
+.livestate { font-size: 13px; color: var(--p-muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.livedlg .dlg-actions { min-height: var(--amx-hit); }
+.livedlg .dlg-actions [hidden] { display: none; }
+
 /* ---------------- motion: state changes only */
 @keyframes amx-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
 @keyframes amx-pend { from { box-shadow: 0 0 0 0 color-mix(in srgb, var(--p-live) 0%, transparent); }
@@ -3356,7 +4010,7 @@ class AvMatrixCardEditor extends HTMLElement {
         type: "grid",
         name: "",
         schema: [
-          { name: "protocol", selector: { select: { mode: "dropdown", custom_value: true, options: ["ndi", "dante"] } } },
+          { name: "protocol", selector: { select: { mode: "dropdown", custom_value: true, options: ["ndi", "dante"] } } }, // any other protocol key can be typed
           { name: "columns", selector: { number: { min: 0, max: 12, mode: "box" } } },
         ],
       },
@@ -3387,11 +4041,26 @@ class AvMatrixCardEditor extends HTMLElement {
         },
       },
       {
+        name: "brand",
+        selector: {
+          select: {
+            mode: "dropdown",
+            options: [
+              { value: "auto", label: de ? "Automatisch (schmal oder kompakt: klein)" : "Automatic (narrow or compact: small)" },
+              { value: "full", label: de ? "Kopfzeile mit Wortmarke" : "Header line with the word mark" },
+              { value: "compact", label: de ? "Klein (Bildmarke und Name)" : "Small (picture mark and name)" },
+              { value: "off", label: de ? "Aus" : "Off" },
+            ],
+          },
+        },
+      },
+      {
         type: "grid",
         name: "",
         schema: [
           { name: "show_offline", selector: { boolean: {} } },
           { name: "compact", selector: { boolean: {} } },
+          { name: "preview", selector: { boolean: {} } },
         ],
       },
       { name: "destinations", selector: { entity: { multiple: true, filter: { integration: "av_matrix", domain: "select" } } } },
@@ -3410,6 +4079,8 @@ class AvMatrixCardEditor extends HTMLElement {
       show_offline: de ? "Offline-Quellen zeigen" : "Show offline sources",
       compact: de ? "Kompakt" : "Compact",
       theme: de ? "Darstellung" : "Theme",
+      brand: de ? "Logo und Name „Strelle AV Matrix“" : 'Logo and name "Strelle AV Matrix"',
+      preview: de ? "Vorschaubilder (wenn ein Vorschau-Server eingerichtet ist)" : "Preview pictures (if a preview server is set up)",
       destinations: de ? "Ziele (Auswahl & Reihenfolge, leer = alle)" : "Destinations (selection & order, empty = all)",
     };
     return L[schema.name] || schema.name;
@@ -3443,6 +4114,8 @@ class AvMatrixCardEditor extends HTMLElement {
       take_mode: "direct",
       name_mode: "both",
       theme: "auto",
+      brand: "auto",
+      preview: true,
       show_offline: this._config.show_offline ?? this._config.show_offline_sources ?? true,
       compact: false,
       ...this._config,
@@ -3456,8 +4129,8 @@ if (!customElements.get("av-matrix-card")) {
   window.customCards = window.customCards || [];
   window.customCards.push({
     type: "av-matrix-card",
-    name: "AV Matrix",
-    description: "Broadcast-style crosspoint router panel for the AV Matrix integration (NDI® decoders and more).",
+    name: BRAND_NAME,
+    description: "Broadcast-style crosspoint router panel for the Strelle AV Matrix integration (NDI® decoders, Dante® and more).",
     preview: false,
     documentationURL: "https://github.com/strelle/ha-av-matrix",
   });

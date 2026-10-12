@@ -1,4 +1,4 @@
-"""AV Matrix - smart crosspoint router for NDI® decoders, Dante® devices (and more) in Home Assistant."""
+"""Strelle AV Matrix - smart crosspoint router for NDI® decoders, Dante® devices (and more) in Home Assistant."""
 
 from __future__ import annotations
 
@@ -18,6 +18,7 @@ from .const import CARD_FILENAME, CONF_DRIVER, DOMAIN, REQUEST_TIMEOUT, URL_BASE
 from .coordinator import AvMatrixConfigEntry, AvMatrixCoordinator, AvMatrixRuntime
 from .drivers import DRIVERS
 from .hub import DATA_HUB, AvMatrixHub, Destination
+from .preview import async_register_views
 from .services import async_setup_services
 from .websocket import async_setup_websocket
 
@@ -43,6 +44,9 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     async_setup_services(hass)
     async_setup_websocket(hass)
     await _async_register_card(hass, hub.version)
+    if hass.http is not None:
+        async_register_views(hass, hub.preview)
+    hub.preview.async_start()
     return True
 
 

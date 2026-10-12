@@ -534,7 +534,7 @@ async def test_websocket_destination_label_and_icons(hass: HomeAssistant, hass_w
     assert dest["label"] is None and dest["name"] == dest["original_name"] == "Lobby"
     assert dest["icon_key"] == "magewell_ndi_aio" and dest["model"] == "Pro Convert NDI to AIO"
     icons = {s["id"]: s["icon_key"] for s in ndi["sources"]}
-    assert icons["CAM (1)"] == "ndi_camera" and icons["STUDIO-PC (Slides)"] == "ndi_computer"
+    assert icons["CAM (1)"] == "ndi_camera" and icons["STUDIO-PC (Slides)"] == "ndi_source"  # not guessed
     assert all(s["original_name"] == s["id"] for s in ndi["sources"])
 
     await client.send_json(

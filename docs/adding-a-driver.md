@@ -81,6 +81,10 @@ Dante shows the pieces a protocol needs; use it as the template.
 - Identity helpers (`"channel@device"`) and the wire format: request builders and response parsers for the ARC
   protocol, tested against real packets (`tests/test_dante_protocol.py`).
 - Registered in `protocols/__init__.py`: `PROTOCOLS["dante"] = Protocol("dante", "Dante®", DanteSourceRegistry)`.
+  A protocol that carries pictures sets `video=True` (`Protocol("ndi", "NDI®", NdiSourceRegistry, video=True)`):
+  the card then reserves a picture area per source and, as long as no preview exists for the protocol, says
+  "no preview available" there. Pictures themselves come from the preview server (`preview.py`,
+  `PreviewServer.protocols`).
 
 **Network driver** `drivers/dante.py` — Dante has no "one device = one entry" shape, so the driver covers the
 whole network:

@@ -40,16 +40,21 @@ from .const import (
     CONF_DISPLAY_OFF_ON_NONE,
     CONF_DISPLAYS,
     CONF_DRIVER,
+    CONF_PREVIEW_SERVER,
     CONF_SCAN_INTERVAL,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
     MAX_SCAN_INTERVAL,
     MIN_SCAN_INTERVAL,
+    PREVIEW_SERVICE_PRODUCT,
+    PREVIEW_SERVICE_TYPE,
     REQUEST_TIMEOUT,
 )
 from .drivers import DRIVERS, CannotConnect, Driver, InvalidAuth
 from .drivers.dante import CONF_HIDDEN_DEVICES, CONF_ONLY_SELECTED, CONF_RX_SELECTED, CONF_STATIC_HOSTS
+from .hub import DATA_HUB
 from .models import ConfigField, DeviceInfo, FieldType, ProbeResult
+from .preview import DATA_PREVIEW_SUGGESTION, InvalidPreviewUrl, PreviewServerError, async_probe, normalize_url
 from .protocols import PROTOCOLS
 from .protocols.dante import ARC_SERVICE_TYPE
 from .scan import InvalidSubnet, async_default_subnet, async_probe_host, async_scan, parse_subnet
@@ -116,6 +121,8 @@ def clean_input(fields: tuple[ConfigField, ...], user_input: Mapping[str, Any]) 
     return data
 
 
+#: example address in the texts of the options (translations must not contain URLs)
+PREVIEW_EXAMPLE = "http://192.0.2.8:8088"
 CONF_SHOWN_DEVICES = "devices"
 CONF_SUBNET = "subnet"
 CONF_HOST = "host"
@@ -268,6 +275,11 @@ class AvMatrixConfigFlow(ConfigFlow, domain=DOMAIN):
 
     async def async_step_zeroconf(self, discovery_info: ZeroconfServiceInfo) -> ConfigFlowResult:
         """Dante®: a device announced itself → offer the Dante network (once). Others: probe the host."""
+        if (
+            discovery_info.type == PREVIEW_SERVICE_TYPE
+            and discovery_info.properties.get("product") == PREVIEW_SERVICE_PRODUCT
+        ):
+            return self._async_preview_server_seen(discovery_info)
         if discovery_info.type != ARC_SERVICE_TYPE:
             return await self._async_discovered(discovery_info.host, discovery_info.properties.get("mac"))
         self._driver_key = "dante"
@@ -275,6 +287,20 @@ class AvMatrixConfigFlow(ConfigFlow, domain=DOMAIN):
         self._abort_if_unique_id_configured()
         self.context["title_placeholders"] = {"name": "Dante network", "driver": "dante", "manufacturer": "Audinate"}
         return await self.async_step_network()
+
+    @callback
+    def _async_preview_server_seen(self, discovery_info: ZeroconfServiceInfo) -> ConfigFlowResult:
+        """A Strelle AV Matrix server announced itself: remember its address as a suggestion for the options.
+
+        Nothing is set up from here - the preview server is an optional setting, not a device.
+        """
+        if discovery_info.port:
+            host = discovery_info.host
+            # kept outside the hub: the announcement may arrive before the first device is set up
+            self.hass.data[DATA_PREVIEW_SUGGESTION] = (
+                f"http://{f'[{host}]' if ':' in host else host}:{discovery_info.port}"
+            )
+        return self.async_abort(reason="preview_server_found")
 
     async def async_step_scan(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Actively search a subnet for decoders of every driver that can be probed."""
@@ -442,17 +468,41 @@ class AvMatrixConfigFlow(ConfigFlow, domain=DOMAIN):
 
 
 class AvMatrixOptionsFlow(OptionsFlow):
-    """Polling interval + optional linked display per destination."""
+    """Polling interval + optional linked display per destination, and the preview server of the integration."""
 
     def __init__(self) -> None:
         self._options: dict[str, Any] = {}
         self._pending: list[tuple[str, str]] = []
         self._current: tuple[str, str] | None = None
 
+    # ------------------------------------------------------------------ preview server (one for all entries)
+    def _preview_field(self, user_input: dict[str, Any] | None) -> dict[Any, Any]:
+        """Form field "preview server": the stored address, else (as a suggestion) a server seen on the network."""
+        preview = self.hass.data[DATA_HUB].preview
+        suggestion = self.hass.data.get(DATA_PREVIEW_SUGGESTION)
+        value = user_input.get(CONF_PREVIEW_SERVER) if user_input is not None else preview.url or suggestion
+        return {vol.Optional(CONF_PREVIEW_SERVER, description={"suggested_value": value}): TextSelector()}
+
+    async def _async_apply_preview(self, user_input: dict[str, Any]) -> dict[str, str]:
+        """Check and store the preview server address. Returns form errors (empty = done)."""
+        hub = self.hass.data[DATA_HUB]
+        try:
+            url = normalize_url(user_input.get(CONF_PREVIEW_SERVER))
+        except InvalidPreviewUrl:
+            return {CONF_PREVIEW_SERVER: "preview_invalid_url"}
+        if url is not None and url != hub.preview.url:  # an unchanged address is not tested again
+            try:
+                await async_probe(async_get_clientsession(self.hass), url)
+            except PreviewServerError as err:
+                return {CONF_PREVIEW_SERVER: f"preview_{err.code}"}
+        hub.async_set_preview_server(url)
+        return {}
+
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         if DRIVERS[self.config_entry.data[CONF_DRIVER]].NETWORK:
             return await self.async_step_network(user_input)
-        if user_input is not None:
+        errors: dict[str, str] = {}
+        if user_input is not None and not (errors := await self._async_apply_preview(user_input)):
             self._options = {
                 **self.config_entry.options,
                 CONF_SCAN_INTERVAL: int(user_input[CONF_SCAN_INTERVAL]),
@@ -462,14 +512,15 @@ class AvMatrixOptionsFlow(OptionsFlow):
             driver = driver_cls(None, self.config_entry.data)  # type: ignore[arg-type] - no I/O here
             self._pending = [(d.id, d.name or self.config_entry.title) for d in driver.destinations()]
             return await self.async_step_display()
+        preview_field = self._preview_field(user_input)
+        interval = (user_input or {}).get(CONF_SCAN_INTERVAL) or self.config_entry.options.get(
+            CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL
+        )
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema(
                 {
-                    vol.Required(
-                        CONF_SCAN_INTERVAL,
-                        default=self.config_entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL),
-                    ): NumberSelector(
+                    vol.Required(CONF_SCAN_INTERVAL, default=interval): NumberSelector(
                         NumberSelectorConfig(
                             min=MIN_SCAN_INTERVAL,
                             max=MAX_SCAN_INTERVAL,
@@ -477,9 +528,12 @@ class AvMatrixOptionsFlow(OptionsFlow):
                             mode=NumberSelectorMode.BOX,
                             unit_of_measurement="s",
                         )
-                    )
+                    ),
+                    **preview_field,
                 }
             ),
+            errors=errors,
+            description_placeholders={"preview_example": PREVIEW_EXAMPLE},
         )
 
     def _network_driver(self) -> Any:
@@ -492,7 +546,8 @@ class AvMatrixOptionsFlow(OptionsFlow):
         driver = self._network_driver()
         known = {d.name for d in driver.devices.values()} if driver is not None else set()
         devices = sorted(known | set(opts.get(CONF_HIDDEN_DEVICES, [])), key=str.casefold)
-        if user_input is not None:
+        errors: dict[str, str] = {}
+        if user_input is not None and not (errors := await self._async_apply_preview(user_input)):
             self._options = {
                 **opts,
                 CONF_SCAN_INTERVAL: int(user_input[CONF_SCAN_INTERVAL]),
@@ -504,6 +559,15 @@ class AvMatrixOptionsFlow(OptionsFlow):
                 return await self.async_step_rx_channels()
             return self.async_create_entry(data=self._options)
         hidden = set(opts.get(CONF_HIDDEN_DEVICES, []))
+        if user_input is not None:  # form is shown again (preview server not accepted): keep what was entered
+            opts = {
+                **opts,
+                CONF_SCAN_INTERVAL: user_input.get(CONF_SCAN_INTERVAL) or DEFAULT_SCAN_INTERVAL,
+                CONF_STATIC_HOSTS: parse_hosts(user_input.get(CONF_STATIC_HOSTS)),
+                CONF_ONLY_SELECTED: bool(user_input.get(CONF_ONLY_SELECTED, False)),
+            }
+            hidden = {d for d in devices if d not in user_input.get(CONF_SHOWN_DEVICES, devices)}
+        preview_field = self._preview_field(user_input)
         schema: dict[Any, Any] = {
             vol.Required(
                 CONF_SCAN_INTERVAL, default=opts.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
@@ -525,10 +589,12 @@ class AvMatrixOptionsFlow(OptionsFlow):
         schema[
             vol.Optional(CONF_STATIC_HOSTS, description={"suggested_value": ", ".join(opts.get(CONF_STATIC_HOSTS, []))})
         ] = TextSelector()
+        schema.update(preview_field)
         return self.async_show_form(
             step_id="network",
             data_schema=vol.Schema(schema),
-            description_placeholders={"count": str(len(devices))},
+            errors=errors,
+            description_placeholders={"count": str(len(devices)), "preview_example": PREVIEW_EXAMPLE},
         )
 
     async def async_step_rx_channels(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:

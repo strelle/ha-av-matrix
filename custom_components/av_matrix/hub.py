@@ -35,8 +35,10 @@ from .display import async_drive_display, display_state
 from .drivers import DriverError
 from .drivers.base import short
 from .models import ConnectionState
+from .preview import InvalidPreviewUrl, PreviewServer, normalize_url
 from .protocols import PROTOCOLS, SourceRegistry, tcp_probe
 from .protocols.base import natural_key
+from .source_types import TYPES as SOURCE_TYPES, classify as classify_source
 
 if TYPE_CHECKING:
     from .coordinator import AvMatrixCoordinator
@@ -118,6 +120,8 @@ class AvMatrixHub:
         # one route at a time per destination (double taps, salvo + service …): keeps "previous",
         # the undo history and BirdDog's read-back verification consistent
         self._route_locks: dict[str, asyncio.Lock] = {}
+        #: optional Strelle AV Matrix server that delivers the NDI preview pictures (see preview.py)
+        self.preview = PreviewServer(hass, self.async_notify)
 
     # ---------------------------------------------------------------- lifecycle
     async def async_load(self) -> None:
@@ -125,6 +129,10 @@ class AvMatrixHub:
         self.locks = set(data.get("locks", []))
         self.labels = data.get("labels", {})
         self.destination_labels = data.get("destination_labels", {})
+        try:
+            self.preview.url = normalize_url(data.get("preview_server"))
+        except InvalidPreviewUrl:
+            self.preview.url = None
 
     async def async_start(self) -> None:
         """Start discovery and periodic liveness evaluation (first config entry)."""
@@ -157,6 +165,7 @@ class AvMatrixHub:
                 "locks": sorted(self.locks),
                 "labels": self.labels,
                 "destination_labels": self.destination_labels,
+                "preview_server": self.preview.url,
             },
             1,
         )
@@ -523,6 +532,14 @@ class AvMatrixHub:
         self._save()
         self.async_notify()
 
+    @callback
+    def async_set_preview_server(self, url: str | None) -> None:
+        """Set (or remove) the address of the preview server; it applies to the whole integration."""
+        if url == self.preview.url:
+            return
+        self.preview.async_set_url(url)
+        self._save()
+
     def destination_icon(self, dest: Destination) -> str:
         """Illustration key of the device behind ``dest`` (see device_icons.py)."""
         manufacturer, model = self._device_model(dest.coordinator, dest.device_key)
@@ -535,7 +552,9 @@ class AvMatrixHub:
         )
 
     def source_icon(self, protocol: str, source_id: str, group: str | None) -> str:
-        """Illustration key of a source (Dante: its TX device; NDI: guessed from the name)."""
+        """Illustration key of a source (Dante: its TX device; NDI: its device type, see ``source_types.py``)."""
+        if protocol == "ndi":
+            return SOURCE_TYPES[classify_source(source_id)][1]
         manufacturer = model = None
         if group:
             for dest in self.destinations.values():
@@ -563,7 +582,7 @@ class AvMatrixHub:
     def snapshot(self) -> dict[str, Any]:
         """Complete state for the frontend (WebSocket API, see docs/frontend-api.md)."""
         ent_reg = er.async_get(self.hass)
-        out: dict[str, Any] = {"version": self.version, "protocols": {}}
+        out: dict[str, Any] = {"version": self.version, "preview": self.preview.snapshot(), "protocols": {}}
         for key, proto in PROTOCOLS.items():
             registry = self.registries[key]
             dests = [d for d in self.destinations.values() if d.protocol == key]
@@ -612,6 +631,8 @@ class AvMatrixHub:
             if destinations or sources:
                 out["protocols"][key] = {
                     "title": proto.title,
+                    "video": proto.video,
+                    "preview": self.preview.covers(key),
                     "sources": sorted(
                         sources.values(),
                         key=lambda s: registry.sort_key(s["id"]) if registry.grouped else natural_key(s["name"]),
@@ -644,6 +665,16 @@ class AvMatrixHub:
         lab = self.label(protocol, source_id)
         host = address.rsplit(":", 1)[0] if address and ":" in address else address
         described = self.registries[protocol].describe(source_id)
+        kind: dict[str, Any] = {}
+        if protocol == "ndi":
+            # the preview server looked at the device itself (web interface); else the same rules by name only
+            known = self.preview.meta(source_id) if self.preview.configured else None
+            device_type = known["device_type"] if known else classify_source(source_id)
+            kind = {
+                "device_type": device_type,
+                "icon_key": known["icon_key"] if known else SOURCE_TYPES[device_type][1],
+                "web_url": known["web_url"] if known else None,
+            }
         return {
             "id": source_id,
             **described,
@@ -651,6 +682,7 @@ class AvMatrixHub:
             "label": lab.get("label"),
             "original_name": source_id,
             "icon_key": self.source_icon(protocol, source_id, described.get("group")),
+            **kind,
             "tags": list(lab.get("tags", [])),
             "live": live,
             "host": host,

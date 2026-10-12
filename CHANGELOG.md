@@ -3,6 +3,40 @@
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- **NDI® preview in the card.** Every source tile of the panel shows its picture (reserved 16:9, name, address
+  and keys stay readable), every destination the picture of the source it is switched to. A click on ⤢ (key `V`)
+  opens a larger, fluent live preview of that one source. The pictures come from a Strelle AV Matrix server (the
+  server variant in `server/`); its address is an optional setting of the integration: *⚙ Configure → Preview
+  server* (one address for all devices, a server found by mDNS is suggested, the address is tested). Empty =
+  no preview, the card behaves as before.
+- **Home Assistant relays the pictures** through three authenticated views (`/api/av_matrix/preview.jpg`,
+  `/api/av_matrix/preview.mjpeg`, `/api/av_matrix/preview`), so the preview also works when the dashboard is
+  opened through https or remote access and the browser cannot reach the server. Stills are fetched with the
+  login token, the stream through a signed path. Identical requests of several dashboards are merged.
+- **Frugal and honest:** only tiles on screen are refreshed (every 4.5 s, heavy sources every 20 s, two at a
+  time), nothing while the tab is hidden or the live preview is open; never an old picture - the tile says
+  *No signal*, *Offline*, *Preview not possible*, *Preview not reachable*, *No update*, and marks stills that
+  come *from the device* instead of the NDI feed. If the server is down, switching is not affected.
+- **Device type symbols for NDI sources:** camera, encoder / converter, computer, test pattern or a neutral
+  "NDI source" - from the same rule table as the server (`source_types.py`, identical copy, kept equal by a
+  test). With a preview server its `device_type` / `icon_key` / `web_url` are used; source tiles then offer the
+  device's web interface (↗).
+- **Brand line:** the Strelle logo and "Strelle AV Matrix", centred on top of the card (word mark in the variant
+  that fits the theme; picture mark in narrow or compact cards). Card option `brand: auto | full | compact | off`,
+  new option `preview: true | false`.
+- Frontend API: `preview` object, `video` / `preview` per protocol, `device_type` / `web_url` per NDI source -
+  see [docs/frontend-api.md](docs/frontend-api.md). Protocols stay open: a protocol the card does not know gets
+  its tab from the snapshot; a picture protocol without preview shows "No preview available".
+
+### Changed
+- The product is called **Strelle AV Matrix**: integration name (manifest, HACS), card name and default title,
+  README. Unchanged: domain `av_matrix`, entity ids, card type `custom:av-matrix-card`, services, repository -
+  existing installations and dashboards keep working.
+- NDI sources that no rule recognises now show the neutral symbol instead of a computer (it is not guessed).
+
 ## [0.8.0] - 2026-10-12
 
 ### Added

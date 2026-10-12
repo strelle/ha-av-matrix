@@ -120,7 +120,8 @@
       "unique_id_mismatch": "Diese Adresse gehört zu einem anderen Gerät.",
       "network_reconfigure": "Nichts neu zu konfigurieren: Dante-Geräte werden automatisch gefunden. Bitte die Optionen verwenden.",
       "not_supported": "Dieses Gerät ist kein unterstützter Decoder.",
-      "already_in_progress": "Dieses Gerät wird bereits eingerichtet."
+      "already_in_progress": "Dieses Gerät wird bereits eingerichtet.",
+      "preview_server_found": "Ein Strelle-AV-Matrix-Server wurde gefunden; seine Adresse steht in den Optionen als Vorschlag für den Vorschau-Server."
     },
     "flow_title": "{name}"
   },
@@ -129,10 +130,12 @@
       "init": {
         "title": "Optionen",
         "data": {
-          "scan_interval": "Abfrageintervall"
+          "scan_interval": "Abfrageintervall",
+          "preview_server": "Vorschau-Server (optional)"
         },
         "data_description": {
-          "scan_interval": "Sekunden zwischen zwei Abfragen. Offline-Geräte werden mit wachsender Pause (bis 30 s) erneut versucht."
+          "scan_interval": "Sekunden zwischen zwei Abfragen. Offline-Geräte werden mit wachsender Pause (bis 30 s) erneut versucht.",
+          "preview_server": "Adresse eines Strelle-AV-Matrix-Servers, der die NDI®-Vorschaubilder für die Karte liefert, z. B. {preview_example}. Eine Adresse für alle Geräte dieser Integration. Wurde ein solcher Server im Netzwerk gefunden, steht seine Adresse hier als Vorschlag. Leer lassen = keine Vorschau."
         }
       },
       "display": {
@@ -158,13 +161,15 @@
           "scan_interval": "Abfrageintervall",
           "devices": "Angezeigte Geräte",
           "only_selected": "Entitäten nur für ausgewählte RX-Kanäle anlegen",
-          "static_hosts": "Zusätzliche Geräteadressen"
+          "static_hosts": "Zusätzliche Geräteadressen",
+          "preview_server": "Vorschau-Server (optional)"
         },
         "data_description": {
           "scan_interval": "Sekunden zwischen zwei Abfragen der Subscriptions.",
           "devices": "Nicht angehakte Geräte werden komplett ignoriert (kein Gerät, keine Quellen, keine Ziele).",
           "only_selected": "Standard: Entitäten für jeden RX-Kanal (Geräte mit mehr als 32 RX-Kanälen starten mit deaktivierten Entitäten). Die Matrix-Karte zeigt immer alle Kanäle.",
-          "static_hosts": "IP-Adressen von Dante-Geräten, die mDNS nicht erreicht, durch Komma getrennt."
+          "static_hosts": "IP-Adressen von Dante-Geräten, die mDNS nicht erreicht, durch Komma getrennt.",
+          "preview_server": "Adresse eines Strelle-AV-Matrix-Servers, der die NDI®-Vorschaubilder für die Karte liefert, z. B. {preview_example}. Eine Adresse für alle Geräte dieser Integration. Wurde ein solcher Server im Netzwerk gefunden, steht seine Adresse hier als Vorschlag. Leer lassen = keine Vorschau."
         }
       },
       "rx_channels": {
@@ -174,6 +179,11 @@
           "rx_selected": "RX-Kanäle"
         }
       }
+    },
+    "error": {
+      "preview_invalid_url": "Keine gültige Adresse. Beispiel: {preview_example}",
+      "preview_cannot_connect": "Unter dieser Adresse antwortet nichts. Adresse prüfen und ob der Server läuft.",
+      "preview_not_matrix": "Unter dieser Adresse antwortet etwas, aber kein Strelle-AV-Matrix-Server."
     }
   },
   "entity": {

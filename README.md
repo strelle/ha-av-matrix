@@ -1,6 +1,6 @@
-<p align="center"><img src="docs/images/header.png" alt="AV Matrix – NDI® & Dante® crosspoint router for Home Assistant" width="100%"></p>
+<p align="center"><img src="docs/images/header.png" alt="Strelle AV Matrix – NDI® & Dante® crosspoint router for Home Assistant" width="100%"></p>
 
-# AV Matrix for Home Assistant
+# Strelle AV Matrix for Home Assistant
 
 **Smart crosspoint router for NDI® decoders (BirdDog, Magewell) and Dante® audio networks.**
 
@@ -94,8 +94,8 @@ Details and API notes: [docs/devices.md](docs/devices.md). Want another device? 
 ### HACS (recommended)
 
 1. HACS → ⋮ → *Custom repositories* → add `https://github.com/strelle/ha-av-matrix`, type *Integration*.
-2. Search for **AV Matrix**, download, restart Home Assistant.
-3. *Settings → Devices & services → Add integration → AV Matrix.*
+2. Search for **Strelle AV Matrix**, download, restart Home Assistant.
+3. *Settings → Devices & services → Add integration → Strelle AV Matrix.*
 
 ### Manual
 
@@ -115,7 +115,8 @@ Add one entry per device — usually Home Assistant finds the decoders by itself
    - **Magewell:** factory login is `Admin` / `Admin` — please change the password in the device's web UI.
    - **BirdDog:** the API on port 8080 normally needs no password; it is only used if the device asks for a login.
      Set *Number of decoder channels* for multi-channel devices.
-3. Options (⚙ on the entry): polling interval (default 5 s) and a **linked display** per destination.
+3. Options (⚙ on the entry): polling interval (default 5 s), a **linked display** per destination and the
+   **preview server** (see [NDI® preview](#ndi-preview)).
 
 Sources need no configuration: everything that sends NDI on the network shows up within seconds.
 
@@ -139,7 +140,7 @@ recognised (by serial number or MAC address), and a **new IP address is taken ov
 integration, Fritz!Box, nmap tracker. Home Assistant's DHCP integration also looks for hosts on its own network periodically. If the decoders sit in
 another VLAN without a device tracker, use the scan.
 
-**Network scan:** *Add integration → AV Matrix → Search the network for decoders*. The subnet defaults to Home
+**Network scan:** *Add integration → Strelle AV Matrix → Search the network for decoders*. The subnet defaults to Home
 Assistant's own network (a /24; at most /22 is accepted). Every address is checked read-only and without login:
 first a quick TCP connect to the driver's port (0.7 s timeout, 64 in parallel), then the driver's fingerprint
 request. A /24 takes about 3 seconds. Every driver that implements `async_probe` takes part automatically.
@@ -153,7 +154,7 @@ request. A /24 takes about 3 seconds. Every driver that implements `async_probe`
 <td width="43%"><img src="docs/screenshots/dante-matrix-light.png" alt="Dante matrix in the daylight theme"></td>
 </tr></table>
 
-*Settings → Devices & services → Add integration → AV Matrix → **Dante® network*** (Home Assistant also offers it
+*Settings → Devices & services → Add integration → Strelle AV Matrix → **Dante® network*** (Home Assistant also offers it
 as soon as a Dante device announces itself). That single entry covers the whole network:
 
 - **Discovery:** every device that announces `_netaudio-arc._udp` via mDNS is added automatically and becomes a
@@ -187,9 +188,40 @@ as soon as a Dante device announces itself). That single entry covers the whole 
 - Switching has been verified against reference packets and a simulator, **not yet on real hardware** – test on
   channels that are not in use.
 
+## NDI® preview
+
+![Panel with a live picture in every source tile; each destination shows the picture of its source](docs/screenshots/preview-panel.png)
+
+Every NDI® source tile of the card can show its picture, every destination the picture of the source it is
+switched to, and a click on ⤢ (key `V`) opens a larger, fluent live preview of that one source.
+
+Home Assistant does not receive NDI itself. The pictures come from a **Strelle AV Matrix server** (the
+[server variant](server/) of this repository, e.g. on a Raspberry Pi next to the desk). Tell the integration where
+it is: *Settings → Devices & services → Strelle AV Matrix → ⚙ Configure* (on any device of the integration) →
+**Preview server**, e.g. `http://192.0.2.8:8088`. One address for the whole integration; a server found on the
+network (mDNS) is suggested in that field. The address is tested when you save. Leave it empty and the card
+looks and works as before.
+
+- **Home Assistant relays the pictures** (`/api/av_matrix/preview.jpg`, `.mjpeg`), the browser never talks to
+  the server. That is on purpose: dashboards opened through https (remote access, a reverse proxy) may not load
+  pictures from a plain-http address (mixed content), and the server is often not reachable from where the
+  browser is. The relay needs the Home Assistant login like every other API call.
+- **Frugal by design.** The server opens a real NDI receiver per still and allows one live preview at a time. The
+  card only refreshes tiles that are on screen (every 4.5 s, heavy sources every 20 s, two requests at a time),
+  pauses while the tab is hidden and while the live preview is open, and several dashboards share one request.
+- **States instead of old pictures:** *No signal*, *Offline*, *Preview not possible* (NDI|HX source without a
+  decoder on the server, or a server without the NDI SDK), *Preview not reachable* (server down – switching is
+  not affected), *No update*. A still that the device itself delivered instead of the NDI feed is marked
+  *from device*. Protocols without pictures (Dante®) get no picture area.
+- **Device types.** NDI sources carry a symbol for camera, encoder, computer, test pattern or (neutral) NDI
+  source - the same rule table as the server. With a preview server its knowledge is used (it also looks at the
+  device's web interface), and source tiles get a ↗ link to that web interface.
+- Sources are matched by their exact NDI name. Labels are only display names; a source the server does not know
+  shows *Unknown*.
+
 ## Dashboard card
 
-The card is loaded automatically. Add it via *Add card → AV Matrix* (visual editor) or YAML. In a sections
+The card is loaded automatically. Add it via *Add card → Strelle AV Matrix* (visual editor) or YAML. In a sections
 view give it the full width.
 
 ```yaml
@@ -202,6 +234,8 @@ name_mode: both        # label | original | both
 # show_offline: true
 # compact: false
 # theme: auto          # auto (follows HA) | dark | daylight
+# brand: auto          # auto | full | compact | off  (Strelle logo + "Strelle AV Matrix" on top)
+# preview: true        # preview pictures, if a preview server is set up
 # columns: 6           # source columns in the panel, 0 = auto
 # destinations:        # selection and order, default: all
 #   - select.stage_left_source
@@ -210,7 +244,7 @@ name_mode: both        # label | original | both
 
 | Option | Default | Description |
 |---|---|---|
-| `title` | `AV Matrix` | Card title (empty = none). |
+| `title` | `Strelle AV Matrix` | Card title (empty = none). A title that only repeats the product name is not shown again under the brand line. |
 | `mode` | `panel` | `panel`: destinations on top, sources below (X-Y panel). `matrix`: destinations × sources grid. Narrow cards (< 640 px) start in panel mode. |
 | `take_mode` | `direct` | `direct`: tapping a source switches immediately. `preset`: tapping arms the route (amber), **TAKE** switches all armed routes at once (salvo). |
 | `name_mode` | `both` | Names shown: `label` (label, else the original name), `original` (device / NDI / Dante name), `both` (label, original name in small print underneath). Initial value only – the switch in the header is remembered per browser. |
@@ -218,6 +252,8 @@ name_mode: both        # label | original | both
 | `show_offline` | `true` | Show sources that stopped sending (greyed, "offline · 6 min"). |
 | `compact` | `false` | Smaller tiles. |
 | `theme` | `auto` | `dark` (control room, hall, evening), `daylight` (open air, stage, office: high-contrast light theme) or `auto` (follows the dark mode of the Home Assistant theme). |
+| `brand` | `auto` | Brand line on top of the card: Strelle logo and "Strelle AV Matrix", centred. `full`: word mark (light or dark variant to match the theme), `compact`: picture mark, `off`: none. `auto` = `full`, `compact` in narrow (< 640 px) or compact cards. |
+| `preview` | `true` | Preview pictures in the panel tiles (needs a preview server, see [NDI® preview](#ndi-preview)). `false` = never. |
 | `columns` | auto | Number of source columns in panel mode. |
 | `destinations` | all | List of destination `select` entities: which ones to show, in this order. |
 
@@ -347,7 +383,7 @@ the TV's source list) and whether to
 - **power on & switch input on route** (default on), and
 - **turn the display off when routed to None**.
 
-When the destination is routed, AV Matrix turns the display on if needed, waits until it is on (max 10 s, without
+When the destination is routed, Strelle AV Matrix turns the display on if needed, waits until it is on (max 10 s, without
 blocking other destinations) and selects the input if it is not already active. Display problems never fail the
 route; they are logged and shown as `display_error`.
 
@@ -406,13 +442,17 @@ automation:
 
 - **No sources appear.** mDNS must reach Home Assistant: run HA with host networking (default for HA OS /
   `network_mode: host` in Docker) and allow multicast between the VLANs. If your network uses an
-  **NDI Discovery Server** instead of mDNS, AV Matrix only sees what the decoders list.
+  **NDI Discovery Server** instead of mDNS, Strelle AV Matrix only sees what the decoders list.
 - **A source shows as not live but is sending.** BirdDog source lists are verified by a TCP connection to the
   sender; a firewall on the sender can block that. Magewell lists and mDNS are trusted as-is.
 - **Sources linger.** They disappear 2 minutes after they stopped sending (on purpose). *Refresh sources* drops
   cached knowledge immediately.
 - **Magewell: "invalid authentication".** Wrong password — Home Assistant starts a re-authentication flow.
 - **BirdDog shows its logo.** The routed source is not sending; the connection sensor says *Source not sending*.
+- **"Preview not reachable" in the tiles.** Home Assistant gets no answer from the preview server: is it running,
+  is the address in the options right, can Home Assistant reach it (firewall, VLAN)? Switching does not depend
+  on it. *Preview not possible* means the server answers but cannot decode that source (NDI|HX decoder or NDI
+  SDK missing on the server).
 - **Diagnostics:** device page → ⋮ → *Download diagnostics* (passwords are redacted). Debug log:
 
   ```yaml
@@ -438,10 +478,10 @@ linked displays, config flow, services, WebSocket API).
 
 ## Deutsch
 
-**AV Matrix** macht aus NDI®-Decodern (BirdDog, Magewell) eine Kreuzschiene in Home Assistant.
+**Strelle AV Matrix** macht aus NDI®-Decodern (BirdDog, Magewell) eine Kreuzschiene in Home Assistant.
 
 - **Ziele** sind die Decoder hinter den Bildschirmen; jedes Gerät wird über *Einstellungen → Geräte & Dienste →
-  Integration hinzufügen → AV Matrix* angelegt (erst Protokoll/Hersteller wählen, dann Adresse und Zugangsdaten;
+  Integration hinzufügen → Strelle AV Matrix* angelegt (erst Protokoll/Hersteller wählen, dann Adresse und Zugangsdaten;
   die Verbindung wird dabei geprüft). Magewell-Werkszugang `Admin`/`Admin` – bitte ändern.
 - **Automatische Erkennung:** neue Decoder meldet die Karte selbst (Admins): Banner „1 neuer Empfänger gefunden –
   Hinzufügen“, die Einrichtung läuft direkt in der Karte (Zugangsdaten, fertig; falsches Passwort = Fehler im
@@ -449,7 +489,7 @@ linked displays, config flow, services, WebSocket API).
   oder Gerätetyp wählen). Außerdem erscheinen sie unter *Geräte & Dienste* als „Entdeckt“ und werden mit einem
   Klick übernommen (Magewell: Werkszugang vorausgefüllt). Erkannt werden sie über die MAC-Herstellerkennung (DHCP –
   dafür muss HA die DHCP-Anfragen sehen oder ein Device-Tracker wie UniFi die MAC melden); bekannte Geräte mit neuer
-  IP werden automatisch nachgeführt. Zusätzlich: *Integration hinzufügen → AV Matrix → Netzwerk nach Decodern
+  IP werden automatisch nachgeführt. Zusätzlich: *Integration hinzufügen → Strelle AV Matrix → Netzwerk nach Decodern
   durchsuchen* fragt das eigene /24 (oder ein angegebenes Subnetz bis /22) nur lesend ab (~3 s). Magewell sendet
   kein verwertbares mDNS und kein SSDP; Dante-Geräte schlagen per mDNS den Eintrag „Dante®-Netzwerk“ vor.
 - **Quellen** werden automatisch gefunden (mDNS und die Listen aller Decoder), nach NDI-Namen zusammengeführt;
@@ -470,7 +510,18 @@ linked displays, config flow, services, WebSocket API).
   Zeichnung mit Status-LED gezeigt, dazu seine **IP-Adresse**; die Taste ↗ öffnet die **Weboberfläche** des
   Decoders in einem neuen Tab (Magewell, BirdDog; nur im Netz des Geräts erreichbar, Dante®-Adapter haben keine).
   In Home Assistant: Diagnose-Sensor *IP-Adresse* je Gerät und *Besuchen* auf der Geräteseite.
+  Oben mittig stehen Strelle-Logo und „Strelle AV Matrix“ (`brand: auto | full | compact | off`).
   Optionen siehe Tabelle oben.
+- **NDI®-Vorschau:** Jede Quellen-Kachel zeigt ihr Bild, jedes Ziel das Bild seiner aktuellen Quelle; ⤢ (Taste
+  `V`) öffnet die eine Quelle größer und flüssig. Die Bilder liefert ein **Strelle-AV-Matrix-Server**
+  ([Server-Variante](server/)); seine Adresse steht unter *Einstellungen → Geräte & Dienste → Strelle AV Matrix →
+  ⚙ Konfigurieren → Vorschau-Server* (z. B. `http://192.0.2.8:8088`, gilt für die ganze Integration, ein im Netz
+  gefundener Server wird vorgeschlagen; leer = keine Vorschau, alles wie bisher). Home Assistant reicht die
+  Bilder selbst durch – deshalb funktioniert es auch über https und Fernzugriff, und der Browser muss den Server
+  nicht erreichen. Abgerufen wird sparsam: nur sichtbare Kacheln, alle 4,5 s, nicht bei verdecktem Tab, live nur
+  die eine geöffnete Quelle. Statt alter Bilder steht der Zustand da: *Kein Signal*, *Offline*, *Vorschau nicht
+  möglich*, *Vorschau nicht erreichbar* (Server weg – geschaltet wird trotzdem), *vom Gerät* (Standbild des
+  Geräts statt NDI-Feed). Quellen tragen ein Symbol für Kamera, Encoder, Rechner, Testbild oder neutral.
 - **HomeKit:** die Quellen-Auswahl über die HomeKit-Bridge freigeben (ein Schalter pro Quelle; neue Quellen erst nach Neuladen der Bridge).
 - **Updates** kommen über HACS (Update-Entität), danach Home Assistant neu starten.
 - **Dante®** (*experimentell*): Eintrag „Dante®-Netzwerk“ übernimmt alle Dante-Geräte im Netz automatisch (mDNS,
@@ -481,7 +532,7 @@ linked displays, config flow, services, WebSocket API).
   Domain Manager, reine AES67-Geräte, Multicast-Flows. Inoffizielles, nachgebautes Protokoll – das Schalten ist
   noch nicht auf echter Hardware getestet.
 - **Keine Quellen sichtbar?** mDNS muss HA erreichen (Host-Netzwerk, Multicast zwischen VLANs). Mit NDI Discovery
-  Server sieht AV Matrix nur, was die Decoder melden.
+  Server sieht Strelle AV Matrix nur, was die Decoder melden.
 
 Installation über HACS (benutzerdefiniertes Repository `https://github.com/strelle/ha-av-matrix`, Typ Integration)
 oder manuell nach `<config>/custom_components/av_matrix`, danach Neustart.
@@ -491,7 +542,8 @@ oder manuell nach `<config>/custom_components/av_matrix`, danach Neustart.
 NDI® is a registered trademark of Vizrt NDI AB. Dante® is a registered trademark of Audinate Group Pty Ltd; the Dante
 support uses an unofficial, reverse-engineered protocol. This project is not affiliated with, endorsed or sponsored
 by Vizrt, Audinate, BirdDog, Magewell, Behringer, Neutrik or HDCVT. The device illustrations are our own stylised
-drawings, not manufacturer artwork; product names only identify the supported devices. Protocol knowledge from
+drawings, not manufacturer artwork; product names only identify the supported devices. The Strelle word mark and
+picture mark shown in the card belong to Strelle GmbH and are not covered by the MIT license (see NOTICE). Protocol knowledge from
 netaudio (public domain), see [NOTICE](NOTICE).
 
 License: [MIT](LICENSE) · © 2026 Strelle

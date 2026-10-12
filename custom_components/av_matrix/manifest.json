@@ -1,6 +1,6 @@
 {
   "domain": "av_matrix",
-  "name": "AV Matrix",
+  "name": "Strelle AV Matrix",
   "codeowners": [
     "@strelle"
   ],
@@ -42,6 +42,12 @@
   "requirements": [],
   "version": "0.8.0",
   "zeroconf": [
-    "_netaudio-arc._udp.local."
+    "_netaudio-arc._udp.local.",
+    {
+      "type": "_http._tcp.local.",
+      "properties": {
+        "product": "av-matrix-server"
+      }
+    }
   ]
 }

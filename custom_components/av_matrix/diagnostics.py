@@ -32,6 +32,7 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: AvMatri
         **network,
         "entry": {"data": async_redact_data(dict(entry.data), redact), "options": dict(entry.options)},
         "device": async_redact_data(asdict(coordinator.info), redact),
+        "preview": hub.preview.snapshot(),
         "last_update_success": coordinator.last_update_success,
         "update_interval": str(coordinator.update_interval),
         "poll": asdict(data) if data else None,

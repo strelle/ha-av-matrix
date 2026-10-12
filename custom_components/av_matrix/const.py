@@ -40,6 +40,15 @@ STORAGE_VERSION: Final = 1
 URL_BASE: Final = "/av_matrix_static"
 CARD_FILENAME: Final = "av-matrix-card.js"
 
+# preview pictures, relayed from a Strelle AV Matrix server (optional, one address for the whole integration)
+CONF_PREVIEW_SERVER: Final = "preview_server"
+PREVIEW_STATUS_URL: Final = "/api/av_matrix/preview"
+PREVIEW_STILL_URL: Final = "/api/av_matrix/preview.jpg"
+PREVIEW_STREAM_URL: Final = "/api/av_matrix/preview.mjpeg"
+#: mDNS: the server announces itself as ``<name>._http._tcp.local.`` with this TXT property
+PREVIEW_SERVICE_TYPE: Final = "_http._tcp.local."
+PREVIEW_SERVICE_PRODUCT: Final = "av-matrix-server"
+
 SERVICE_ROUTE: Final = "route"
 SERVICE_SALVO: Final = "salvo"
 SERVICE_LOCK: Final = "lock"

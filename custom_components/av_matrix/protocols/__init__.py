@@ -19,10 +19,12 @@ class Protocol:
     key: str
     title: str
     registry: type[SourceRegistry]
+    #: Carries pictures: the card reserves a preview box per source (filled if a preview exists for the protocol).
+    video: bool = False
 
 
 PROTOCOLS: dict[str, Protocol] = {
-    "ndi": Protocol("ndi", "NDI®", NdiSourceRegistry),
+    "ndi": Protocol("ndi", "NDI®", NdiSourceRegistry, video=True),
     "dante": Protocol("dante", "Dante®", DanteSourceRegistry),
 }
 

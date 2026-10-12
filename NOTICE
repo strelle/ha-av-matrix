@@ -1,4 +1,4 @@
-AV Matrix for Home Assistant
+Strelle AV Matrix for Home Assistant
 Copyright (c) 2026 Strelle - MIT License (see LICENSE)
 
 Dante® support
@@ -23,3 +23,11 @@ custom_components/av_matrix/frontend/fonts/ contains Atkinson Hyperlegible Next 
 ofl/atkinsonhyperlegiblemono), subset to Latin / Latin-1 and converted to WOFF2. They are licensed under the
 SIL Open Font License, Version 1.1 - see custom_components/av_matrix/frontend/fonts/OFL.txt. The card serves them
 from the integration itself; no external font service is contacted.
+
+Marks of Strelle GmbH
+---------------------
+custom_components/av_matrix/frontend/brand/ contains the word mark (wortmarke-hell.svg for dark ground,
+wortmarke-dunkel.svg for light ground) and the picture mark (strelle-icon.svg) of Strelle GmbH - the same,
+unchanged files as in server/avmatrix/static/brand/. They are shipped so that the card can show them and are
+NOT covered by the MIT license of the code: use them unchanged, not for products or variations of your own.
+Whoever distributes the card under another name replaces the three files and sets the card option "brand: off".

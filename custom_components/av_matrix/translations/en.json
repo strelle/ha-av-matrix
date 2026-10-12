@@ -120,7 +120,8 @@
       "unique_id_mismatch": "This address belongs to a different device.",
       "network_reconfigure": "Nothing to reconfigure: Dante devices are found automatically. Use the options instead.",
       "not_supported": "This device is not a supported decoder.",
-      "already_in_progress": "This device is already being set up."
+      "already_in_progress": "This device is already being set up.",
+      "preview_server_found": "A Strelle AV Matrix server was found; its address is suggested as preview server in the options."
     },
     "flow_title": "{name}"
   },
@@ -129,10 +130,12 @@
       "init": {
         "title": "Options",
         "data": {
-          "scan_interval": "Polling interval"
+          "scan_interval": "Polling interval",
+          "preview_server": "Preview server (optional)"
         },
         "data_description": {
-          "scan_interval": "Seconds between two polls. Offline devices are retried with a growing pause (up to 30 s)."
+          "scan_interval": "Seconds between two polls. Offline devices are retried with a growing pause (up to 30 s).",
+          "preview_server": "Address of a Strelle AV Matrix server that delivers the NDI® preview pictures for the card, e.g. {preview_example}. One address for all devices of this integration. If such a server was found on the network, its address is suggested here. Leave empty for no preview."
         }
       },
       "display": {
@@ -158,13 +161,15 @@
           "scan_interval": "Polling interval",
           "devices": "Devices shown",
           "only_selected": "Create entities only for selected RX channels",
-          "static_hosts": "Additional device addresses"
+          "static_hosts": "Additional device addresses",
+          "preview_server": "Preview server (optional)"
         },
         "data_description": {
           "scan_interval": "Seconds between two polls of the subscriptions.",
           "devices": "Unticked devices are ignored completely (no device, no sources, no destinations).",
           "only_selected": "Default: entities for every RX channel (devices with more than 32 RX channels start with disabled entities). The matrix card always shows all channels.",
-          "static_hosts": "IP addresses of Dante devices mDNS does not reach, comma separated."
+          "static_hosts": "IP addresses of Dante devices mDNS does not reach, comma separated.",
+          "preview_server": "Address of a Strelle AV Matrix server that delivers the NDI® preview pictures for the card, e.g. {preview_example}. One address for all devices of this integration. If such a server was found on the network, its address is suggested here. Leave empty for no preview."
         }
       },
       "rx_channels": {
@@ -174,6 +179,11 @@
           "rx_selected": "RX channels"
         }
       }
+    },
+    "error": {
+      "preview_invalid_url": "Not a valid address. Example: {preview_example}",
+      "preview_cannot_connect": "No answer from this address. Check the address and whether the server is running.",
+      "preview_not_matrix": "Something answers at this address, but it is not a Strelle AV Matrix server."
     }
   },
   "entity": {

@@ -29,10 +29,24 @@ const unsub = await hass.connection.subscribeMessage(
 
 ```jsonc
 {
-  "version": "0.1.0",
+  "version": "0.9.0",
+  "preview": {                                 // see "Preview pictures"
+    "configured": true,                        // a preview server is set in the options
+    "reachable": true,                         // true | false | null (not asked yet / not configured)
+    "available": true,                         // the server can receive NDI (false: SDK missing, preview off)
+    "reason": null,                            // the server's reason while available is false
+    "hx_decoder": true,                        // the server can decode NDI|HX
+    "server": { "name": "Strelle AV Matrix", "version": "1.0.0" },
+    "protocols": ["ndi"],                      // protocols with pictures ([] if not configured)
+    "still_url": "/api/av_matrix/preview.jpg",
+    "stream_url": "/api/av_matrix/preview.mjpeg",
+    "status_url": "/api/av_matrix/preview"
+  },
   "protocols": {
     "ndi": {                                   // one key per protocol that has destinations or sources
       "title": "NDI®",
+      "video": true,                           // the protocol carries pictures
+      "preview": true,                         // pictures exist for its sources (preview server configured)
       "sources": [                             // sorted by name
         {
           "id": "STUDIO-PC (Slides)",          // identity; pass this as `source` when routing
@@ -40,6 +54,9 @@ const unsub = await hass.connection.subscribeMessage(
           "label": "Slides",                   // user label or null
           "original_name": "STUDIO-PC (Slides)", // name on the network (NDI name, Dante channel@device)
           "icon_key": "ndi_computer",          // device illustration, see "Device illustrations"
+          // NDI only:
+          "device_type": "computer",           // camera | computer | encoder | testpattern | unknown
+          "web_url": null,                     // web UI of the sender if the preview server found one, else null
           "tags": ["presentation"],            // user tags (categories), may be []
           "live": true,                        // sending right now
           // grouped protocols (Dante®) only:
@@ -106,6 +123,55 @@ Notes:
   `no_source` = routed to None; `source_lost` = routed source is not sending (BirdDog shows its logo);
   `offline` = device unreachable; `error` = the device reports an error (Dante: subscription error, see
   `subscription.status` / `detail`).
+
+- Do not assume two protocols: build tabs and lists from the keys of `protocols` and take the name from `title`.
+  Show a picture area only where `video` is true; where `preview` is false say "no preview available" (never
+  "no signal"), or show no picture area at all.
+
+## Preview pictures
+
+Optional. Home Assistant does not receive NDI; it relays the preview API of a Strelle AV Matrix server
+(`server/docs/SCHNITTSTELLE.md`, "NDI-Vorschau") whose address is set in the options of the integration
+(stored in `.storage/av_matrix`, key `preview_server`). All three views need a Home Assistant login. They are
+relays and not `camera` / `image` entities because sources come and go (an entity per source would fill the
+registry), the server's states must reach the card unchanged, and nothing may be cached.
+
+| View | Purpose |
+|---|---|
+| `GET /api/av_matrix/preview.jpg?source=<source id>[&w=64…640]` | Current still (JPEG, default width 320). |
+| `GET /api/av_matrix/preview.mjpeg?source=<source id>[&w=160…1280][&fps=1…25]` | Live preview, `multipart/x-mixed-replace`. Ends when the source is gone, after 10 minutes, or when another source takes the server's one live receiver. Close the connection to end it. |
+| `GET /api/av_matrix/preview[?source=<source id>]` | The server's status JSON (`available`, `hx_decoder`, `live: [{source, frames, seconds, state, mode}]`, with `source`: `source: {id, state}`); opens no receiver. |
+
+`source` is the exact NDI name (the `id` of the source), never a label.
+
+```js
+// still: with the login token, so the headers can be read
+const res = await hass.fetchWithAuth(`/api/av_matrix/preview.jpg?source=${encodeURIComponent(id)}&w=320`);
+const state = res.headers.get("X-Preview-State");          // "ok" or the reason
+// live: an <img> cannot send a token - let Home Assistant sign the path
+const { path } = await hass.callWS({ type: "auth/sign_path", path: `/api/av_matrix/preview.mjpeg?source=${encodeURIComponent(id)}`, expires: 30 });
+img.src = hass.hassUrl(path);
+```
+
+Answers carry `Cache-Control: no-store` and the server's headers `X-Preview-State`, `X-Preview-Origin` (`ndi`, or
+`device` = a still the device delivered itself: mark it), `X-Preview-Age`, `X-Preview-Size`. Without a picture
+the body is JSON `{"ok": false, "error": <state>, "message": …}`:
+
+| `X-Preview-State` | HTTP | Meaning |
+|---|---|---|
+| `offline`, `unknown_source` | 404 | The server knows the source but it is not sending / does not know it. |
+| `no_signal` | 503 | The source is there but delivered no picture. |
+| `unsupported_codec` | 415 | NDI\|HX source, the decoder is missing on the server. |
+| `unavailable` | 501 | The server cannot receive NDI (SDK missing or preview off). |
+| `not_configured` | 404 | No preview server is set. |
+| `unreachable` | 502 | Home Assistant gets no answer from the server. |
+| `bad_response` | 502 | Something answers, but not like a Strelle AV Matrix server. |
+| `invalid` | 400 | `source` is missing. |
+
+Be frugal - every still is a real NDI receiver on the server, and there is one live receiver: fetch only what is
+on screen, every 4-5 s per source, at most two at a time, not while the page is hidden; never show a picture
+older than ~15 s as current; while a live preview is open let the tiles rest. Home Assistant merges identical
+requests and allows two requests to the server at a time.
 
 ## `av_matrix/label` (admin only)
 
@@ -187,8 +253,11 @@ The event is fired with the context of the action that caused it, so `event.cont
 
 `icon_key` names an SVG in `/av_matrix_static/devices/<icon_key>.svg` (shipped with the integration). The key is
 derived in `device_icons.py` from driver, manufacturer, model and device name (Dante: mDNS model or the default
-name prefix such as `AVIOAES3-`, `DA-22UC-`, `WING`); NDI sources fall back to `ndi_camera` / `ndi_computer` by
-name. Keys: `magewell_ndi_aio`, `magewell_pro_convert`, `birddog_play`, `ndi_decoder`, `ndi_camera`, `ndi_computer`,
+name prefix such as `AVIOAES3-`, `DA-22UC-`, `WING`). NDI sources get the key of their `device_type`
+(`source_types.py`, the rule table shared with the server: `ndi_camera`, `ndi_computer`, `ndi_encoder`,
+`ndi_testpattern`, and the neutral `ndi_source` when no rule matches - it is not guessed); a configured preview
+server overrides it with what it found out. Keys: `magewell_ndi_aio`, `magewell_pro_convert`, `birddog_play`,
+`ndi_decoder`, `ndi_camera`, `ndi_computer`, `ndi_encoder`, `ndi_testpattern`, `ndi_source`,
 `avio_aes3`, `avio_analog_in`, `avio_analog_out`, `avio_usb`, `dante_converter`, `wing`, `dante_device`, `display`.
 The SVGs use CSS custom properties: `--avm-led` (status LED colour, set by the card), `--avm-dev-body`,
 `--avm-dev-top`, `--avm-dev-side`, `--avm-dev-line`, `--avm-dev-metal`, `--avm-dev-screen`.
@@ -197,4 +266,5 @@ The SVGs use CSS custom properties: `--avm-led` (status LED colour, set by the c
 
 The integration serves `/av_matrix_static/av-matrix-card.js` and registers it with `frontend.add_extra_js_url`,
 so the custom element `av-matrix-card` is available on every dashboard without a manual resource.
+The Strelle marks of the brand line are in `/av_matrix_static/brand/` (see NOTICE).
 A replacement card can be shipped the same way (same file name) or as a separate HACS frontend repository.
