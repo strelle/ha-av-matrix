@@ -1,0 +1,309 @@
+{
+  "transport": "Streamable HTTP, POST /mcp, JSON-RPC 2.0, zustandslos (keine Sitzung, kein Server-Stream)",
+  "protocolVersions": [
+    "2025-11-25",
+    "2025-06-18",
+    "2025-03-26",
+    "2024-11-05"
+  ],
+  "serverInfo": {
+    "name": "av-matrix",
+    "title": "Strelle AV Matrix (Kreuzschiene)"
+  },
+  "auth": "Lesende Werkzeuge ohne Schlüssel. Schreibende mit 'Authorization: Bearer <Zugangsschlüssel>'; fehlt er: Ergebnis mit isError=true. Ist er falsch: HTTP 401.",
+  "writeTools": [
+    "delete_preset",
+    "recall_preset",
+    "save_preset",
+    "set_route",
+    "undo"
+  ],
+  "instructions": "Strelle AV Matrix: Kreuzschiene des Studios (NDI®-Video und Dante®-Audio). Quellen werden auf Ziele geschaltet. Erst lesen (list_destinations, list_sources, get_routing), dann schalten. Schreibende Werkzeuge (set_route, recall_preset, save_preset, delete_preset, undo) brauchen den Zugangsschlüssel als Bearer-Token. Ziele mit 'protected' sind fest gesperrt und lassen sich über keine Schnittstelle verändern; Ziele mit 'locked' hat ein Mensch gesperrt – nicht umgehen, sondern nachfragen. Vor jedem Schalten kurz sagen, was sich ändert; nach einem Versehen undo benutzen.",
+  "tools": [
+    {
+      "name": "list_devices",
+      "title": "Geräte auflisten",
+      "description": "Eingerichtete Geräte (NDI-Decoder, Dante-Geräte) mit Adresse, Modell und Online-Status.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true
+      }
+    },
+    {
+      "name": "list_sources",
+      "title": "Quellen auflisten",
+      "description": "Alle bekannten Quellen (NDI-Sender, Dante-Sendekanäle 'Kanal@Gerät'). 'id' ist der Wert für set_route.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "protocol": {
+            "type": "string",
+            "enum": [
+              "ndi",
+              "dante"
+            ],
+            "description": "Nur dieses Protokoll (ndi = Video, dante = Audio)."
+          },
+          "live_only": {
+            "type": "boolean",
+            "description": "Nur Quellen, die gerade senden."
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true
+      }
+    },
+    {
+      "name": "list_destinations",
+      "title": "Ziele auflisten",
+      "description": "Alle Ziele (Decoder-Ausgänge, Dante-Empfangskanäle) mit aktueller Quelle, Status, Sperre und Schutz.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "protocol": {
+            "type": "string",
+            "enum": [
+              "ndi",
+              "dante"
+            ],
+            "description": "Nur dieses Protokoll (ndi = Video, dante = Audio)."
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true
+      }
+    },
+    {
+      "name": "get_routing",
+      "title": "Schaltzustand abfragen",
+      "description": "Kompakter Ist-Zustand: welche Quelle liegt auf welchem Ziel, welche Presets sind aktiv.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "protocol": {
+            "type": "string",
+            "enum": [
+              "ndi",
+              "dante"
+            ],
+            "description": "Nur dieses Protokoll (ndi = Video, dante = Audio)."
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true
+      }
+    },
+    {
+      "name": "list_presets",
+      "title": "Presets auflisten",
+      "description": "Gespeicherte Presets (mehrere Verbindungen auf einmal) mit ihren Verbindungen und ob sie gerade aktiv sind.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true
+      }
+    },
+    {
+      "name": "get_preview_url",
+      "title": "Vorschau-Adresse einer NDI-Quelle",
+      "description": "Adressen der Bildvorschau einer NDI-Quelle: 'jpeg' (aktuelles Standbild) und 'mjpeg' (fortlaufende Live-Vorschau), jeweils je Zugangsadresse des Servers. Liefert kein Bild, nur die Adressen und den Zustand (ok, offline, unavailable). Nur NDI – Dante ist Audio.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "type": "string",
+            "description": "NDI-Quelle: 'id' oder Label aus list_sources."
+          }
+        },
+        "required": [
+          "source"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true
+      }
+    },
+    {
+      "name": "get_system_status",
+      "title": "Systemauslastung",
+      "description": "Auslastung des Rechners (CPU gesamt und je Kern, Load, RAM, Temperatur, Speicherplatz, Netz), Verbrauch des Matrix-Dienstes und von Companion, was der Server gerade tut (NDI-Empfänger, Testbild, verbundene Clients, Geräteverbindungen, letzte Schaltvorgänge und Fehler), Warnungen und ein kurzer Verlauf.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true
+      }
+    },
+    {
+      "name": "set_route",
+      "title": "Verbindung setzen",
+      "description": "Eine Quelle auf ein Ziel schalten. Braucht den Zugangsschlüssel. Gesperrte und geschützte Ziele werden abgelehnt.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "destination": {
+            "type": "string",
+            "description": "Ziel: 'id' oder Name aus list_destinations."
+          },
+          "source": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Quelle: 'id' oder Label aus list_sources. null oder 'Aus' trennt die Verbindung."
+          }
+        },
+        "required": [
+          "destination",
+          "source"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": true
+      }
+    },
+    {
+      "name": "recall_preset",
+      "title": "Preset abrufen",
+      "description": "Alle Verbindungen eines Presets schalten. Braucht den Zugangsschlüssel. Ist ein Ziel gesperrt, wird nichts geschaltet.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "preset": {
+            "type": "string",
+            "description": "'id' oder Name des Presets."
+          }
+        },
+        "required": [
+          "preset"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": true
+      }
+    },
+    {
+      "name": "save_preset",
+      "title": "Preset anlegen oder ändern",
+      "description": "Preset speichern. Entweder 'routes' (Liste aus {destination, source}) angeben oder 'destinations' (dann wird der Ist-Zustand dieser Ziele festgehalten). Mit 'preset' wird ein bestehendes Preset überschrieben. Braucht den Zugangsschlüssel.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Name des Presets."
+          },
+          "routes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "destination": {
+                  "type": "string"
+                },
+                "source": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "destination",
+                "source"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "destinations": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "preset": {
+            "type": "string",
+            "description": "'id' oder Name eines bestehenden Presets (zum Ändern)."
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false
+      }
+    },
+    {
+      "name": "delete_preset",
+      "title": "Preset löschen",
+      "description": "Ein Preset löschen (schaltet nichts). Braucht den Zugangsschlüssel.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "preset": {
+            "type": "string",
+            "description": "'id' oder Name des Presets."
+          }
+        },
+        "required": [
+          "preset"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true
+      }
+    },
+    {
+      "name": "undo",
+      "title": "Rückgängig",
+      "description": "Ohne 'destination': die letzte Aktion (Einzelschaltung oder Preset) komplett zurücknehmen. Mit 'destination': die vorherige Quelle dieses Ziels wiederherstellen. Braucht den Zugangsschlüssel.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "destination": {
+            "type": "string"
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false
+      }
+    }
+  ]
+}

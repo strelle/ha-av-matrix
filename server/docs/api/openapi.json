@@ -1,0 +1,1280 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Strelle AV Matrix Server",
+    "version": "1.0.0",
+    "description": "Kreuzschiene für NDI® (Video) und Dante® (Audio). Lesen und Schalten im Studionetz ohne Anmeldung; Schalt-Adressen gehen als GET und POST (Parameter in der Query oder als JSON-Body). Fest geschützte Ziele (Feld 'protected') lassen sich über keine Schnittstelle verändern. MCP (Streamable HTTP) unter /mcp, schreibende MCP-Werkzeuge mit Bearer-Token."
+  },
+  "servers": [
+    {
+      "url": "http://matrixpi.local:8088",
+      "description": "Beispiel"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Zugangsschlüssel; nur für schreibende MCP-Werkzeuge nötig"
+      }
+    }
+  },
+  "paths": {
+    "/api/state": {
+      "get": {
+        "summary": "Kompletter Zustand: Protokolle, Quellen, Ziele, Presets, Sperrliste",
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/status": {
+      "get": {
+        "summary": "Kompakter Zustand: routes {Ziel-id: Quelle}, presets {id: aktiv}",
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/choices": {
+      "get": {
+        "summary": "Auswahllisten: Ziele, Quellen, Presets (für Companion)",
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/events": {
+      "get": {
+        "summary": "Server-Sent Events 'status' bei jeder Änderung",
+        "responses": {
+          "200": {
+            "description": "text/event-stream"
+          }
+        }
+      }
+    },
+    "/api/history": {
+      "get": {
+        "summary": "Die letzten 50 Umschaltungen",
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/preview": {
+      "get": {
+        "summary": "Zustand der NDI-Vorschau: verfügbar, offene Empfänger, Grenzen",
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "source",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "optional: Zustand dieser Quelle"
+          }
+        ]
+      }
+    },
+    "/api/preview.jpg": {
+      "get": {
+        "summary": "Standbild einer NDI-Quelle (JPEG aus dem Proxy-Stream, wenige Sekunden zwischengespeichert)",
+        "parameters": [
+          {
+            "name": "source",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "NDI-Quelle: id oder Label"
+          },
+          {
+            "name": "w",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Breite in Pixel, 64–640 (Vorgabe 320)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "image/jpeg; Header X-Preview-Age (Sekunden), X-Preview-Size",
+            "content": {
+              "image/jpeg": {}
+            }
+          },
+          "404": {
+            "description": "Quelle offline oder unbekannt (JSON, error: offline | unknown_source)"
+          },
+          "415": {
+            "description": "NDI|HX-Quelle, Decoder fehlt (error: unsupported_codec)"
+          },
+          "501": {
+            "description": "NDI SDK nicht installiert (error: unavailable)"
+          },
+          "503": {
+            "description": "Quelle liefert kein Bild (error: no_signal)"
+          }
+        }
+      }
+    },
+    "/api/preview.mjpeg": {
+      "get": {
+        "summary": "Live-Vorschau einer NDI-Quelle als MJPEG-Stream (multipart/x-mixed-replace); höchstens eine Quelle gleichzeitig",
+        "parameters": [
+          {
+            "name": "source",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "NDI-Quelle: id oder Label"
+          },
+          {
+            "name": "w",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Breite in Pixel, 160–1280 (Vorgabe 640)"
+          },
+          {
+            "name": "fps",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Bilder je Sekunde, 1–25 (Vorgabe 12.5)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "multipart/x-mixed-replace; boundary=avmframe"
+          },
+          "404": {
+            "description": "offline"
+          },
+          "501": {
+            "description": "nicht verfügbar"
+          }
+        }
+      }
+    },
+    "/api/info": {
+      "get": {
+        "summary": "Version und Zugangsadressen",
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/route": {
+      "get": {
+        "summary": "Verbindung setzen (Quelle auf Ziel)",
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Ziel ist fest gesperrt (Sperrliste) oder Aufruf von fremder Webseite"
+          },
+          "404": {
+            "description": "Ziel / Preset unbekannt"
+          },
+          "423": {
+            "description": "Ziel ist gesperrt"
+          },
+          "502": {
+            "description": "Gerät hat das Schalten abgelehnt"
+          }
+        },
+        "parameters": [
+          {
+            "name": "dest",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Ziel: id, Label oder Name"
+          },
+          {
+            "name": "source",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Quelle: id oder Label. Leer, 'None' oder 'Aus' trennt die Verbindung."
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Verbindung setzen (Quelle auf Ziel)",
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Ziel ist fest gesperrt (Sperrliste) oder Aufruf von fremder Webseite"
+          },
+          "404": {
+            "description": "Ziel / Preset unbekannt"
+          },
+          "423": {
+            "description": "Ziel ist gesperrt"
+          },
+          "502": {
+            "description": "Gerät hat das Schalten abgelehnt"
+          }
+        },
+        "parameters": [
+          {
+            "name": "dest",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Ziel: id, Label oder Name"
+          },
+          {
+            "name": "source",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Quelle: id oder Label. Leer, 'None' oder 'Aus' trennt die Verbindung."
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/salvo": {
+      "post": {
+        "summary": "Mehrere Verbindungen auf einmal: {routes: [{destination, source}]}",
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Ziel ist fest gesperrt (Sperrliste) oder Aufruf von fremder Webseite"
+          },
+          "404": {
+            "description": "Ziel / Preset unbekannt"
+          },
+          "423": {
+            "description": "Ziel ist gesperrt"
+          },
+          "502": {
+            "description": "Gerät hat das Schalten abgelehnt"
+          }
+        },
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/undo": {
+      "get": {
+        "summary": "Rückgängig: ohne dest die letzte Aktion, mit dest die vorherige Quelle dieses Ziels",
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Ziel ist fest gesperrt (Sperrliste) oder Aufruf von fremder Webseite"
+          },
+          "404": {
+            "description": "Ziel / Preset unbekannt"
+          },
+          "423": {
+            "description": "Ziel ist gesperrt"
+          },
+          "502": {
+            "description": "Gerät hat das Schalten abgelehnt"
+          }
+        },
+        "parameters": [
+          {
+            "name": "dest",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Ziel: id, Label oder Name"
+          }
+        ]
+      },
+      "post": {
+        "summary": "Rückgängig: ohne dest die letzte Aktion, mit dest die vorherige Quelle dieses Ziels",
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Ziel ist fest gesperrt (Sperrliste) oder Aufruf von fremder Webseite"
+          },
+          "404": {
+            "description": "Ziel / Preset unbekannt"
+          },
+          "423": {
+            "description": "Ziel ist gesperrt"
+          },
+          "502": {
+            "description": "Gerät hat das Schalten abgelehnt"
+          }
+        },
+        "parameters": [
+          {
+            "name": "dest",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Ziel: id, Label oder Name"
+          }
+        ]
+      }
+    },
+    "/api/lock": {
+      "post": {
+        "summary": "Ziel sperren",
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Ziel ist fest gesperrt (Sperrliste) oder Aufruf von fremder Webseite"
+          },
+          "404": {
+            "description": "Ziel / Preset unbekannt"
+          },
+          "423": {
+            "description": "Ziel ist gesperrt"
+          },
+          "502": {
+            "description": "Gerät hat das Schalten abgelehnt"
+          }
+        },
+        "parameters": [
+          {
+            "name": "dest",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Ziel: id, Label oder Name"
+          }
+        ]
+      }
+    },
+    "/api/unlock": {
+      "post": {
+        "summary": "Ziel entsperren (nicht möglich bei fest geschützten Zielen)",
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Ziel ist fest gesperrt (Sperrliste) oder Aufruf von fremder Webseite"
+          },
+          "404": {
+            "description": "Ziel / Preset unbekannt"
+          },
+          "423": {
+            "description": "Ziel ist gesperrt"
+          },
+          "502": {
+            "description": "Gerät hat das Schalten abgelehnt"
+          }
+        },
+        "parameters": [
+          {
+            "name": "dest",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Ziel: id, Label oder Name"
+          }
+        ]
+      }
+    },
+    "/api/label": {
+      "post": {
+        "summary": "Label/Tags setzen: {protocol, source, label, tags} oder {destination, label, tags}; Gerätetyp einer NDI-Quelle: {protocol, source, type}",
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/refresh": {
+      "post": {
+        "summary": "Quellenlisten der Geräte neu aufbauen",
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/source/forget": {
+      "post": {
+        "summary": "Eine Quelle, die nicht mehr sendet, aus den Listen nehmen: {protocol, source}",
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/presets": {
+      "get": {
+        "summary": "Presets mit Verbindungen und 'active'",
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Preset anlegen: {name, routes: [{destination, source}]} oder {name, destinations: [...]} (Ist-Zustand)",
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Ziel ist fest gesperrt (Sperrliste) oder Aufruf von fremder Webseite"
+          },
+          "404": {
+            "description": "Ziel / Preset unbekannt"
+          },
+          "423": {
+            "description": "Ziel ist gesperrt"
+          },
+          "502": {
+            "description": "Gerät hat das Schalten abgelehnt"
+          }
+        },
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/presets/{id}": {
+      "put": {
+        "summary": "Preset ändern (name, routes oder destinations)",
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Ziel ist fest gesperrt (Sperrliste) oder Aufruf von fremder Webseite"
+          },
+          "404": {
+            "description": "Ziel / Preset unbekannt"
+          },
+          "423": {
+            "description": "Ziel ist gesperrt"
+          },
+          "502": {
+            "description": "Gerät hat das Schalten abgelehnt"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Preset löschen",
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/presets/{id}/recall": {
+      "get": {
+        "summary": "Preset abrufen",
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Ziel ist fest gesperrt (Sperrliste) oder Aufruf von fremder Webseite"
+          },
+          "404": {
+            "description": "Ziel / Preset unbekannt"
+          },
+          "423": {
+            "description": "Ziel ist gesperrt"
+          },
+          "502": {
+            "description": "Gerät hat das Schalten abgelehnt"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      },
+      "post": {
+        "summary": "Preset abrufen",
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Ziel ist fest gesperrt (Sperrliste) oder Aufruf von fremder Webseite"
+          },
+          "404": {
+            "description": "Ziel / Preset unbekannt"
+          },
+          "423": {
+            "description": "Ziel ist gesperrt"
+          },
+          "502": {
+            "description": "Gerät hat das Schalten abgelehnt"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/preset/recall": {
+      "get": {
+        "summary": "Preset abrufen",
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Ziel ist fest gesperrt (Sperrliste) oder Aufruf von fremder Webseite"
+          },
+          "404": {
+            "description": "Ziel / Preset unbekannt"
+          },
+          "423": {
+            "description": "Ziel ist gesperrt"
+          },
+          "502": {
+            "description": "Gerät hat das Schalten abgelehnt"
+          }
+        },
+        "parameters": [
+          {
+            "name": "preset",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "id oder Name des Presets"
+          }
+        ]
+      },
+      "post": {
+        "summary": "Preset abrufen",
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Ziel ist fest gesperrt (Sperrliste) oder Aufruf von fremder Webseite"
+          },
+          "404": {
+            "description": "Ziel / Preset unbekannt"
+          },
+          "423": {
+            "description": "Ziel ist gesperrt"
+          },
+          "502": {
+            "description": "Gerät hat das Schalten abgelehnt"
+          }
+        },
+        "parameters": [
+          {
+            "name": "preset",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "id oder Name des Presets"
+          }
+        ]
+      }
+    },
+    "/api/system": {
+      "get": {
+        "summary": "Systemauslastung: host (CPU, Kerne, Load, RAM, Temperatur, Unterspannung, Speicherplatz, Netz, Laufzeit), processes (matrix, companion), activity (NDI-Empfänger, Testbild, Clients, Geräte, Schaltvorgänge, Fehler), warnings, history. Mit summary=1 nur die Kurzform für die Anzeige",
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "summary",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "1 = nur cpu_percent, memory_percent, temperature_c, warnings"
+          }
+        ]
+      }
+    },
+    "/api/qr.svg": {
+      "get": {
+        "summary": "QR-Code zum Verbinden (SVG). Inhalt: eine vom Telefon erreichbare Adresse des Panels",
+        "parameters": [
+          {
+            "name": "target",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Art der Adresse: lan_ip (Vorgabe) | tailscale_name | tailscale_ip | mdns_name"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "image/svg+xml; Header X-QR-Url nennt die Adresse",
+            "content": {
+              "image/svg+xml": {}
+            }
+          }
+        }
+      }
+    },
+    "/api/testpattern": {
+      "get": {
+        "summary": "Zustand der eigenen NDI-Testbild-Quelle: enabled, available, running, source, connections, url",
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Testbild-Quelle ein-/ausschalten: {enabled: true|false} (bleibt über Neustarts erhalten)",
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/testpattern.jpg": {
+      "get": {
+        "summary": "Das Testbild als JPEG (1280×720), auch ohne NDI SDK",
+        "responses": {
+          "200": {
+            "description": "image/jpeg",
+            "content": {
+              "image/jpeg": {}
+            }
+          }
+        }
+      }
+    },
+    "/api/token": {
+      "get": {
+        "summary": "Zugangsschlüssel anzeigen – nur aus dem Panel (Header X-AVM-Panel: 1)",
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/token/rotate": {
+      "post": {
+        "summary": "Zugangsschlüssel erneuern – nur aus dem Panel (Header X-AVM-Panel: 1)",
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ha/config/config_entries/flow": {
+      "post": {
+        "summary": "„Gerät hinzufügen“ beginnen (Dialog der Karte; Ablauf wie Home-Assistant-Config-Flows)",
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ha/config/config_entries/flow/{id}": {
+      "get": {
+        "summary": "Aktuellen Schritt eines Vorgangs lesen",
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      },
+      "post": {
+        "summary": "Eingaben eines Schritts senden",
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Vorgang abbrechen",
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/ws": {
+      "get": {
+        "summary": "WebSocket für das Panel (Befehle mit id/type, siehe docs/SCHNITTSTELLE.md)",
+        "responses": {
+          "101": {
+            "description": "Switching Protocols"
+          }
+        }
+      }
+    },
+    "/mcp": {
+      "post": {
+        "summary": "MCP (Streamable HTTP, JSON-RPC 2.0, zustandslos). Werkzeuge: docs/api/mcp-tools.json",
+        "security": [
+          {},
+          {
+            "bearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "JSON-RPC-Antwort"
+          },
+          "202": {
+            "description": "Benachrichtigung angenommen"
+          },
+          "401": {
+            "description": "Zugangsschlüssel ungültig"
+          }
+        }
+      }
+    },
+    "/api/devices": {
+      "get": {
+        "summary": "Eingerichtete Geräte (ohne Zugangsdaten)",
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/devices/{id}": {
+      "patch": {
+        "summary": "Gerät umbenennen / Optionen",
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Gerät entfernen",
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    }
+  }
+}

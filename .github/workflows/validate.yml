@@ -1,21 +1,41 @@
 name: Validate
 
+# Only the Home Assistant integration is validated here. Documentation, workflow files and the stand-alone
+# server (server/**, tested locally) do not start a run - Actions minutes are scarce.
 on:
   push:
+    paths:
+      - "custom_components/**"
+      - "tests/**"
+      - "hacs.json"
+      - "requirements_test.txt"
+      - "pyproject.toml"
   pull_request:
+    paths:
+      - "custom_components/**"
+      - "tests/**"
+      - "hacs.json"
+      - "requirements_test.txt"
+      - "pyproject.toml"
   schedule:
     - cron: "0 4 * * 1"
   workflow_dispatch:
 
+concurrency:
+  group: validate-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   hassfest:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: home-assistant/actions/hassfest@master
 
   hacs:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: hacs/action@main
         with:
@@ -24,6 +44,7 @@ jobs:
 
   tests:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

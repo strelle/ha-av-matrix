@@ -1,0 +1,23 @@
+[Unit]
+Description=Strelle AV Matrix Server (NDI/Dante-Kreuzschiene, Panel + HTTP + MCP)
+Documentation=file://%h/av-matrix-server/README.md
+
+[Service]
+Type=simple
+WorkingDirectory=%h/av-matrix-server
+ExecStart=%h/av-matrix-server/.venv/bin/python -m avmatrix --host 0.0.0.0 --port 8088
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=20
+# Companion hat Vorrang: niedrigere Priorität und harte Obergrenzen für diesen Dienst
+Nice=5
+CPUWeight=50
+MemoryHigh=220M
+MemoryMax=320M
+NoNewPrivileges=yes
+Environment=PYTHONUNBUFFERED=1
+# viele kurzlebige Empfänger-Threads (NDI-Vorschau): Speicher-Arenen begrenzen, sonst wächst der Prozess
+Environment=MALLOC_ARENA_MAX=2
+
+[Install]
+WantedBy=default.target

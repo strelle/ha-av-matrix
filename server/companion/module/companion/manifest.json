@@ -1,0 +1,17 @@
+{
+  "$schema": "../node_modules/@companion-module/base/assets/manifest.schema.json",
+  "id": "strelle-avmatrix",
+  "name": "strelle-avmatrix",
+  "shortname": "avmatrix",
+  "description": "Strelle AV Matrix Server (NDI/Dante-Kreuzschiene): Verbindungen schalten, Presets abrufen, mit Rückmeldung",
+  "version": "0.0.0",
+  "license": "MIT",
+  "repository": "git+https://github.com/strelle/ha-av-matrix.git",
+  "bugs": "https://github.com/strelle/ha-av-matrix/issues",
+  "maintainers": [{ "name": "Strelle", "email": "strelle@users.noreply.github.com" }],
+  "runtime": { "type": "node22", "api": "nodejs-ipc", "apiVersion": "0.0.0", "entrypoint": "../main.js" },
+  "legacyIds": [],
+  "manufacturer": "Strelle",
+  "products": ["AV Matrix"],
+  "keywords": ["NDI", "Dante", "Matrix", "Router", "Kreuzschiene"]
+}

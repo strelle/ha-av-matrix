@@ -1,0 +1,35 @@
+[project]
+name = "av-matrix-server"
+version = "1.0.0"
+description = "Eigenständige NDI®-/Dante®-Kreuzschiene mit Browser-Panel, HTTP- und MCP-Schnittstelle"
+requires-python = ">=3.12"
+dependencies = ["aiohttp>=3.11,<4", "zeroconf>=0.140", "pillow>=11", "segno>=1.6"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 130
+target-version = "py312"
+extend-exclude = ["companion", "local"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+ignore = ["E501", "B904"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/conftest.py" = ["E402"]  # spiegelt vor dem Import die gemeinsamen Dateien
+# aus der Integration gespiegelt (scripts/sync-shared.sh), dort geprüft
+"avmatrix/drivers/*" = ["ALL"]
+"avmatrix/protocols/*" = ["ALL"]
+"avmatrix/models.py" = ["ALL"]
+"avmatrix/device_icons.py" = ["ALL"]
+"tests/dante_sim.py" = ["ALL"]
+"tests/fake_http.py" = ["ALL"]
+"tests/test_dante_protocol.py" = ["ALL"]
+"tests/test_device_icons.py" = ["ALL"]
+"tests/test_registry.py" = ["ALL"]
+"tests/test_magewell.py" = ["ALL"]
+"tests/test_birddog.py" = ["ALL"]

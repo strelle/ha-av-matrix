@@ -1,0 +1,40 @@
+# Laufzeit / Werkzeuge
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+node_modules/
+companion/module/pkg/
+*.tgz
+.DS_Store
+
+# Aus der Home-Assistant-Variante gespiegelt (scripts/sync-shared.sh) – eine Quelle, keine Kopie im Repo
+/avmatrix/models.py
+/avmatrix/device_icons.py
+/avmatrix/drivers/
+/avmatrix/protocols/
+/avmatrix/translations/
+/avmatrix/static/av-matrix-card.js
+/avmatrix/static/devices/
+/avmatrix/static/fonts/
+/avmatrix/SHARED_FROM
+/tests/dante_sim.py
+/tests/fake_http.py
+/tests/test_dante_protocol.py
+/tests/test_device_icons.py
+/tests/test_registry.py
+/tests/test_magewell.py
+/tests/test_birddog.py
+
+# Anlagenspezifisch – gehört nie ins öffentliche Repo
+/local/
+config.json
+state.json
+token
+*.companionconfig
+*.env
+!*.env.example
+# NDI SDK (Binärdateien und Lizenztexte kommen vom Hersteller, siehe deploy/install-ndi-sdk.sh)
+libndi*
+vendor-sdk/

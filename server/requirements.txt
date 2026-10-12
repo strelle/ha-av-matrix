@@ -1,0 +1,4 @@
+aiohttp>=3.11,<4
+zeroconf>=0.140
+pillow>=11
+segno>=1.6

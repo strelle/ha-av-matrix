@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark light">
+<meta name="theme-color" content="#0a0a0a">
+<title>Strelle AV Matrix</title>
+<link rel="icon" href="/static/brand/strelle-icon.svg" type="image/svg+xml">
+<link rel="preload" href="/static/fonts/AtkinsonHyperlegibleNext-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<header class="top">
+  <div class="status">
+    <span class="led" id="conn-led" title="Verbindung zum Server"></span><span class="mono sub" id="app-sub">verbinde …</span>
+    <button class="sys" id="sys-chip" data-own data-goto-system title="Systemauslastung anzeigen" hidden></button>
+  </div>
+  <div class="brand">
+    <!-- Original-Marken der Strelle GmbH, unverändert: Wortmarke je Grund, darunter (schmal) die Bildmarke -->
+    <picture class="logo wm" aria-hidden="true">
+      <img class="on-dark" src="/static/brand/wortmarke-hell.svg" alt="" width="338" height="51">
+      <img class="on-light" src="/static/brand/wortmarke-dunkel.svg" alt="" width="338" height="51">
+    </picture>
+    <img class="logo mark" src="/static/brand/strelle-icon.svg" alt="" width="32" height="32">
+    <h1 id="app-name">Strelle AV Matrix</h1>
+  </div>
+  <div class="top-right" data-own>
+  <div class="qrwrap">
+    <button class="btn sm ghost" id="qr-btn" aria-expanded="false" aria-controls="qr-pop" title="QR-Code: Kreuzschiene am Telefon öffnen">
+      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h3v3h-3zM20 17v3h-3M17 14h3"/></svg><span>Telefon</span></button>
+    <div class="qrpop" id="qr-pop" hidden></div>
+  </div>
+  <div class="seg" role="group" aria-label="Darstellung">
+    <button data-theme-set="auto" title="Darstellung folgt dem Gerät">Auto</button>
+    <button data-theme-set="dark" title="Dunkel (Regie)">Dunkel</button>
+    <button data-theme-set="daylight" title="Tageslicht">Tageslicht</button>
+  </div>
+  </div>
+  <nav class="tabs" role="tablist" aria-label="Bereiche">
+    <button role="tab" data-tab="matrix" aria-selected="true">Kreuzschiene</button>
+    <button role="tab" data-tab="presets">Presets</button>
+    <button role="tab" data-tab="devices">Geräte</button>
+    <button role="tab" data-tab="system">System</button>
+    <button role="tab" data-tab="llm">LLM-Verbindung</button>
+  </nav>
+</header>
+<main>
+  <section id="page-matrix" class="page" role="tabpanel">
+    <div class="presetbar" id="presetbar" hidden></div>
+    <av-matrix-card id="card"></av-matrix-card>
+  </section>
+  <section id="page-presets" class="page" role="tabpanel" hidden></section>
+  <section id="page-devices" class="page" role="tabpanel" hidden></section>
+  <section id="page-system" class="page" role="tabpanel" hidden data-own></section>
+  <section id="page-llm" class="page" role="tabpanel" hidden></section>
+  <p class="viewswitch" data-own><button class="btn sm ghost" data-view="mobile">Zur Mobilansicht</button></p>
+</main>
+<div id="mobile" data-own hidden></div>
+<dialog id="dlg" class="dlg"></dialog>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+<noscript><p style="padding:24px">Dieses Panel braucht JavaScript.</p></noscript>
+<script src="/static/av-matrix-card.js"></script>
+<script src="/static/card-preview.js"></script>
+<script src="/static/app.js"></script>
+<script src="/static/extras.js"></script>
+<script src="/static/mobile.js"></script>
+</body>
+</html>

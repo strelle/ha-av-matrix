@@ -15,6 +15,23 @@ Dante device on the network is a source, every RX channel a destination – foun
 
 > Deutsch: [siehe unten](#deutsch).
 
+## One router, several variants
+
+This repository is the home of **Strelle AV Matrix** – one crosspoint router for NDI® video and Dante® audio that
+can run in different places. All variants share the device drivers, the card and the look (Strelle Pult-UI).
+
+| Variant | Where | For |
+|---|---|---|
+| **Home Assistant** | [`custom_components/av_matrix`](custom_components/av_matrix) (installed through HACS) – this README | routing from dashboards, automations, HomeKit |
+| **Server** (stand-alone, Bitfocus Companion) | [`server/`](server/) – [server/README.md](server/README.md) | a small box at the desk: browser panel with live NDI preview, presets, HTTP API, Companion module with feedback, MCP for language models |
+
+The server's interface is specified independently of its implementation
+([server/docs/SCHNITTSTELLE.md](server/docs/SCHNITTSTELLE.md), OpenAPI and MCP tool schemas next to it), so
+another backend can serve the same panel, Companion pages and cards. Protocol notes that apply to every
+variant live in [docs/](docs/): [devices.md](docs/devices.md) (Magewell, BirdDog, Dante® ARC) and
+[ndi-preview.md](docs/ndi-preview.md) (receiving NDI at low bandwidth). Further variants get their own
+directory next to `server/`.
+
 ![Matrix view: destinations x sources with tally, presets and crosshair](docs/screenshots/matrix-desktop.png)
 
 <table><tr>

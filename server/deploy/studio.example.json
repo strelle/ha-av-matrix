@@ -1,0 +1,30 @@
+{
+  "name": "Strelle AV Matrix",
+  "port": 8088,
+  "addresses": {
+    "tailscale_name": "matrixpi.example.ts.net"
+  },
+  "scan_interval": 5,
+  "protected": [
+    {
+      "protocol": "dante",
+      "host": "192.0.2.31",
+      "device": "AVIOAES3*",
+      "channels": null,
+      "reason": "AES3-Adapter: Zuordnung zum Pult darf nicht verändert werden"
+    },
+    {
+      "protocol": "dante",
+      "host": "192.0.2.33",
+      "device": "PULT-WING",
+      "channels": [61, 62],
+      "reason": "Pult-Empfang 61/62 vom AES3-Adapter"
+    }
+  ],
+  "preview": {
+    "enabled": true,
+    "max_live": 1,
+    "max_parallel": 2
+  },
+  "devices": []
+}
