@@ -3,7 +3,7 @@
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions follow [SemVer](https://semver.org/).
 
-## [Unreleased]
+## [0.9.0] - 2026-10-12
 
 ### Added
 - **NDI® preview in the card.** Every source tile of the panel shows its picture (reserved 16:9, name, address
@@ -36,6 +36,12 @@ All notable changes to this project are documented here. The format follows
   README. Unchanged: domain `av_matrix`, entity ids, card type `custom:av-matrix-card`, services, repository -
   existing installations and dashboards keep working.
 - NDI sources that no rule recognises now show the neutral symbol instead of a computer (it is not guessed).
+
+### Commits
+
+- feat: NDI preview in the card, device type symbols for sources, product name Strelle AV Matrix (7022638)
+- chore(server): keep protocols open for a third type (no fixed NDI/Dante split) (0f9a624)
+- chore(server): add the stand-alone server variant (Strelle AV Matrix) (be1ba13)
 
 ## [0.8.0] - 2026-10-12
 
