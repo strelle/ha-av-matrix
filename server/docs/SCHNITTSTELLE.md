@@ -27,6 +27,14 @@ Schemata). Beide werden aus dem Code erzeugt (`scripts/export-spec.py`); ein Tes
   andere Oberflächen im Studionetz sie einbetten können.
 - Parameter schaltender Aufrufe stehen in der Query **oder** im JSON-Body; `GET` und `POST` sind gleichwertig.
 
+## Protokolle
+
+`protocols` im Schnappschuss ist ein Objekt mit einem Schlüssel je Protokoll (`ndi`, `dante`, künftig weitere wie
+`st2110`), jeweils mit `title`, `sources`, `destinations`. Oberflächen dürfen keine feste Zweiteilung annehmen:
+Reiter, Gruppen und Auswahllisten aus den vorhandenen Schlüsseln bilden, den Titel aus `title` nehmen. Quellen
+verbinden sich nur mit Zielen desselben Protokolls. Eine Bildvorschau gibt es nur für `ndi`; für alle anderen
+Protokolle zeigt eine Oberfläche neutral „keine Vorschau verfügbar“ bzw. gar keinen Bildbereich – nie „kein Signal“.
+
 ## Bezeichner
 
 | | Form | Beispiel |

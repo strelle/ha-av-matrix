@@ -222,11 +222,11 @@
     for (const [key, proto] of Object.entries((S.snap && S.snap.protocols) || {})) {
       const byDev = new Map();
       for (const d of proto.destinations) {
-        const g = d.group || (key === "ndi" ? "NDI®-Decoder" : d.device_name);
+        const g = d.group || `${proto.title || key}-Ziele`;
         if (!byDev.has(g)) byDev.set(g, []);
         byDev.get(g).push(d);
       }
-      for (const [g, dests] of byDev) groups.push({ key, title: key === "ndi" ? g : `Dante® · ${g}`, dests });
+      for (const [g, dests] of byDev) groups.push({ key, title: dests[0].group ? `${proto.title || key} · ${g}` : g, dests });
     }
     const srcOptions = (key, value) => {
       const list = protoOf(key).sources;
@@ -248,7 +248,7 @@
               const val = on ? chosen.get(d.id) : d.current_source;
               return `<div class="rrow ${on ? "" : "off"} ${d.protected ? "prot" : ""}" data-dest="${esc(d.id)}" data-proto="${esc(g.key)}" data-current="${esc(d.current_source ?? "")}">
                 <input type="checkbox" id="pr-${esc(d.id)}" ${on ? "checked" : ""} ${d.protected ? "disabled" : ""}>
-                <label for="pr-${esc(d.id)}" title="${esc(d.protected || d.original_name)}">${esc(g.key === "ndi" ? d.name : d.label || d.channel || d.name)}${d.protected ? " · fest gesperrt" : ""}</label>
+                <label for="pr-${esc(d.id)}" title="${esc(d.protected || d.original_name)}">${esc(d.group ? d.label || d.channel || d.name : d.name)}${d.protected ? " · fest gesperrt" : ""}</label>
                 <select aria-label="Quelle für ${esc(d.name)}" ${d.protected ? "disabled" : ""}>${srcOptions(g.key, val)}</select></div>`;
             }).join("")}</details>`;
         }).join("") || `<div class="empty">Noch keine Ziele vorhanden – zuerst Geräte einrichten.</div>`}

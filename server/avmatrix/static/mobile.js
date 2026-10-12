@@ -83,7 +83,7 @@
           <button class="btn" data-mlock ${d.protected ? "disabled" : ""}>${d.protected ? "Fest gesperrt" : d.locked ? "Entsperren" : "Sperren"}</button></div>
         ${d.protected ? `<p class="m-hint">${esc(d.protected)}</p>` : d.locked ? `<p class="m-hint">Dieses Ziel ist gesperrt – erst entsperren.</p>` : d.available === false ? `<p class="m-hint">Das Gerät ist offline.</p>` : ""}${body}`;
     }
-    return `${protos().length > 1 ? `<div class="seg m-proto" role="group" aria-label="Protokoll">${protos().map((k) => `<button data-mproto="${k}" aria-pressed="${k === M.proto}">${k === "ndi" ? "NDI® Video" : "Dante® Audio"}</button>`).join("")}</div>` : ""}
+    return `${protos().length > 1 ? `<div class="seg m-proto" role="group" aria-label="Protokoll">${protos().map((k) => `<button data-mproto="${esc(k)}" aria-pressed="${k === M.proto}">${esc(S.snap.protocols[k].title || k)}</button>`).join("")}</div>` : ""}
       <section><h2><span class="m-step">1</span>Ziel</h2><div class="m-dests">${destHtml || `<p class="m-hint">Noch keine Ziele eingerichtet.</p>`}</div></section>
       <section id="m-sources"><h2><span class="m-step">2</span>Quelle${d ? ` für ${esc(d.name)}` : ""}</h2>${srcHtml}</section>`;
   }

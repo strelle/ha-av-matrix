@@ -40,7 +40,8 @@ def _obj(properties: dict[str, Any], required: list[str] | None = None) -> dict[
     return {"type": "object", "properties": properties, "required": required or [], "additionalProperties": False}
 
 
-_PROTOCOL = {"type": "string", "enum": ["ndi", "dante"], "description": "Nur dieses Protokoll (ndi = Video, dante = Audio)."}
+#: bewusst kein festes enum: weitere Protokolle (z. B. ST 2110) kommen als eigener Schlüssel dazu
+_PROTOCOL = {"type": "string", "description": "Nur dieses Protokoll, z. B. ndi (Video) oder dante (Audio); die Schlüssel stehen in get_routing / list_destinations."}
 
 TOOLS: list[dict[str, Any]] = [
     {
