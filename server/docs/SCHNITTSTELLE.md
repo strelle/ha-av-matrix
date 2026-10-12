@@ -35,6 +35,11 @@ Reiter, Gruppen und Auswahllisten aus den vorhandenen Schlüsseln bilden, den Ti
 verbinden sich nur mit Zielen desselben Protokolls. Eine Bildvorschau gibt es nur für `ndi`; für alle anderen
 Protokolle zeigt eine Oberfläche neutral „keine Vorschau verfügbar“ bzw. gar keinen Bildbereich – nie „kein Signal“.
 
+Jedes Protokoll im Schnappschuss trägt außerdem `video` (trägt Bild), `preview` (es gibt eine Bildvorschau;
+derzeit nur `ndi`) und `grouped` (Quellen und Ziele gehören zu Geräten: `group` / `channel`). Auf oberster Ebene
+steht `preview: {configured, available, reason, still_url, stream_url, status_url}`. Für ein Protokoll mit
+`video: true` und `preview: false` zeigt eine Oberfläche in den Kacheln „Keine Vorschau verfügbar“.
+
 ## Bezeichner
 
 | | Form | Beispiel |
@@ -43,10 +48,15 @@ Protokolle zeigt eine Oberfläche neutral „keine Vorschau verfügbar“ bzw. g
 | Dante-Quelle | `<TX-Kanal>@<Gerät>` | `Mic 3@STAGEBOX-01` |
 | Ziel eines Einzelgeräts | `<Geräte-id>_<Ausgang>` | `magewell-a1b2c3_main` |
 | Dante-Ziel | `dante_<Gerät>:<RX-Nummer>` | `dante_STAGEBOX-01:2` |
+| ST-2110-Quelle | `<Eingang>@<Gerät>` | `SDI In 2@Studio 4x12G` |
+| ST-2110-Ziel | `nmos_<Gerät>:<Ausgang>` | `nmos_Studio 4x12G:SDI Out 2` |
+| ST-2110-Ton-Ziel (nur mit `audio_breakaway`) | `nmos_<Gerät>:<Ausgang>/audio` | Kanalname „… · nur Ton“ |
+| fremde ST-2110-Verbindung | `sender:<uuid>` / `ext:<uuid>` | von einem anderen Controller gesetzt; lässt sich per Undo wiederherstellen |
 | Preset | Kurzform des Namens | `schnitt-auf-regie` |
 
 Wo ein Ziel oder eine Quelle verlangt ist, gilt auch das Label oder der Name (Groß-/Kleinschreibung egal, muss
-eindeutig sein); für Dante-Ziele auch `<Gerät>:<RX-Nummer>`. „Keine Quelle“: leerer Wert, `null`, `None`, `Aus`.
+eindeutig sein); für Dante- und ST-2110-Ziele auch `<Gerät>:<RX-Nummer>` bzw. `<Gerät>:<Ausgang>` ohne Vorsatz.
+`<Gerät>` ist bei ST 2110 das NMOS-Label des Geräts (`:` und `@` werden daraus entfernt). „Keine Quelle“: leerer Wert, `null`, `None`, `Aus`.
 
 ## Zustand lesen
 
@@ -127,6 +137,7 @@ Kein Bild → JSON-Fehler, **nie ein altes oder Platzhalterbild**; der Zustand s
 | `unknown_source` | 404 | Quelle unbekannt |
 | `no_signal` | 503 | Quelle ist da, liefert binnen 2,5 s kein Bild |
 | `unavailable` | 501 | NDI SDK nicht installiert oder Vorschau abgeschaltet |
+| `no_preview` | 404 | Quelle eines Protokolls ohne Vorschau (ST 2110, Dante) – keine Störung |
 | `unsupported_codec` | 415 | NDI\|HX-Quelle (H.264/HEVC), der Decoder fehlt auf dem Server (`hx_decoder: false` in `/api/preview`) |
 
 Empfohlener Takt für Kacheln: alle 4–5 s je sichtbarer Quelle, höchstens zwei Abrufe gleichzeitig, nur solange
@@ -171,6 +182,47 @@ Converter, OBS, vMix, Loop, …) oder die Maschine wie ein Rechner heißt (`MAC�
 
 Von Hand: `POST /api/label` mit `{"protocol": "ndi", "source": "<id>", "type": "<Typ>"}`; `"auto"` oder `null`
 stellt die Automatik wieder her. Die Wahl wird gespeichert und hat Vorrang.
+
+## ST 2110 (NMOS)
+
+Protokollschlüssel `st2110`, ein Netzwerk-Eintrag `nmos` für alle Geräte. Gefunden werden sie per mDNS
+(`_nmos-node._tcp`), über eine IS-04-Registry (`_nmos-query._tcp` oder von Hand eingetragen) oder über von Hand
+eingetragene Adressen. Gesteuert wird über IS-04 (lesen) und IS-05 (schalten); der Server empfängt keine Medien.
+
+- **Eine Quelle ist ein Bündel** aus Bild, Ton und Zusatzdaten (ANC) eines Eingangs, ein Ziel das Bündel eines
+  Ausgangs. Ein Mehrkanalgerät erscheint mit so vielen Ein- und Ausgängen, wie es hat (`group` = Gerät,
+  `channel` = Ein-/Ausgang).
+- **Schalten** verbindet alle gemeinsamen Ebenen. Trennen: Quelle leer. Undo wie überall.
+- **Quelle**, zusätzliche Felder: `format` („1920x1080p50 · unkomprimiert“), `audio_format`, `essences`
+  (`["video", "audio", "data"]`), `compressed`, `media_type`, `grouped_by` (`bcp-002-01` | `labels`),
+  `device_type`, `preview: "none"`, `preview_reason`.
+- **Ziel**, zusätzliche Felder: `layers` (`{"video": Quelle|null, "audio": …, "data": …}`), `breakaway` (eine Ebene
+  folgt einer anderen Quelle), `partial` (das Bild ist verbunden, eine andere Ebene nicht), `format`, `detail`
+  (Klartext bei `source_lost`, z. B. „Der Sender ist ausgeschaltet“). `resolution` trägt die Bildgröße.
+- **Was nicht passt, wird abgelehnt, bevor etwas geschaltet wird** – 502 `route_failed` mit lesbarem Grund, z. B.
+  `passt nicht: Ziel kann Blackmagic IP10 nicht empfangen (nur unkomprimiert)`, `<Gerät> ist offline`,
+  `<Gerät> lehnt ab (400): …`. Hat die Quelle keinen Ton, wird das Bild geschaltet und der Ton am Ziel getrennt
+  (`partial`).
+- **Keine Vorschau:** `/api/preview.jpg` und `.mjpeg` antworten für eine ST-2110-Quelle 404 `no_preview`
+  (Header `X-Preview-State: no_preview`); das MCP-Werkzeug `get_preview_url` meldet `state: "no_preview"`.
+- **Optionen** des Eintrags (`PATCH /api/devices/nmos`): `static_hosts` (Adressen, auch `Adresse:Port`),
+  `registries` (`http://<adresse>:<port>`), `audio_breakaway` (je Ziel mit Ton ein zweites Ziel „… · nur Ton“; ab
+  Werk aus), `check_compat` (ab Werk an), `enable_senders` (ab Werk an), `scan_interval`.
+- **Geräte:** `GET /api/devices` liefert im Eintrag `nmos` je Gerät `name`, `host`, `online`, `manufacturer`,
+  `model`, `device_type` (`converter` | `presentation` | `multi` | `card` | `device`), `device_type_title`,
+  `icon_key` (`st2110_*`), `web_url`, `ptp` (`{locked, grandmaster, traceable}` oder `null`), `found_via`
+  (`mdns` | `registry` | `static`), `tx_count`, `rx_count`, `last_error`. `POST /api/devices/nmos/forget` mit
+  `{device}` nimmt ein nicht antwortendes Gerät aus der Liste (400, solange es antwortet).
+- **Prüfen ohne zu schalten:** `GET /api/nmos/check` → `{ok, time, configured, discovery: {mdns, mdns_error,
+  announced, registries}, registries, pending, devices: [{name, host, port, online, manufacturer, model,
+  device_type, icon_key, api, found_via, ptp, last_error, sources: [{name, essences, grouped_by_device}],
+  destinations: […], senders, receivers}], findings: [{level: "ok"|"hinweis"|"problem", text}], note}`.
+  Mit `?raw=1` die vollständigen Rohdaten als JSON-Datei (`Content-Disposition: attachment`).
+- **Systemanzeige:** `activity.devices` hat je NMOS-Gerät eine Zeile (mit `ptp`); Warnungen `ptp_unlocked` und
+  `ptp_split` (verschiedene Taktgeber).
+- Solange kein Gerät gefunden ist, fehlt `st2110` im Schnappschuss; der Eintrag kostet dann nichts.
+- Presets dürfen Verbindungen mehrerer Protokolle mischen; die Sperrliste gilt auch hier (Regeln über `host` oder
+  `device`; `channels` greift bei ST 2110 nicht).
 
 ## Quellen, die ihren Namen wechseln, und verschwundene Quellen
 
@@ -292,6 +344,8 @@ Streamable HTTP, JSON-RPC 2.0, zustandslos; Antwort `application/json` (kein Str
 `GET` → 405. Unterstützt: `initialize`, `ping`, `tools/list`, `tools/call`. Werkzeuge mit Schemata in
 [`api/mcp-tools.json`](api/mcp-tools.json):
 
+- `list_sources` / `list_destinations` geben für ST 2110 `format`, `essences`, `layers` usw. mit; der Parameter
+  `protocol` nimmt jeden Protokollschlüssel.
 - lesend, ohne Schlüssel: `list_devices`, `list_sources`, `list_destinations`, `get_routing`, `list_presets`,
   `get_preview_url`, `get_system_status`
 - schreibend, nur mit `Authorization: Bearer <Zugangsschlüssel>`: `set_route`, `recall_preset`, `save_preset`,

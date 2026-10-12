@@ -149,14 +149,16 @@ class AvMatrixInstance extends InstanceBase {
 		return hit ? hit.name : id
 	}
 	short(name) {
-		// "STUDIO-PC (Program)" → "Program"; "CH1@DA-22UC" bleibt
+		// "STUDIO-PC (Program)" → "Program"; "SDI In 2@Konverter" (ST 2110, Dante) → "SDI In 2"
 		const m = /\(([^)]+)\)\s*$/.exec(name)
-		return m ? m[1] : name
+		if (m) return m[1]
+		const at = name.lastIndexOf('@')
+		return at > 0 ? name.slice(0, at) : name
 	}
 
 	// ------------------------------------------------------------ Definitionen
 	defineAll() {
-		const tag = { ndi: 'NDI', dante: 'Dante' }
+		const tag = { ndi: 'NDI', dante: 'Dante', st2110: '2110' }
 		const destChoices = this.choices.destinations.map((d) => ({ id: d.id, label: `${tag[d.protocol] || d.protocol} · ${d.name}${d.protected ? ' (gesperrt)' : ''}` }))
 		const sourceChoices = [{ id: OFF, label: 'Aus (keine Quelle)' }, ...this.choices.sources.map((s) => ({ id: s.id, label: `${tag[s.protocol] || s.protocol} · ${s.name}${s.name !== s.id ? ` – ${s.id}` : ''}` }))]
 		const presetChoices = this.choices.presets.map((p) => ({ id: p.id, label: p.name }))
@@ -256,14 +258,16 @@ class AvMatrixInstance extends InstanceBase {
 		// Tasten-Vorlagen: je NDI-Decoder "Quelle auf Ziel", je Preset eine Taste
 		const presets = {}
 		const text = (t, size = 14) => ({ text: t, size, color: WHITE, bgcolor: DARK })
-		for (const d of this.choices.destinations.filter((x) => x.protocol === 'ndi' && !x.protected)) {
-			for (const s of [...this.choices.sources.filter((x) => x.protocol === 'ndi'), null]) {
+		// je Bildprotokoll (NDI, ST 2110): "Quelle auf Ziel" für jedes Ziel; ST 2110 farblich abgesetzt
+		const STYLE = { ndi: DARK, st2110: combineRgb(26, 36, 48) }
+		for (const d of this.choices.destinations.filter((x) => x.protocol in STYLE && !x.protected)) {
+			for (const s of [...this.choices.sources.filter((x) => x.protocol === d.protocol), null]) {
 				const sid = s ? s.id : OFF
 				presets[`route_${slug(d.id)}_${slug(sid)}`] = {
 					type: 'button',
-					category: `Ziel: ${d.name}`,
+					category: `${tag[d.protocol]} · Ziel: ${d.name}`,
 					name: `${s ? s.name : 'Aus'} auf ${d.name}`,
-					style: text(`${s ? this.short(s.name) : 'AUS'}\\n→ ${d.name}`),
+					style: { ...text(`${s ? this.short(s.name) : 'AUS'}\\n→ ${d.name}`), bgcolor: STYLE[d.protocol] },
 					steps: [{ down: [{ actionId: 'route', options: { dest: d.id, source: sid } }], up: [] }],
 					feedbacks: [{ feedbackId: 'route_active', options: { dest: d.id, source: sid }, style: { bgcolor: RED, color: BLACK } }],
 				}

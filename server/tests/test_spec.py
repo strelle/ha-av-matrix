@@ -32,6 +32,6 @@ def test_spec_covers_every_route_of_the_server():
 def test_panel_is_static_and_only_talks_to_the_interface():
     """Das Panel ist ein eigenständiges statisches Frontend: keine Vorlagen, nur /api, /ws und /static."""
     static = ROOT / "avmatrix" / "static"
-    for name in ("index.html", "app.js", "card-preview.js"):
+    for name in ("index.html", "app.js", "extras.js", "mobile.js"):
         text = (static / name).read_text(encoding="utf-8")
         assert "{{" not in text and "{%" not in text, name

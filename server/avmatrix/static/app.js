@@ -323,7 +323,7 @@
     setTimeout(() => hooks.tab.forEach((fn) => fn("devices-rendered")), 0);
     page.innerHTML = `
       <div class="panel"><div class="row"><div class="grow"><h2>Geräte</h2>
-        <p class="lead">NDI®-Decoder werden einzeln eingerichtet (Netzwerksuche oder von Hand). Das Dante®-Netzwerk findet alle Dante-Geräte von selbst.</p></div>
+        <p class="lead">NDI®-Decoder werden einzeln eingerichtet (Netzwerksuche oder von Hand). Dante®- und ST-2110-Geräte melden sich von selbst und erscheinen in ihrem Netzwerk-Block.</p></div>
         <button class="btn" data-refresh>Quellen neu einlesen</button><button class="btn primary" data-add>Gerät hinzufügen</button></div></div>
       ${devs.filter((d) => !d.network).map((d) => `<div class="panel dev">${art(d.icon_key)}
         <div><div class="name">${esc(d.name)} ${d.online ? `<span class="chip ok">online</span>` : d.auth_failed ? `<span class="chip err">Anmeldung abgelehnt</span>` : `<span class="chip err">offline</span>`}</div>
@@ -333,21 +333,75 @@
             ${!d.online && d.last_error ? `<span>${esc(d.last_error)}</span>` : ""}</div></div>
         <div class="row acts"><button class="btn sm" data-rename="${esc(d.id)}" data-name="${esc(d.name)}">Umbenennen</button>
           <button class="btn sm danger" data-remove="${esc(d.id)}" data-name="${esc(d.name)}">Entfernen</button></div></div>`).join("")}
-      ${devs.filter((d) => d.network).map((d) => `<div class="panel"><div class="row"><div class="grow"><h3>Dante®-Netzwerk</h3>
-          <span class="muted">${d.devices.length} Geräte, automatisch per mDNS gefunden${d.static_hosts.length ? ` · feste Adressen: ${esc(d.static_hosts.join(", "))}` : ""}</span></div>
-          <button class="btn sm" data-static="${esc(d.id)}" data-hosts="${esc(d.static_hosts.join(", "))}">Feste Adressen</button>
-          <button class="btn sm danger" data-remove="${esc(d.id)}" data-name="Dante®-Netzwerk">Entfernen</button></div>
-        <div class="subdevs">${d.devices.map((s) => `<div class="subdev"><span class="dot ${s.online ? "ok" : "err"}" title="${s.online ? "online" : "offline"}"></span>
-          <span><b>${esc(s.name)}</b>${s.protected ? ` <span class="chip cue" title="${esc(s.protected)}">fest gesperrt</span>` : ""}</span>
-          <span class="muted">${esc([s.manufacturer, s.model].filter(Boolean).join(" ") || "Dante-Gerät")} · ${s.tx_count} TX / ${s.rx_count} RX${s.sample_rate ? ` · ${s.sample_rate / 1000} kHz` : ""}</span>
-          <span class="mono">${esc(s.host)}</span></div>`).join("") || `<div class="subdev"><span></span><span class="muted">Noch keine Dante-Geräte gefunden.</span></div>`}</div></div>`).join("")}
+      ${devs.filter((d) => d.network).map(networkBlock).join("")}
       ${devs.length ? "" : `<div class="empty">Noch keine Geräte eingerichtet.</div>`}
       ${hasDante ? "" : `<div class="panel"><div class="row"><div class="grow"><h3>Dante®-Netzwerk</h3><span class="muted">Noch nicht eingerichtet.</span></div><button class="btn" data-add>Einrichten</button></div></div>`}
+      ${devs.some((d) => d.driver === "nmos") ? "" : `<div class="panel"><div class="row"><div class="grow"><h3>ST 2110 (NMOS)</h3><span class="muted">Nicht eingerichtet. Über „Gerät hinzufügen → Gerätetyp manuell wählen“ kommt das ST-2110-Netzwerk dazu.</span></div><button class="btn sm" data-nmos-check>ST 2110 prüfen</button></div></div>`}
       <div class="panel" id="pattern-panel"></div>
       <div class="panel"><h3>Feste Sperrliste</h3>
         <p class="lead" style="margin-top:6px">Diese Ziele verändert der Server über keine Schnittstelle – weder Panel noch HTTP, Companion oder MCP. Änderbar nur in der Konfigurationsdatei auf dem Server.</p>
         ${prot.map((r) => `<div class="row" style="padding:6px 0"><span class="chip cue">gesperrt</span><span>${esc(r.reason)}</span>
           <span class="mono muted">${esc([r.protocol, r.host, r.device, r.channels ? `Kanäle ${r.channels.join(", ")}` : "alle Kanäle"].filter(Boolean).join(" · "))}</span></div>`).join("") || `<span class="muted">Keine Einträge.</span>`}</div>`;
+  }
+
+  /* Ein Netzwerk-Eintrag (Dante®, ST 2110): alle Geräte eines Protokolls, die sich selbst melden. */
+  function networkBlock(d) {
+    const nmos = d.driver === "nmos";
+    const title = nmos ? "ST 2110 (NMOS)" : `${d.protocol_title || d.name}-Netzwerk`;
+    const opt = d.options || {};
+    const found = { mdns: "per mDNS gefunden", registry: "aus der Registry", static: "von Hand eingetragen", remembered: "zuletzt im Netz gesehen" };
+    const rows = d.devices.map((s) => {
+      const ptp = s.ptp ? (s.ptp.locked ? `<span class="chip ok" title="Taktgeber ${esc(s.ptp.grandmaster || "–")}">PTP eingerastet</span>` : `<span class="chip warnchip" title="Ohne gemeinsamen Takt gibt es kein stabiles Bild">PTP nicht eingerastet</span>`) : nmos ? `<span class="chip">kein PTP-Zustand</span>` : "";
+      const what = nmos
+        ? `${esc(s.device_type_title || "ST-2110-Gerät")} · ${esc([s.manufacturer, s.model].filter(Boolean).join(" ") || "–")} · ${s.tx_count} Eingänge / ${s.rx_count} Ausgänge · ${found[s.found_via] || ""}`
+        : `${esc([s.manufacturer, s.model].filter(Boolean).join(" ") || "Dante-Gerät")} · ${s.tx_count} TX / ${s.rx_count} RX${s.sample_rate ? ` · ${s.sample_rate / 1000} kHz` : ""}`;
+      return `<div class="subdev ${nmos ? "wide" : ""}">${nmos ? `<img src="/static/devices/${esc(s.icon_key)}.svg" alt="" width="54" height="36">` : `<span class="dot ${s.online ? "ok" : "err"}" title="${s.online ? "online" : "offline"}"></span>`}
+        <span><b>${esc(s.name)}</b> ${nmos ? (s.online ? `<span class="chip ok">online</span>` : `<span class="chip err">offline</span>`) : ""}${s.protected ? ` <span class="chip cue" title="${esc(s.protected)}">fest gesperrt</span>` : ""} ${ptp}
+          ${!s.online && s.last_error ? `<br><span class="muted">${esc(s.last_error)}</span>` : ""}</span>
+        <span class="muted">${what}</span>
+        <span class="mono">${s.web_url ? `<a href="${esc(s.web_url)}" target="_blank" rel="noopener">${esc(s.host)}</a>` : esc(s.host)}
+          ${s.online ? "" : `<button class="btn sm ghost" data-forget-dev="${esc(d.id)}" data-name="${esc(s.name)}">Vergessen</button>`}</span></div>`;
+    }).join("");
+    const empty = nmos
+      ? `<div class="subdev"><span></span><span class="muted">Noch keine ST-2110-Geräte im Netz. Sobald sich eines per NMOS meldet, erscheint es hier und in der Kreuzschiene von selbst.</span></div>`
+      : `<div class="subdev"><span></span><span class="muted">Noch keine Geräte gefunden.</span></div>`;
+    return `<div class="panel"><div class="row"><div class="grow"><h3>${esc(title)}</h3>
+        <span class="muted">${d.devices.length} Gerät${d.devices.length === 1 ? "" : "e"}${d.static_hosts.length ? ` · feste Adressen: ${esc(d.static_hosts.join(", "))}` : ""}${(d.registries || []).length ? ` · Registry: ${esc(d.registries.map((r) => r.url + (r.error ? " (antwortet nicht)" : "")).join(", "))}` : ""}</span></div>
+        ${nmos ? `<button class="btn sm primary" data-nmos-check>ST 2110 prüfen</button>
+          <button class="btn sm" data-netopt="${esc(d.id)}" data-key="audio_breakaway" data-val="${opt.audio_breakaway ? "false" : "true"}" role="switch" aria-checked="${!!opt.audio_breakaway}" title="Je Ziel mit Ton ein zweites Ziel „… · nur Ton“">Ton getrennt schalten: ${opt.audio_breakaway ? "ein" : "aus"}</button>
+          <button class="btn sm" data-registry="${esc(d.id)}" data-urls="${esc((opt.registries || []).join(", "))}">Registry</button>` : ""}
+        <button class="btn sm" data-static="${esc(d.id)}" data-hosts="${esc(d.static_hosts.join(", "))}" data-nmos="${nmos}">Feste Adressen</button>
+        <button class="btn sm danger" data-remove="${esc(d.id)}" data-name="${esc(title)}">Entfernen</button></div>
+      ${nmos ? `<p class="muted" style="margin:8px 0 0">Eine Quelle ist hier Bild, Ton und Zusatzdaten gemeinsam. Eine Bildvorschau gibt es für ST 2110 nicht.</p>` : ""}
+      <div class="subdevs">${rows || empty}</div></div>`;
+  }
+
+  /* „ST 2110 prüfen“: was melden die Geräte? Liest nur, schaltet nichts. */
+  async function nmosCheck() {
+    const dlg = $("#dlg");
+    dlg.onchange = null;
+    dlg.innerHTML = `<form method="dialog"><div class="dhead"><h2 class="grow">ST 2110 prüfen</h2><button type="button" class="btn sm ghost" data-close>Schließen</button></div>
+      <div class="dbody"><p class="muted" style="margin:0">Suche NMOS-Geräte im Netz (rund 6 Sekunden) … Es wird nichts geschaltet.</p></div></form>`;
+    dlg.onclick = (e) => { if (e.target.closest("[data-close]")) dlg.close(); };
+    dlg.showModal();
+    let r;
+    try { r = await api("GET", "/api/nmos/check"); }
+    catch (err) { $(".dbody", dlg).innerHTML = `<p class="errbox">Prüfung fehlgeschlagen: ${esc(err.message)}</p>`; return; }
+    const mark = { ok: `<span class="chip ok">in Ordnung</span>`, hinweis: `<span class="chip">Hinweis</span>`, problem: `<span class="chip warnchip">Auffällig</span>` };
+    const ess = { video: "Bild", audio: "Ton", data: "Zusatzdaten", mux: "Bild+Ton" };
+    const list = (items) => items.map((g) => `${esc(g.name)} <span class="muted">(${g.essences.map((k) => ess[k.replace(/\d+$/, "")] || k).join(" + ")})</span>`).join(", ") || "–";
+    $(".dbody", dlg).innerHTML = `
+      <div>${r.findings.map((f) => `<div class="row" style="padding:5px 0;align-items:flex-start">${mark[f.level] || ""}<span class="grow">${esc(f.text)}</span></div>`).join("")}</div>
+      <p class="muted" style="margin:0">Gefunden: ${r.devices.length} Gerät${r.devices.length === 1 ? "" : "e"} · per mDNS angekündigt: ${r.discovery.announced} · Registries: ${Object.keys(r.registries).length}${r.configured ? "" : " · ST 2110 ist in der Kreuzschiene noch nicht eingerichtet"}</p>
+      ${r.devices.map((d) => `<div class="panel" style="padding:12px"><div class="row"><img src="/static/devices/${esc(d.icon_key)}.svg" alt="" width="60" height="40">
+          <div class="grow"><b>${esc(d.name)}</b> ${d.online ? `<span class="chip ok">antwortet</span>` : `<span class="chip err">antwortet nicht</span>`}
+            ${d.ptp ? (d.ptp.locked ? `<span class="chip ok">PTP eingerastet</span>` : `<span class="chip warnchip">PTP nicht eingerastet</span>`) : ""}<br>
+            <span class="muted">${esc([d.manufacturer, d.model].filter(Boolean).join(" ") || "Hersteller/Modell nicht gemeldet")} · <span class="mono">${esc(d.host)}:${d.port}</span> · ${esc(d.api)}</span></div></div>
+        <dl class="kv"><dt>Eingänge (Quellen)</dt><dd>${list(d.sources)}</dd><dt>Ausgänge (Ziele)</dt><dd>${list(d.destinations)}</dd>
+          <dt>Ströme</dt><dd>${d.senders} Sender, ${d.receivers} Empfänger${d.ptp && d.ptp.grandmaster ? ` · Taktgeber <span class="mono">${esc(d.ptp.grandmaster)}</span>` : ""}</dd></dl></div>`).join("")}
+      <div class="row"><span class="muted grow">${esc(r.note)} Stand ${esc(new Date(r.time).toLocaleTimeString("de-AT"))}.</span>
+        <a class="btn sm" href="/api/nmos/check?raw=1" download>Rohdaten herunterladen</a><button type="button" class="btn sm" data-again>Erneut prüfen</button></div>`;
+    dlg.onclick = (e) => { if (e.target.closest("[data-close]")) dlg.close(); else if (e.target.closest("[data-again]")) nmosCheck(); };
   }
 
   function textDialog(title, label, value, okLabel, hint = "") {
@@ -523,8 +577,22 @@ Beschreibung der HTTP-Schnittstelle, falls du sie brauchst: ${first.replace(/mcp
         if (v !== null) { await api("PATCH", `/api/devices/${encodeURIComponent(d.rename)}`, { title: v.trim() }); loadDevices(); }
         return;
       }
+      if (d.nmosCheck !== undefined) return nmosCheck();
+      if (d.netopt) { await api("PATCH", `/api/devices/${encodeURIComponent(d.netopt)}`, { [d.key]: d.val === "true" }); toast("Gespeichert", "ok"); return setTimeout(loadDevices, 1200); }
+      if (d.registry) {
+        const v = await textDialog("NMOS-Registry", "Adresse(n), durch Komma getrennt", d.urls, "Speichern", "z. B. http://192.0.2.5:8010 – nur nötig, wenn die Geräte in einem anderen Netz/VLAN stehen und sich dort an einer Registry anmelden.");
+        if (v !== null) { await api("PATCH", `/api/devices/${encodeURIComponent(d.registry)}`, { registries: v }); setTimeout(loadDevices, 1200); }
+        return;
+      }
+      if (d.forgetDev) {
+        if (await confirmDialog("Gerät vergessen?", `„${d.name}“ antwortet nicht und wird aus der Liste genommen. Meldet es sich wieder, erscheint es von selbst.`, "Vergessen")) {
+          await api("POST", `/api/devices/${encodeURIComponent(d.forgetDev)}/forget`, { device: d.name }); toast("Gerät vergessen", "ok"); loadDevices();
+        }
+        return;
+      }
       if (d.static) {
-        const v = await textDialog("Feste Dante-Adressen", "IP-Adressen, durch Komma getrennt", d.hosts, "Speichern", "Nur nötig, wenn ein Dante-Gerät per mDNS nicht gefunden wird.");
+        const v = await textDialog(d.nmos === "true" ? "Feste ST-2110-Adressen" : "Feste Dante-Adressen", "Adressen, durch Komma getrennt", d.hosts, "Speichern",
+          d.nmos === "true" ? "Für Geräte, die sich nicht per mDNS melden (anderes VLAN). Auch als Adresse:Port; ohne Port werden 8090, 80, 3212 und 8080 probiert." : "Nur nötig, wenn ein Dante-Gerät per mDNS nicht gefunden wird.");
         if (v !== null) { await api("PATCH", `/api/devices/${encodeURIComponent(d.static)}`, { static_hosts: v }); setTimeout(loadDevices, 800); }
         return;
       }

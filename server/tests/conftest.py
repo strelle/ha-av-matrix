@@ -119,6 +119,7 @@ async def env(tmp_path, monkeypatch):
 
     config = JsonFile(tmp_path / "cfg" / "config.json")
     config.data = {
+        "nmos_auto": False,  # diese Anlage hat kein ST 2110 (eigene Tests unter tests/nmos)
         "protected": RULES,
         "devices": [
             {"id": "dante", "driver": "dante", "title": "Dante-Netzwerk", "data": {"host": "dante"}},

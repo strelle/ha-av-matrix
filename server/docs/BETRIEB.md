@@ -39,16 +39,45 @@ module package* einspielen; in der Verbindung die neue Version wählen.
 | `source_hold_seconds` | so lange bleiben verschwundene Quellen als „offline“ sichtbar (Vorgabe 120) |
 | `memory_restart_mb` | über diesem Speicherverbrauch startet sich der Dienst neu (Vorgabe 240, 0 = aus) |
 | `mdns` | `false` schaltet Suche und Ankündigung ab |
+| `mdns_interface` | `"all"` = an allen Schnittstellen suchen (z. B. zweites Netz für ST 2110); Vorgabe: nur die Adresse des Studionetzes |
+| `nmos_auto` | `false` = den Eintrag „ST 2110“ nicht von selbst anlegen |
 | `ignored_hosts` | gefundene Decoder, die nicht mehr angeboten werden |
 
 Nach Änderungen von Hand: `systemctl --user restart av-matrix`. Eine kaputte Datei überschreibt der Server
 nicht – er startet dann nicht und sagt im Protokoll, warum.
+
+## ST 2110 (NMOS)
+
+Der Eintrag „ST 2110“ wird beim ersten Start von selbst angelegt und bleibt unsichtbar, bis sich ein Gerät meldet.
+Am Liefertag: Gerät anstecken, im Panel **Geräte → ST 2110 prüfen** – der Dialog zeigt, welche Geräte antworten,
+welche Ein- und Ausgänge sie melden, ob PTP eingerastet ist und was auffällt. Dabei wird nichts geschaltet;
+„Rohdaten herunterladen“ liefert alles für die Fehlersuche. Im Terminal dasselbe mit
+`.venv/bin/python -m avmatrix.nmos_check` (mit `--probe` ein Probe-Schaltvorgang samt Zurückschalten).
+
+**Eigenes Netz / VLAN für ST 2110.** mDNS geht nicht über Netzgrenzen. Steht der Rechner nicht im selben Netz wie
+die Geräte, findet er sie nicht von selbst. Dann eines von beidem:
+
+1. Dem Rechner eine zweite Adresse im ST-2110-Netz geben (zweite Netzwerkkarte oder VLAN-Schnittstelle – braucht
+   Root auf dem Rechner). Der Server sucht per mDNS nur an der Adresse des Studionetzes; deshalb zusätzlich in
+   `config.json` unter dem Eintrag `nmos` die Geräte eintragen (Punkt 2) **oder** die Suche auf alle Schnittstellen
+   stellen: `"mdns_interface": "all"`.
+2. Ohne zweite Adresse, wenn das Netz geroutet wird (der Rechner erreicht die Geräte per IP): im Panel unter
+   **Geräte → ST 2110 → Feste Adressen** die Adressen der Geräte eintragen (`192.0.2.31` oder `192.0.2.31:8090`;
+   ohne Port werden 8090, 80, 3212 und 8080 probiert) oder unter **Registry** die Adresse einer NMOS-Registry
+   (`http://192.0.2.5:8010`). In der Datei: `devices` → Eintrag `nmos` → `options.static_hosts` /
+   `options.registries`.
+
+Schalten braucht nur HTTP zum Gerät (Steuerebene); die Medienströme laufen zwischen den Geräten und nie über
+diesen Rechner. Weitere Optionen des Eintrags: `audio_breakaway` (Ton getrennt schaltbar, ab Werk aus),
+`check_compat: false` (falls ein Gerät unbrauchbare Fähigkeiten meldet und zu Unrecht abgelehnt wird),
+`enable_senders: false` (ausgeschaltete Sender beim Schalten nicht einschalten).
 
 ## Wenn etwas nicht geht
 
 - **Panel nicht erreichbar:** Dienststatus, dann `curl http://127.0.0.1:8088/api/info` auf dem Rechner selbst.
 - **Gerät „offline“:** Seite *Geräte* zeigt die letzte Fehlermeldung; „Anmeldung abgelehnt“ → Gerät entfernen
   und mit den richtigen Zugangsdaten neu hinzufügen.
+- **ST-2110-Gerät fehlt oder schaltet nicht:** *Geräte → ST 2110 prüfen*; steht es in einem anderen Netz, siehe oben.
 - **Dante-Gerät fehlt:** es meldet sich nicht per mDNS → *Geräte → Feste Adressen*.
 - **Companion-Tasten ohne Rückmeldung:** in Companion unter *Connections* muss „avmatrix“ grün sein.
 - **Vorschau zeigt nichts:** `curl http://127.0.0.1:8088/api/preview` – `available: false` nennt den Grund.

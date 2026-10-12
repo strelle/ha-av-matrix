@@ -156,7 +156,7 @@ async def test_add_device_flow_like_home_assistant(client):
     assert flow["type"] == "menu" and flow["menu_options"] == ["scan", "manual"]
     url = f"/api/ha/config/config_entries/flow/{flow['flow_id']}"
     step = await (await client.post(url, json={"next_step_id": "manual"})).json()
-    assert step["step_id"] == "manual" and {o["value"] for o in step["data_schema"][0]["selector"]["select"]["options"]} == {"dante", "magewell", "birddog"}
+    assert step["step_id"] == "manual" and {o["value"] for o in step["data_schema"][0]["selector"]["select"]["options"]} == {"dante", "magewell", "birddog", "nmos"}
     step = await (await client.post(url, json={"driver": "dante"})).json()
     assert step == {"type": "abort", "flow_id": flow["flow_id"], "handler": "av_matrix", "reason": "already_configured"}
     assert (await client.get(url)).status == 400
@@ -184,7 +184,7 @@ async def test_mcp_reads_without_key(client):
     dests = (await tool(client, "list_destinations", {"protocol": "dante"}))["structuredContent"]["destinations"]
     assert next(d for d in dests if d["id"] == f"dante_{AVIO}:1")["protected"]
     sources = json.loads((await tool(client, "list_sources", {"live_only": True}))["content"][0]["text"])["sources"]
-    assert {"id": "CAM (A)", "name": "CAM (A)", "protocol": "ndi", "live": True, "host": "192.0.2.9"} in sources
+    assert {"id": "CAM (A)", "name": "CAM (A)", "protocol": "ndi", "live": True, "host": "192.0.2.9", "device_type": "camera"} in sources
     assert (await tool(client, "list_devices"))["isError"] is False
     assert (await tool(client, "list_presets"))["structuredContent"] == {"presets": []}
 

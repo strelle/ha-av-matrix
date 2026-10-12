@@ -46,7 +46,10 @@ class Discovery:
         on_change: Callable[[], None],
         dante: Callable[[], DanteNetwork | None],
         on_http_host: Callable[[str, str], Awaitable[None]] | None = None,
+        nmos: Callable[[], Any] | None = None,
     ) -> None:
+        self._nmos = nmos
+        self.nmos_browser: Any = None
         self._interface = interface
         self._ndi = ndi_registry
         self._on_change = on_change
@@ -59,6 +62,8 @@ class Discovery:
         #: Dante-Geräte, die mDNS gemeldet hat, bevor das Dante-Netzwerk eingerichtet war
         self.dante_seen: dict[str, tuple[int | None, dict[str, str]]] = {}
         self._http_seen: set[str] = set()
+        #: wird gerufen, wenn sich bei den NMOS-Geräten etwas tut (der Start weckt damit den Poller)
+        self.on_nmos_change: Callable[[], None] | None = None
 
     async def start(self) -> None:
         kwargs: dict[str, Any] = {"ip_version": IPVersion.V4Only}
@@ -67,10 +72,29 @@ class Discovery:
         self._aiozc = AsyncZeroconf(**kwargs)
         types = [NDI_SERVICE_TYPE, ARC_SERVICE_TYPE] + ([HTTP_SERVICE_TYPE] if self._on_http_host else [])
         self._browser = AsyncServiceBrowser(self._aiozc.zeroconf, types, handlers=[self._handler])
+        if self._nmos is not None:  # ST 2110: NMOS-Nodes und -Registries (_nmos-node._tcp, _nmos-query._tcp)
+            try:
+                from .protocols.nmos_mdns import NmosBrowser
+
+                self.nmos_browser = NmosBrowser(self._aiozc.zeroconf, self._nmos, self._on_nmos_change)
+                await self.nmos_browser.async_start()
+            except Exception as err:  # noqa: BLE001 - ohne NMOS-Suche läuft alles andere weiter
+                _LOGGER.warning("NMOS-Suche nicht verfügbar: %s", err)
+                self.nmos_browser = None
+
+    def _on_nmos_change(self) -> None:
+        self._on_change()
+        if self.on_nmos_change is not None:
+            self.on_nmos_change()
 
     async def stop(self) -> None:
         for task in list(self._tasks):
             task.cancel()
+        if self.nmos_browser is not None:
+            try:
+                await self.nmos_browser.async_stop()
+            except Exception:  # noqa: BLE001
+                pass
         if self._aiozc is None:
             return
         if self._browser is not None:

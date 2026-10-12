@@ -281,7 +281,7 @@ body.mobile-on > .top, body.mobile-on > main { display: none; }
 .m-src.dead { border-style: dashed; }
 .m-pv { position: relative; display: block; width: 100%; aspect-ratio: 16 / 9; border-radius: 8px; overflow: hidden; background: #050505; border: 1px solid var(--p-line-strong); margin-bottom: 4px; }
 .m-pv img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
-.m-pv .pvmsg { position: absolute; inset: 0; display: grid; place-items: center; font-family: var(--p-mono); font-size: 12px; font-weight: 700; letter-spacing: .08em;
+.m-pv .pvmsg { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 0 4px; font-family: var(--p-mono); font-size: 12px; font-weight: 700; letter-spacing: .08em;
   text-transform: uppercase; color: #a3a19c; background: repeating-linear-gradient(135deg, #131416 0 8px, #0b0b0c 8px 16px); }
 .m-pv.st-offline .pvmsg { color: #ff8a84; } .m-pv.st-no_signal .pvmsg, .m-pv.st-stale .pvmsg { color: #ffb020; }
 .m-live { position: absolute; right: 6px; top: 6px; width: 44px; height: 44px; display: grid; place-items: center; border-radius: 10px; color: #fff;
@@ -312,3 +312,12 @@ body.mobile-on .dlg.live { width: calc(100vw - 16px); }
 .m-srcmain .m-art { position: absolute; right: 8px; bottom: 6px; width: 36px; height: 24px; pointer-events: none; }
 .m-src:has(.m-art) .m-srcmain .mono { padding-right: 42px; }
 .m-pv .pvtag { position: absolute; left: 4px; top: 4px; padding: 1px 6px; border-radius: 5px; background: rgba(10,10,10,.8); color: #fff; font-family: var(--p-mono); font-size: 11px; }
+
+/* Warn-Kennzeichnung ohne Funktionsfarben (Rot = Program, Bernstein = Preset): Schraffur + Text */
+.chip.warnchip { color: var(--p-fg); border: 1.5px solid var(--p-fg); font-weight: 800; background: repeating-linear-gradient(135deg, var(--p-surface-3) 0 5px, var(--p-bg) 5px 10px); }
+.subdev.wide { grid-template-columns: 54px minmax(0, 1.4fr) minmax(0, 1.3fr) auto; }
+.subdev.wide img { width: 54px; height: 36px; }
+@media (max-width: 640px) { .subdev.wide { grid-template-columns: 44px minmax(0, 1fr); } .subdev.wide > :nth-child(n+3) { grid-column: 2; } }
+.m-pv.st-na .pvmsg { color: #8a8f96; background: #0b0b0c; text-transform: none; letter-spacing: 0; font-weight: 500; font-size: 12px; }
+.m-fmt { font-family: var(--p-mono); font-size: 12px; color: var(--p-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.m-src.pgm .m-fmt { color: var(--p-on-signal); }

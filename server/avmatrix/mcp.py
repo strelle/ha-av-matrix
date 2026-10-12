@@ -27,7 +27,7 @@ PROTOCOL_VERSIONS = ("2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05")
 DEFAULT_PROTOCOL = "2025-06-18"
 
 INSTRUCTIONS = (
-    "Strelle AV Matrix: Kreuzschiene des Studios (NDI®-Video und Dante®-Audio). Quellen werden auf Ziele geschaltet. "
+    "Strelle AV Matrix: Kreuzschiene des Studios (NDI®-Video, Dante®-Audio, ST 2110 über NMOS). Quellen werden auf Ziele desselben Protokolls geschaltet. "
     "Erst lesen (list_destinations, list_sources, get_routing), dann schalten. Schreibende Werkzeuge "
     "(set_route, recall_preset, save_preset, delete_preset, undo) brauchen den Zugangsschlüssel als Bearer-Token. "
     "Ziele mit 'protected' sind fest gesperrt und lassen sich über keine Schnittstelle verändern; Ziele mit "
@@ -41,7 +41,7 @@ def _obj(properties: dict[str, Any], required: list[str] | None = None) -> dict[
 
 
 #: bewusst kein festes enum: weitere Protokolle (z. B. ST 2110) kommen als eigener Schlüssel dazu
-_PROTOCOL = {"type": "string", "description": "Nur dieses Protokoll, z. B. ndi (Video) oder dante (Audio); die Schlüssel stehen in get_routing / list_destinations."}
+_PROTOCOL = {"type": "string", "description": "Nur dieses Protokoll: ndi (Video), dante (Audio), st2110 (ST 2110: Bild, Ton und Zusatzdaten gemeinsam); die vorhandenen Schlüssel stehen in get_routing."}
 
 TOOLS: list[dict[str, Any]] = [
     {
@@ -203,6 +203,8 @@ class McpServer:
                         "available": d["available"],
                         "locked": d["locked"],
                         "protected": d["protected"],
+                        # ST 2110: Format und was auf Bild/Ton/Zusatzdaten liegt
+                        **{k: d[k] for k in ("format", "layers", "breakaway", "partial", "detail") if d.get(k) not in (None, False)},
                     }
                 )
         return out
@@ -221,6 +223,9 @@ class McpServer:
                 item = {"id": s["id"], "name": s["name"], "protocol": key, "live": s["live"], "host": s["host"]}
                 if s.get("group"):
                     item["device"] = s["group"]
+                for extra in ("format", "audio_format", "essences", "compressed", "preview", "device_type"):
+                    if s.get(extra) is not None:
+                        item[extra] = s[extra]
                 out.append(item)
         return {"sources": out}
 
@@ -254,6 +259,11 @@ class McpServer:
         return data
 
     async def _tool_get_preview_url(self, args: dict[str, Any]) -> Any:
+        text = str(args.get("source") or "").strip()
+        for key, registry in self.hub.registries.items():
+            if key != "ndi" and registry.get(text) is not None:  # ST 2110 / Dante: klar sagen, dass es keine gibt
+                return {"source": text, "protocol": key, "state": "no_preview", "urls": [],
+                        "message": "Keine Vorschau verfügbar: Quellen dieses Protokolls werden vom Server nicht empfangen."}  # fmt: skip
         source = self.hub.resolve_source("ndi", args.get("source"))
         if source is None or self.preview is None:
             raise MatrixError("invalid", "NDI-Quelle angeben")

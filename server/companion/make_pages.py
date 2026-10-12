@@ -96,8 +96,40 @@ def page(name: str, grid: dict[tuple[int, int], dict], columns: int = 8, rows: i
 
 
 def short(name: str) -> str:
+    """``RECHNER (Kanal)`` → ``Kanal``; ``Eingang@Gerät`` (ST 2110, Dante) → ``Eingang``."""
     m = re.search(r"\(([^)]+)\)\s*$", name)
-    return m.group(1) if m else name
+    if m:
+        return m.group(1)
+    return name.rsplit("@", 1)[0] if "@" in name else name
+
+
+ST2110_BG = 0x1A2430  # ST-2110-Tasten leicht abgesetzt (Rückmeldung bleibt rot)
+
+
+def protocol_page(conn: str, choices: dict, protocol: str, title: str, columns: int = 8, rows: int = 4) -> dict | None:
+    """Eine Seite je weiterem Bildprotokoll (z. B. ST 2110): bis zu drei Ziele, je Ziel die ersten Quellen."""
+    dests = [d for d in choices["destinations"] if d["protocol"] == protocol and not d["protected"]][: rows - 1]
+    sources = [s for s in choices["sources"] if s["protocol"] == protocol][: columns - 2]
+    if not dests:
+        return None
+    grid: dict[tuple[int, int], dict] = {}
+    for row, dest in enumerate(dests):
+        name = dest["name"].replace(" · ", "\n")
+        grid[(row, 0)] = button(wrap(f"ZIEL {name}", 11), bg=PANEL, color=MUTED, size=17)
+        for col, src in enumerate([*sources, None], start=1):
+            sid = src["id"] if src else OFF
+            label = wrap(short(src["name"])) if src else "AUS"
+            grid[(row, col)] = button(
+                label, actions=[action(conn, "route", dest=dest["id"], source=sid)],
+                feedbacks=[feedback(conn, "route_active", dest=dest["id"], source=sid)], bg=ST2110_BG, size=fit(label.replace("\\n", "\n")),
+            )  # fmt: skip
+    grid[(rows - 1, 0)] = button(title.replace(" ", "\n", 1), bg=BLUE, color=WHITE, size=23.3)
+    grid[(rows - 1, 1)] = button("Bild+Ton\ngemeinsam", bg=DARK, color=MUTED, size=17)
+    grid[(rows - 1, 2)] = button("UNDO\nletzte\nAktion", actions=[action(conn, "undo_last")], bg=PANEL, color=AMBER, size=23.3)
+    grid[(rows - 1, columns - 3)] = {"type": "pageup"}
+    grid[(rows - 1, columns - 2)] = {"type": "pagenum"}
+    grid[(rows - 1, columns - 1)] = {"type": "pagedown"}
+    return page(f"Strelle AV Matrix – {title}", grid, columns, rows)
 
 
 def wrap(text: str, width: int = 9) -> str:
@@ -196,15 +228,19 @@ def main() -> None:
     conn = next((c for c in get(f"{args.companion}/api/connections") if c["label"] == args.label), None)
     if conn is None:
         raise SystemExit(f"Companion-Verbindung {args.label!r} nicht gefunden – zuerst das Modul 'Strelle: AV Matrix' hinzufügen.")
-    instance = {"moduleInstanceType": "connection", "moduleId": conn["moduleId"], "moduleVersionId": "1.0.0", "sortOrder": 99,
+    instance = {"moduleInstanceType": "connection", "moduleId": conn["moduleId"], "moduleVersionId": conn.get("moduleVersionId") or "1.1.0", "sortOrder": 99,
                 "label": conn["label"], "isFirstInit": False, "config": {"host": "127.0.0.1", "port": 8088}, "secrets": {},
                 "lastUpgradeIndex": -1, "enabled": True}  # fmt: skip
     build = "5.0.7+9763-stable-cec2f88e6f"
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
-    for name, data in (("av-matrix", matrix_page(conn["id"], choices)), ("av-matrix-zugang", access_page(info))):
+    pages = [("av-matrix", matrix_page(conn["id"], choices)), ("av-matrix-zugang", access_page(info))]
+    st2110 = protocol_page(conn["id"], choices, "st2110", "ST 2110")
+    if st2110 is not None:  # nur, wenn es ST-2110-Ziele gibt
+        pages.append(("av-matrix-st2110", st2110))
+    for name, data in pages:
         path = out / f"{name}.companionconfig"
-        path.write_text(json.dumps(export(data, conn["id"], instance if name == "av-matrix" else None, build), ensure_ascii=False, indent="\t"))
+        path.write_text(json.dumps(export(data, conn["id"], None if name == "av-matrix-zugang" else instance, build), ensure_ascii=False, indent="\t"))
         print(path, f"({sum(len(r) for r in data['controls'].values())} Tasten)")
 
 

@@ -41,7 +41,7 @@ def openapi(info: dict[str, Any]) -> dict[str, Any]:
             "title": "Strelle AV Matrix Server",
             "version": __version__,
             "description": (
-                "Kreuzschiene für NDI® (Video) und Dante® (Audio). Lesen und Schalten im Studionetz ohne Anmeldung; "
+                "Kreuzschiene für NDI® (Video), Dante® (Audio) und ST 2110 (über NMOS). Lesen und Schalten im Studionetz ohne Anmeldung; "
                 "Schalt-Adressen gehen als GET und POST (Parameter in der Query oder als JSON-Body). "
                 "Fest geschützte Ziele (Feld 'protected') lassen sich über keine Schnittstelle verändern. "
                 "MCP (Streamable HTTP) unter /mcp, schreibende MCP-Werkzeuge mit Bearer-Token."
@@ -136,8 +136,16 @@ def openapi(info: dict[str, Any]) -> dict[str, Any]:
                     "responses": {"200": {"description": "JSON-RPC-Antwort"}, "202": {"description": "Benachrichtigung angenommen"}, "401": {"description": "Zugangsschlüssel ungültig"}},
                 }
             },
+            "/api/devices/{id}/forget": {"post": _op("Nicht antwortendes Gerät eines Netzwerk-Eintrags (dante, nmos) aus der Liste nehmen: {device}", [pid], body=True)},
+            "/api/nmos/check": {
+                "get": _op(
+                    "ST 2110 prüfen: NMOS-Geräte suchen (mDNS, eingetragene Adressen/Registry) und lesen, was sie melden – schaltet nichts. "
+                    "Antwort: discovery, devices (Name, Typ, Adresse, PTP, Ein-/Ausgänge), findings [{level: ok|hinweis|problem, text}]",
+                    [_q("raw", "1 = vollständige Rohdaten als JSON-Datei zum Herunterladen")],
+                )
+            },
             "/api/devices": {"get": _op("Eingerichtete Geräte (ohne Zugangsdaten)")},
-            "/api/devices/{id}": {"patch": _op("Gerät umbenennen / Optionen", [pid], body=True), "delete": _op("Gerät entfernen", [pid])},
+            "/api/devices/{id}": {"patch": _op("Gerät umbenennen / Optionen (title, scan_interval; Netzwerk-Einträge: static_hosts, registries, audio_breakaway, check_compat, enable_senders)", [pid], body=True), "delete": _op("Gerät entfernen", [pid])},
         },
     }
 
@@ -147,7 +155,7 @@ def llms_txt(info: dict[str, Any]) -> str:
     mcp = "\n".join(f"- {u['label']}: {u['url']}mcp" for u in info.get("urls", []))
     return f"""# Strelle AV Matrix Server
 
-> Kreuzschiene des Studios für NDI® (Video) und Dante® (Audio): Quellen auf Ziele schalten, Presets abrufen,
+> Kreuzschiene des Studios für NDI® (Video), Dante® (Audio) und ST 2110 (NMOS): Quellen auf Ziele schalten, Presets abrufen,
 > Zustand lesen. Läuft nur im Studionetz und im Tailnet. Version {__version__}.
 
 ## Adressen
@@ -183,7 +191,9 @@ Ohne Anmeldung, Antworten als JSON. Schalt-Adressen gehen als GET und POST.
 - `GET /openapi.json` – vollständige Beschreibung (OpenAPI 3.1)
 
 Ziele und Quellen dürfen als `id`, Label oder Name angegeben werden (Groß-/Kleinschreibung egal).
-Dante-Quellen heißen `Kanal@Gerät`, Dante-Ziele `Gerät:RX-Nummer`.
+Dante-Quellen heißen `Kanal@Gerät`, Dante-Ziele `Gerät:RX-Nummer`. ST-2110-Quellen heißen `Eingang@Gerät`,
+ST-2110-Ziele `Gerät:Ausgang`; eine Quelle ist dort Bild, Ton und Zusatzdaten gemeinsam. Für ST 2110 gibt es
+keine Bildvorschau. `GET /api/nmos/check` zeigt, was die ST-2110-Geräte melden, ohne zu schalten.
 
 ## Regeln
 - Ziele mit `protected` sind fest gesperrt (serverseitige Sperrliste) und werden über keine Schnittstelle

@@ -78,17 +78,36 @@ async def run(args: argparse.Namespace) -> int:
                 poller = hub.pollers.get("dante")
                 return poller.driver if poller else None
 
+            def nmos() -> Any:
+                poller = hub.pollers.get("nmos")
+                return poller.driver if poller else None
+
+            def nmos_changed() -> None:  # eingestecktes Gerät soll nach Sekunden erscheinen, nicht erst beim nächsten Takt
+                poller = hub.pollers.get("nmos")
+                if poller is not None:
+                    poller.wake()
+
             async def http_host(host: str, mdns_name: str) -> None:
                 await flows.probe_host(host, mdns_name)
 
             discovery = Discovery(
-                interface=info().get("lan_ip"),
+                # Vorgabe: nur an der Adresse des Studionetzes suchen; "all" nimmt alle Schnittstellen (zweites Netz)
+                interface=None if cfg.get("mdns_interface") == "all" else (cfg.get("mdns_interface") or info().get("lan_ip")),
                 ndi_registry=hub.registries["ndi"],
                 on_change=hub.schedule_evaluate,
                 dante=dante,
                 on_http_host=http_host,
+                nmos=nmos,
             )
-            hub.on_poller = lambda poller: discovery.feed_dante(poller.driver) if poller.entry.id == "dante" else None
+            discovery.on_nmos_change = nmos_changed
+
+            def feed(poller: Any) -> None:
+                if poller.entry.id == "dante":
+                    discovery.feed_dante(poller.driver)
+                elif poller.entry.id == "nmos" and discovery.nmos_browser is not None:
+                    discovery.nmos_browser.feed(poller.driver)
+
+            hub.on_poller = feed
             await discovery.start()
         except Exception as err:  # noqa: BLE001 - ohne mDNS läuft alles andere weiter
             _LOGGER.warning("mDNS nicht verfügbar: %s", err)

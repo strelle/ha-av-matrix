@@ -26,5 +26,8 @@
     "max_live": 1,
     "max_parallel": 2
   },
-  "devices": []
+  "devices": [
+    {"id": "nmos", "driver": "nmos", "title": "ST 2110", "data": {"host": "nmos"},
+     "options": {"static_hosts": [], "registries": [], "audio_breakaway": false}}
+  ]
 }

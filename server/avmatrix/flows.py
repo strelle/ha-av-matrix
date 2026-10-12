@@ -91,6 +91,29 @@ def translations(language: str) -> dict[str, str]:
             out[prefix] = text
 
     walk(f"component.{HANDLER}.config", raw.get("config", {}))
+    # ST 2110 (NMOS): eigener Schritt, bis die Integration die Texte selbst mitbringt
+    base = f"component.{HANDLER}.config.step.network_nmos"
+    out.update(
+        {
+            f"{base}.title": "ST-2110-Netzwerk (NMOS)" if lang == "de" else "ST 2110 network (NMOS)",
+            f"{base}.description": (
+                "Alle ST-2110-Geräte, die sich über NMOS (IS-04/IS-05) steuern lassen, werden automatisch per mDNS gefunden "
+                "und erscheinen als Geräte: Eingänge werden Quellen, Ausgänge Ziele – jeweils Bild, Ton und Zusatzdaten gemeinsam. "
+                "Eine Bildvorschau gibt es für ST 2110 nicht."
+                if lang == "de"
+                else "All ST 2110 devices controllable through NMOS (IS-04/IS-05) are found automatically via mDNS. "
+                "Inputs become sources, outputs destinations – video, audio and ancillary data together. There is no picture preview."
+            ),
+            f"{base}.data.static_hosts": "Zusätzliche Geräteadressen (optional)" if lang == "de" else "Additional device addresses (optional)",
+            f"{base}.data_description.static_hosts": (
+                "Nur nötig, wenn sich Geräte nicht selbst melden (anderes VLAN): Adressen durch Komma getrennt, auch als Adresse:Port."
+                if lang == "de"
+                else "Only needed if devices do not announce themselves (other VLAN): addresses separated by commas, also address:port."
+            ),
+            f"{base}.data.registries": "NMOS-Registry (optional)" if lang == "de" else "NMOS registry (optional)",
+            f"{base}.data_description.registries": "z. B. http://192.0.2.5:8010" if lang == "de" else "e.g. http://192.0.2.5:8010",
+        }
+    )
     return out
 
 
@@ -254,7 +277,8 @@ class FlowManager:
     async def _step_manual(self, flow: Flow, user_input: dict[str, Any] | None) -> dict[str, Any]:
         if user_input is not None and user_input.get("driver") in DRIVERS:
             flow.driver_key = user_input["driver"]
-            flow.step = "network" if DRIVERS[flow.driver_key].NETWORK else "device"
+            cls = DRIVERS[flow.driver_key]
+            flow.step = ("network" if cls.KEY == "dante" else f"network_{cls.KEY}") if cls.NETWORK else "device"
             return await self._step(flow, None)
         options = [
             {
@@ -371,9 +395,18 @@ class FlowManager:
         if user_input is not None:
             hosts = parse_hosts(user_input.get(CONF_STATIC_HOSTS))
             title = f"{PROTOCOLS[cls.PROTOCOL].title.rstrip('®')}-Netzwerk"
-            self.hub.add_entry(cls.KEY, {"host": "dante"}, title=title, options={CONF_STATIC_HOSTS: hosts} if hosts else {})
+            options: dict[str, Any] = {CONF_STATIC_HOSTS: hosts} if hosts else {}
+            if parse_hosts(user_input.get("registries")):
+                options["registries"] = parse_hosts(user_input.get("registries"))
+            self.hub.add_entry(cls.KEY, {"host": cls.KEY}, title=title, options=options)
             return self._created(flow, title)
-        return self._form(flow, [{"name": CONF_STATIC_HOSTS, "required": False, "selector": {"text": {}}}])
+        schema = [{"name": CONF_STATIC_HOSTS, "required": False, "selector": {"text": {}}}]
+        if cls.KEY == "nmos":
+            schema.append({"name": "registries", "required": False, "selector": {"text": {}}})
+        return self._form(flow, schema)
+
+    async def _step_network_nmos(self, flow: Flow, user_input: dict[str, Any] | None) -> dict[str, Any]:
+        return await self._step_network(flow, user_input)
 
 
 def default_subnet(lan_ip: str | None) -> str:

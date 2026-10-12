@@ -18,7 +18,7 @@
     "set_route",
     "undo"
   ],
-  "instructions": "Strelle AV Matrix: Kreuzschiene des Studios (NDI®-Video und Dante®-Audio). Quellen werden auf Ziele geschaltet. Erst lesen (list_destinations, list_sources, get_routing), dann schalten. Schreibende Werkzeuge (set_route, recall_preset, save_preset, delete_preset, undo) brauchen den Zugangsschlüssel als Bearer-Token. Ziele mit 'protected' sind fest gesperrt und lassen sich über keine Schnittstelle verändern; Ziele mit 'locked' hat ein Mensch gesperrt – nicht umgehen, sondern nachfragen. Vor jedem Schalten kurz sagen, was sich ändert; nach einem Versehen undo benutzen.",
+  "instructions": "Strelle AV Matrix: Kreuzschiene des Studios (NDI®-Video, Dante®-Audio, ST 2110 über NMOS). Quellen werden auf Ziele desselben Protokolls geschaltet. Erst lesen (list_destinations, list_sources, get_routing), dann schalten. Schreibende Werkzeuge (set_route, recall_preset, save_preset, delete_preset, undo) brauchen den Zugangsschlüssel als Bearer-Token. Ziele mit 'protected' sind fest gesperrt und lassen sich über keine Schnittstelle verändern; Ziele mit 'locked' hat ein Mensch gesperrt – nicht umgehen, sondern nachfragen. Vor jedem Schalten kurz sagen, was sich ändert; nach einem Versehen undo benutzen.",
   "tools": [
     {
       "name": "list_devices",
@@ -43,7 +43,7 @@
         "properties": {
           "protocol": {
             "type": "string",
-            "description": "Nur dieses Protokoll, z. B. ndi (Video) oder dante (Audio); die Schlüssel stehen in get_routing / list_destinations."
+            "description": "Nur dieses Protokoll: ndi (Video), dante (Audio), st2110 (ST 2110: Bild, Ton und Zusatzdaten gemeinsam); die vorhandenen Schlüssel stehen in get_routing."
           },
           "live_only": {
             "type": "boolean",
@@ -66,7 +66,7 @@
         "properties": {
           "protocol": {
             "type": "string",
-            "description": "Nur dieses Protokoll, z. B. ndi (Video) oder dante (Audio); die Schlüssel stehen in get_routing / list_destinations."
+            "description": "Nur dieses Protokoll: ndi (Video), dante (Audio), st2110 (ST 2110: Bild, Ton und Zusatzdaten gemeinsam); die vorhandenen Schlüssel stehen in get_routing."
           }
         },
         "required": [],
@@ -85,7 +85,7 @@
         "properties": {
           "protocol": {
             "type": "string",
-            "description": "Nur dieses Protokoll, z. B. ndi (Video) oder dante (Audio); die Schlüssel stehen in get_routing / list_destinations."
+            "description": "Nur dieses Protokoll: ndi (Video), dante (Audio), st2110 (ST 2110: Bild, Ton und Zusatzdaten gemeinsam); die vorhandenen Schlüssel stehen in get_routing."
           }
         },
         "required": [],

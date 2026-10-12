@@ -50,6 +50,8 @@ REQUEST_TIMEOUT = 3.0
 #: Abstände der Nach-Abfragen nach dem Schalten (→ 1,5 / 3 / 5 / 8 / 12 s), bis das Gerät "verbunden" meldet.
 FOLLOWUP_DELAYS: tuple[float, ...] = (1.5, 1.5, 2.0, 3.0, 4.0)
 PROTOCOL_DANTE = "dante"
+#: Optionen von Netzwerk-Einträgen, die über die Schnittstelle sichtbar und änderbar sind
+NETWORK_OPTIONS = ("static_hosts", "registries", "audio_breakaway", "check_compat", "enable_senders", "hidden_devices", "scan_interval")
 
 
 class MatrixError(Exception):
@@ -365,6 +367,8 @@ class Hub:
         self.started = time.time()
         #: Haken für die mDNS-Suche: neu gestartete Treiber bekommen bereits gesehene Geräte
         self.on_poller: Callable[[Poller], None] | None = None
+        #: liefert den Abschnitt ``preview`` des Schnappschusses (setzt der Start, wenn es eine Vorschau gibt)
+        self.preview_info: Callable[[], dict[str, Any]] | None = None
 
     # ---------------------------------------------------------------- lifecycle
     def load(self) -> None:
@@ -388,6 +392,12 @@ class Hub:
                 continue
             if entry.driver in DRIVERS:
                 self.entries[entry.id] = entry
+        # ST 2110 „einstecken und es ist da“: der Netzwerk-Eintrag wird einmal von selbst angelegt. Ohne Geräte
+        # kostet er nichts und bleibt unsichtbar. Wer ihn entfernt, bekommt ihn nicht wieder (Merker).
+        if "nmos" in DRIVERS and "nmos" not in self.entries and cfg.get("nmos_auto", True) is True:
+            self.entries["nmos"] = Entry("nmos", "nmos", "ST 2110", {"host": "nmos"}, {})
+            cfg["nmos_auto"] = "angelegt"
+            self._save_config()
         self.locks = set(st.get("locks") or [])
         self.labels = st.get("labels") or {}
         self.destination_labels = st.get("destination_labels") or {}
@@ -417,6 +427,8 @@ class Hub:
             driver = self._driver_factory(entry)
         elif entry.driver == PROTOCOL_DANTE:
             driver = GuardedDanteNetwork(self.session, entry.data, options=entry.options)
+        elif DRIVERS[entry.driver].NETWORK:  # jeder Netzwerk-Treiber (z. B. NMOS / ST 2110) bekommt seine Optionen
+            driver = DRIVERS[entry.driver](self.session, entry.data, options=entry.options)  # type: ignore[call-arg]
         else:
             driver = DRIVERS[entry.driver](self.session, entry.data, timeout=REQUEST_TIMEOUT)  # type: ignore[arg-type]
         if isinstance(driver, GuardedDanteNetwork):
@@ -697,6 +709,42 @@ class Hub:
         self.notify()
         return entry
 
+    def forget_network_device(self, entry_id: str, name: str) -> None:
+        """Ein Gerät eines Netzwerk-Eintrags (Dante, ST 2110) aus der Liste nehmen, solange es nicht antwortet.
+
+        Meldet es sich wieder (mDNS, Registry), erscheint es von selbst erneut; eine von Hand eingetragene
+        Adresse wird mit entfernt.
+        """
+        poller = self.pollers.get(entry_id)
+        entry = self.entries.get(entry_id)
+        if poller is None or entry is None or not poller.driver.NETWORK:
+            raise MatrixError("unknown_device", f"Unbekanntes Netzwerk {entry_id!r}")
+        devices = getattr(poller.driver, "devices", {})
+        dev = devices.get(name)
+        if dev is None:
+            raise MatrixError("unknown_device", f"Unbekanntes Gerät {name!r}")
+        if dev.online:
+            raise MatrixError("invalid", f"{name} antwortet gerade – es lässt sich nicht vergessen.")
+        devices.pop(name, None)
+        if hasattr(poller.driver, "_reindex"):
+            poller.driver._reindex()
+        hosts = [h for h in entry.options.get(CONF_STATIC_HOSTS, []) if h.split(":")[0] != dev.host]
+        if hosts != list(entry.options.get(CONF_STATIC_HOSTS, [])):
+            entry.options[CONF_STATIC_HOSTS] = hosts
+            if hasattr(poller.driver, "static_hosts"):
+                poller.driver.static_hosts = hosts
+            self._save_config()
+        # seine Quellen ("Kanal@Gerät") gleich mit aus den Listen nehmen, sonst bleiben sie als "sendet nicht" stehen
+        registry = self.registries.get(poller.driver.PROTOCOL)
+        if registry is not None:
+            in_use = {self.current_source(d) for d in self.destinations.values() if d.protocol == poller.driver.PROTOCOL}
+            for source_id in [s for s in list(registry._records) if s.endswith(f"@{name}") and s not in in_use]:
+                registry._records.pop(source_id, None)
+                registry._discovered.pop(source_id, None)
+            self._save_state()
+        self.sync_destinations(poller)
+        self.notify()
+
     def refresh_sources(self) -> None:
         for registry in self.registries.values():
             registry.forget()
@@ -747,10 +795,21 @@ class Hub:
                             "rx_count": dev.rx_count,
                             "sample_rate": dev.sample_rate,
                             "mdns": dev.via_mdns,
+                            "found_via": "mdns"
+                            if dev.via_mdns
+                            else "registry"
+                            if getattr(dev, "via_registry", False)
+                            else "static"
+                            if any(str(h).split(":")[0] == dev.host for h in (entry.options.get("static_hosts") or []))
+                            else "remembered",
                             "last_error": dev.last_error,
-                            "icon_key": icon_key(
-                                protocol=cls.PROTOCOL, manufacturer=dev.manufacturer, model=dev.model, name=dev.name
-                            ),
+                            # der Treiber kennt den Gerätetyp ggf. besser (Aufbau des Geräts) als die Namensregeln
+                            "icon_key": getattr(dev, "icon_key", None)
+                            or icon_key(protocol=cls.PROTOCOL, manufacturer=dev.manufacturer, model=dev.model, name=dev.name),
+                            "device_type": getattr(dev, "device_type", None),
+                            "device_type_title": getattr(dev, "device_type_title", None),
+                            "web_url": getattr(dev, "web_url", None),
+                            "ptp": getattr(dev, "ptp", None),
                             "protected": rule.reason if rule else None,
                         }
                     )
@@ -759,8 +818,14 @@ class Hub:
                         **base,
                         "online": True,
                         "manufacturer": cls.MANUFACTURER,
-                        "model": "Dante®-Netzwerk",
+                        "model": getattr(cls, "NETWORK_MODEL", "Dante®-Netzwerk"),
+                        "protocol_title": PROTOCOLS[cls.PROTOCOL].title,
                         "static_hosts": list(entry.options.get(CONF_STATIC_HOSTS, [])),
+                        "options": {k: v for k, v in entry.options.items() if k in NETWORK_OPTIONS},
+                        "registries": [
+                            {"url": url, **{k: v for k, v in info.items() if k in ("mdns", "version", "error")}}
+                            for url, info in getattr(poller.driver, "registries", {}).items()
+                        ],
                         "devices": subs,
                     }
                 )
@@ -820,7 +885,7 @@ class Hub:
                 d.uid.casefold(),
                 d.name.casefold(),
                 self.dest_title(d).casefold(),
-                d.dest_id.casefold() if d.protocol == PROTOCOL_DANTE else d.device_name.casefold(),
+                d.dest_id.casefold() if d.poller.driver.NETWORK else d.device_name.casefold(),
             }
         ]
         if len(hits) == 1:
@@ -949,7 +1014,7 @@ class Hub:
                 self.history.setdefault(dest.uid, deque(maxlen=HISTORY_SIZE)).append(previous)
                 if action is not None:
                     action["changes"].append((dest.uid, previous, source))
-            if dest.protocol == PROTOCOL_DANTE:
+            if registry.grouped:  # Dante, ST 2110: zuletzt benutzte Quellen je Ziel merken
                 self.remember(dest, previous)
                 self.remember(dest, source)
             _LOGGER.info("Geschaltet: %s → %s (%s)", source, dest.name, origin)
@@ -1249,11 +1314,23 @@ class Hub:
             return (dev.manufacturer, dev.model) if dev else (None, None)
         return poller.info.manufacturer or poller.driver.MANUFACTURER, poller.info.model
 
+    def _sub_icon(self, poller: Poller, device_key: str | None) -> str | None:
+        """Symbol, das der Treiber für ein Untergerät selbst bestimmt (NMOS: aus dem Aufbau des Geräts)."""
+        if device_key is None or not hasattr(poller.driver, "device_for"):
+            return None
+        return getattr(poller.driver.device_for(device_key), "icon_key", None)
+
+    def _protocol_driver(self, protocol: str, attr: str) -> Any:
+        return next((p.driver for p in self.pollers.values() if p.driver.PROTOCOL == protocol and hasattr(p.driver, attr)), None)
+
     def _source_icon(self, protocol: str, source_id: str, group: str | None) -> str:
         manufacturer = model = None
         if group:
             for poller in self.pollers.values():
                 if poller.driver.PROTOCOL == protocol and hasattr(poller.driver, "device_for"):
+                    own = self._sub_icon(poller, group)
+                    if own:
+                        return own
                     manufacturer, model = self._device_model(poller, group)
                     break
         return icon_key(protocol=protocol, manufacturer=manufacturer, model=model, name=group or source_id, role="source")
@@ -1272,6 +1349,10 @@ class Hub:
             kind = lab.get("type") if lab.get("type") in SOURCE_TYPES else auto
             icon = SOURCE_TYPES[kind][1]
             extra = {"device_type": kind, "device_type_auto": auto, "device_type_manual": kind != auto or bool(lab.get("type")), "web_url": web.get("url")}
+        else:  # Treiber mit eigenen Angaben zur Quelle (ST 2110: Format, Ebenen, „keine Vorschau“)
+            driver = self._protocol_driver(protocol, "source_info")
+            if driver is not None:
+                extra = dict(driver.source_info(source_id))
         return {
             "id": source_id,
             **described,
@@ -1286,6 +1367,20 @@ class Hub:
             "address": address,
             "last_seen": _iso(last_seen),
             "first_seen": _iso(first_seen),
+        }
+
+    @staticmethod
+    def _layer_fields(dest: Destination, state: DestinationState | None) -> dict[str, Any]:
+        """ST 2110: ein Ziel ist ein Bündel aus Ebenen (Bild, Ton, Zusatzdaten) – was liegt auf welcher?"""
+        extra = state.status.extra if state and dest.available else {}
+        if "layers" not in extra:
+            return {}
+        return {
+            "layers": extra["layers"],
+            "breakaway": bool(extra.get("breakaway")),
+            "partial": bool(extra.get("partial")),
+            "format": extra.get("format"),
+            "detail": extra.get("detail"),
         }
 
     def _subscription(self, dest: Destination) -> dict[str, Any] | None:
@@ -1322,13 +1417,8 @@ class Hub:
             "driver": dest.poller.driver.KEY,
             "manufacturer": manufacturer,
             "model": model,
-            "icon_key": icon_key(
-                protocol=dest.protocol,
-                driver=dest.poller.driver.KEY,
-                manufacturer=manufacturer,
-                model=model,
-                name=dest.device_name,
-            ),
+            "icon_key": self._sub_icon(dest.poller, dest.device_key)
+            or icon_key(protocol=dest.protocol, driver=dest.poller.driver.KEY, manufacturer=manufacturer, model=model, name=dest.device_name),
             "host": dest.host,
             "web_url": dest.web_url,
             "protocol": dest.protocol,
@@ -1339,6 +1429,7 @@ class Hub:
             "status": self.connection_state(dest).value,
             "resolution": state.status.resolution if state and dest.available else None,
             "subscription": self._subscription(dest),
+            **self._layer_fields(dest, state),
             "available": dest.available,
             # fest geschützte Ziele erscheinen in der Karte als gesperrt (und lassen sich nicht entsperren)
             "locked": dest.uid in self.locks or rule is not None,
@@ -1371,12 +1462,18 @@ class Hub:
             if destinations or sources:
                 out["protocols"][key] = {
                     "title": proto.title,
+                    # trägt Bild? gibt es dafür eine Vorschau? (ST 2110: Bild ja, Vorschau nein)
+                    "video": bool(getattr(proto, "video", key == "ndi")),
+                    "preview": key == "ndi",
+                    "grouped": registry.grouped,
                     "sources": sorted(
                         sources.values(),
                         key=lambda s: registry.sort_key(s["id"]) if registry.grouped else natural_key(s["name"]),
                     ),
                     "destinations": destinations,
                 }
+        # Vorschau: die Karte holt die Bilder selbst (docs/SCHNITTSTELLE.md); hier steht nur, wo und ob überhaupt
+        out["preview"] = self.preview_info() if self.preview_info else {"configured": False}
         out["presets"] = self.presets_view()
         out["can_undo"] = any(a["changes"] for a in self.actions)
         out["protected"] = [r.as_dict() for r in self.guard.rules]

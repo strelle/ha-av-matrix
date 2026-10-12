@@ -296,17 +296,121 @@ async def api_device_update(request: web.Request) -> web.Response:
     kwargs: dict[str, Any] = {}
     if "title" in p:
         kwargs["title"] = p["title"]
+    from .flows import parse_hosts
+
     options: dict[str, Any] = {}
     if "static_hosts" in p:
-        from .flows import parse_hosts
-
         options["static_hosts"] = parse_hosts(p["static_hosts"])
     if "scan_interval" in p:
         options["scan_interval"] = max(2.0, min(60.0, float(p["scan_interval"])))
+    if "registries" in p:  # ST 2110: IS-04-Registry von Hand, z. B. http://192.0.2.5:8010
+        options["registries"] = parse_hosts(p["registries"]) if not isinstance(p["registries"], list) else [str(x) for x in p["registries"]]
+    for flag in ("audio_breakaway", "check_compat", "enable_senders"):
+        if flag in p:
+            options[flag] = p[flag] if isinstance(p[flag], bool) else str(p[flag]).lower() in ("1", "true", "on", "ein", "yes")
     if options:
         kwargs["options"] = options
     entry = await hub.update_entry(request.match_info["id"], **kwargs)
     return _json({"ok": True, "id": entry.id})
+
+
+async def api_device_forget(request: web.Request) -> web.Response:
+    """Ein nicht antwortendes Gerät eines Netzwerk-Eintrags (Dante, ST 2110) aus der Liste nehmen."""
+    p = await _params(request)
+    request.app[HUB].forget_network_device(request.match_info["id"], str(p.get("device") or ""))
+    return _json({"ok": True})
+
+
+# ----------------------------------------------------- ST 2110 prüfen (NMOS)
+def _nmos_findings(stats: dict[str, Any], diag: dict[str, Any]) -> list[dict[str, str]]:
+    """Was am Ergebnis auffällt – in Klartext, mit Einstufung (ok | hinweis | problem)."""
+    devices = diag.get("devices", [])
+    out: list[dict[str, str]] = []
+    if stats.get("mdns_error"):
+        out.append({"level": "problem", "text": f"mDNS-Suche nicht möglich: {stats['mdns_error']}"})
+    if not devices:
+        if stats.get("announced") or diag.get("pending"):
+            out.append({"level": "problem", "text": f"{stats.get('announced', 0)} Gerät(e) haben sich angekündigt, aber keines antwortet auf der "
+                        f"NMOS-Schnittstelle: {', '.join(diag.get('pending', [])) or '–'}"})  # fmt: skip
+        else:
+            out.append({"level": "hinweis", "text": "Keine NMOS-Geräte gefunden. Das ist richtig, solange noch kein ST-2110-Gerät am Netz hängt. "
+                        "Sonst: Gerät eingeschaltet und im selben Netz/VLAN wie dieser Rechner? Andernfalls die Adresse von Hand eintragen."})  # fmt: skip
+        return out
+    online = [d for d in devices if d["online"]]
+    for d in devices:
+        if not d["online"]:
+            out.append({"level": "problem", "text": f"{d['name']} ({d['host']}) antwortet nicht: {d.get('last_error') or 'keine Antwort'}"})
+    unlocked = [d["name"] for d in online if d.get("ptp") and d["ptp"].get("locked") is False]
+    if unlocked:
+        out.append({"level": "problem", "text": f"PTP nicht eingerastet: {', '.join(unlocked)} – ohne gemeinsamen Takt gibt es kein stabiles Bild."})
+    masters = sorted({d["ptp"]["grandmaster"] for d in online if d.get("ptp") and d["ptp"].get("grandmaster")})
+    if len(masters) > 1:
+        out.append({"level": "problem", "text": f"Die Geräte hören auf verschiedene PTP-Taktgeber ({', '.join(masters)})."})
+    no_ptp = [d["name"] for d in online if not d.get("ptp")]
+    if no_ptp:
+        out.append({"level": "hinweis", "text": f"Kein PTP-Zustand gemeldet: {', '.join(no_ptp)}"})
+    for d in online:
+        loose = [n for n, g in {**d.get("sources", {}), **d.get("destinations", {})}.items() if not g.get("hinted", True)]
+        if loose and (len(d.get("sources", {})) > 1 or len(d.get("destinations", {})) > 1):
+            out.append({"level": "hinweis", "text": f"{d['name']}: Bild/Ton/Zusatzdaten wurden über die Namen zusammengefasst (keine Gruppen-Angabe des Geräts) – "
+                        "bitte prüfen, ob die Ein-/Ausgänge stimmen."})  # fmt: skip
+        if not d.get("sources") and not d.get("destinations"):
+            out.append({"level": "problem", "text": f"{d['name']} meldet weder Sender noch Empfänger."})
+        off = [s["label"] for s in d.get("senders", []) if s.get("active") is False]
+        if off:
+            out.append({"level": "hinweis", "text": f"{d['name']}: {len(off)} Sender sind ausgeschaltet – sie werden beim Schalten eingeschaltet."})
+        if not d.get("is04_subscription_reliable", True):
+            out.append({"level": "hinweis", "text": f"{d['name']} zeigt den Schaltzustand in IS-04 nicht zuverlässig; er wird direkt über IS-05 gelesen."})
+    if not any(f["level"] == "problem" for f in out):
+        out.insert(0, {"level": "ok", "text": f"{len(online)} Gerät(e) antworten, nichts Auffälliges."})
+    return out
+
+
+async def api_nmos_check(request: web.Request) -> web.Response:
+    """„ST 2110 prüfen“: sucht NMOS-Geräte und liest, was sie melden. Schaltet nichts (wie ``nmos-check``)."""
+    import argparse
+
+    from . import nmos_check
+
+    hub = request.app[HUB]
+    entry = hub.entries.get("nmos")
+    options = entry.options if entry else {}
+    args = argparse.Namespace(
+        host=list(options.get("static_hosts", [])), registry=list(options.get("registries", [])), no_mdns=False,
+        interface=request.app[INFO]().get("lan_ip"), timeout=5.0, audio=False, force=False,
+    )  # fmt: skip
+    driver, stats = await nmos_check.discover(args, hub.session)
+    diag = json.loads(json.dumps(driver.diagnostics(), default=str))
+    driver.close()
+    stamp = datetime.now(UTC).isoformat(timespec="seconds")
+    if request.query.get("raw") in ("1", "true"):  # Rohdaten für die Fehlersuche, als Datei
+        body = json.dumps({"time": stamp, "discovery": stats, **diag}, ensure_ascii=False, indent=2)
+        return web.Response(text=body, content_type="application/json",
+                            headers={"Content-Disposition": f'attachment; filename="nmos-check-{stamp[:19].replace(":", "")}.json"', "Cache-Control": "no-store"})  # fmt: skip
+    devices = [
+        {
+            "name": d["name"], "host": d["host"], "port": d["port"], "online": d["online"], "manufacturer": d["manufacturer"],
+            "model": d["model"], "device_type": d["device_type"], "icon_key": d["icon_key"], "api": d["api"], "found_via":
+            "mdns" if d["mdns"] else "registry" if d["registry"] else "static", "ptp": d["ptp"], "last_error": d["last_error"],
+            "sources": [{"name": n, "essences": list(g.get("layers", {})), "grouped_by_device": bool(g.get("hinted"))} for n, g in d["sources"].items()],
+            "destinations": [{"name": n, "essences": list(g.get("layers", {})), "grouped_by_device": bool(g.get("hinted"))} for n, g in d["destinations"].items()],
+            "senders": len(d["senders"]), "receivers": len(d["receivers"]),
+        }
+        for d in diag["devices"]
+    ]  # fmt: skip
+    return _json(
+        {
+            "ok": True,
+            "time": stamp,
+            "configured": entry is not None,
+            "discovery": stats,
+            "registries": diag.get("registries", {}),
+            "pending": diag.get("pending", []),
+            "devices": devices,
+            "findings": _nmos_findings(stats, diag),
+            "note": "Es wurde nichts geschaltet oder verändert.",
+        }
+    )
 
 
 # token
@@ -330,10 +434,26 @@ def _preview_source(request: web.Request) -> str:
     text = request.query.get("source", "").strip()
     if not text:
         raise MatrixError("invalid", "source fehlt")
+    hub = request.app[HUB]
+    for key, registry in hub.registries.items():  # Quelle eines Protokolls ohne Vorschau (ST 2110, Dante)?
+        if key != "ndi" and registry.get(text) is not None:
+            raise NoPreview(key)
     source = request.app[HUB].resolve_source("ndi", text)
     if source is None:
         raise MatrixError("invalid", "source fehlt")
     return source
+
+
+class NoPreview(Exception):
+    """Die Quelle gehört zu einem Protokoll, für das es keine Vorschau gibt – kein Fehler, eine Eigenschaft."""
+
+
+def _no_preview(protocol: str) -> web.Response:
+    response = _json({"ok": False, "error": "no_preview", "protocol": protocol,
+                      "message": "Für dieses Protokoll gibt es keine Vorschau (das Signal wird nicht empfangen)."}, 404)  # fmt: skip
+    response.headers["X-Preview-State"] = "no_preview"
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 def _preview_error(state: str) -> web.Response:
@@ -354,14 +474,21 @@ async def api_preview_status(request: web.Request) -> web.Response:
     preview = request.app[PREVIEW]
     data = preview.status()
     if request.query.get("source"):
-        source = _preview_source(request)
-        data["source"] = {"id": source, "state": preview.source_state(source)[0]}
+        try:
+            source = _preview_source(request)
+            data["source"] = {"id": source, "state": preview.source_state(source)[0]}
+        except NoPreview as err:
+            data["source"] = {"id": request.query["source"], "state": "no_preview", "protocol": str(err)}
     return _json(data)
 
 
 async def api_preview_jpeg(request: web.Request) -> web.Response:
     """Standbild einer NDI-Quelle als JPEG (aus dem Proxy-Stream, wenige Sekunden zwischengespeichert)."""
-    thumb = await request.app[PREVIEW].thumbnail(_preview_source(request), _int(request, "w"))
+    try:
+        source = _preview_source(request)
+    except NoPreview as err:
+        return _no_preview(str(err))
+    thumb = await request.app[PREVIEW].thumbnail(source, _int(request, "w"))
     if thumb.state != STATE_OK or thumb.jpeg is None:
         return _preview_error(thumb.state)
     return web.Response(
@@ -381,7 +508,10 @@ async def api_preview_jpeg(request: web.Request) -> web.Response:
 async def api_preview_mjpeg(request: web.Request) -> web.StreamResponse:
     """Fortlaufende Live-Vorschau (MJPEG, ``multipart/x-mixed-replace``). Endet, wenn die Quelle wegfällt."""
     preview = request.app[PREVIEW]
-    source = _preview_source(request)
+    try:
+        source = _preview_source(request)
+    except NoPreview as err:
+        return _no_preview(str(err))
     fps = request.query.get("fps")
     try:
         rx, queue = preview.subscribe(source, _int(request, "w"), float(fps) if fps else None)
@@ -429,19 +559,35 @@ def system_status(app: web.Application, *, detail: bool = True) -> dict[str, Any
     counters = app[COUNTERS]
     pstat = preview.status() if preview._lib_tried else {"available": None, "live": [], "receivers_open": 0, "receivers_opened_total": 0, "limits": {}}
     devices = []
+    extra_warnings: list[dict[str, str]] = []
     for dev in hub.devices():
         poller = hub.pollers.get(dev["id"])
         age = round(now - poller.last_poll, 1) if poller and poller.last_poll else None
         if dev.get("network"):
             subs = dev.get("devices", [])
-            devices.append({"name": "Dante®-Netzwerk", "online": True, "detail": f"{sum(1 for s in subs if s['online'])} von {len(subs)} Geräten erreichbar",
+            if dev["driver"] == "nmos" and not subs:
+                continue  # ST 2110 ohne Geräte: unauffällig bleiben
+            devices.append({"name": dev.get("model") or dev["name"], "protocol": dev["protocol"], "online": True,
+                            "detail": f"{sum(1 for s in subs if s['online'])} von {len(subs)} Geräten erreichbar",
                             "last_poll_s": age, "error": next((s["last_error"] for s in subs if s.get("last_error")), None)})  # fmt: skip
+            if dev["driver"] == "nmos":  # je NMOS-Node eine Zeile: erreichbar? PTP eingerastet?
+                for sub in subs:
+                    ptp = sub.get("ptp")
+                    text = "PTP eingerastet" if ptp and ptp.get("locked") else "PTP NICHT eingerastet" if ptp else "kein PTP-Zustand"
+                    devices.append({"name": sub["name"], "protocol": dev["protocol"], "online": sub["online"], "ptp": ptp,
+                                    "detail": f"{sub.get('device_type_title') or 'ST-2110-Gerät'} · {text}", "last_poll_s": age, "error": sub.get("last_error")})  # fmt: skip
+                unlocked = [s["name"] for s in subs if s["online"] and s.get("ptp") and s["ptp"].get("locked") is False]
+                masters = sorted({s["ptp"]["grandmaster"] for s in subs if s["online"] and s.get("ptp") and s["ptp"].get("grandmaster")})
+                if unlocked:
+                    extra_warnings.append({"code": "ptp_unlocked", "text": f"PTP nicht eingerastet: {', '.join(unlocked)}"})
+                if len(masters) > 1:
+                    extra_warnings.append({"code": "ptp_split", "text": "ST-2110-Geräte hören auf verschiedene PTP-Taktgeber"})
         else:
             devices.append({"name": dev["name"], "online": dev["online"], "detail": dev.get("model"), "last_poll_s": age, "error": dev.get("last_error")})
     return {
         "ok": True,
         **monitor.current,
-        "warnings": monitor.warnings(),
+        "warnings": [*monitor.warnings(), *extra_warnings],
         "activity": {
             "ndi_receivers": [
                 {"source": rx["source"], "kind": "live", "bandwidth": "lowest", "fps": preview.live_fps, "seconds": rx["seconds"], "viewers": rx["clients"], "frames": rx["frames"]}
@@ -766,6 +912,20 @@ def create_app(
     app = web.Application(middlewares=[security], client_max_size=1 << 20)
     app[HUB], app[TOKEN], app[FLOWS], app[INFO], app[HOSTS] = hub, token, flows, info, hosts
     app[PREVIEW] = preview or PreviewManager(hub.registries["ndi"], {"enabled": False})
+    pv = app[PREVIEW]
+
+    def preview_info() -> dict[str, Any]:
+        tried = pv._lib_tried
+        return {
+            "configured": pv.enabled,
+            "available": None if not tried else pv.available,  # None = noch nicht benutzt (die Bibliothek lädt beim ersten Bild)
+            "reason": pv._lib_error if tried and not pv.available else None,
+            "still_url": "/api/preview.jpg",
+            "stream_url": "/api/preview.mjpeg",
+            "status_url": "/api/preview",
+        }
+
+    hub.preview_info = preview_info
     app[PATTERN] = pattern or TestPattern(hub.state, info, app[PREVIEW])
     app[SYSMON] = monitor or SystemMonitor()
     app[COUNTERS] = {"sse": 0, "mcp": 0, "mcp_at": 0.0}
@@ -809,6 +969,8 @@ def create_app(
     r.add_get("/api/devices", api_devices)
     r.add_patch("/api/devices/{id}", api_device_update)
     r.add_delete("/api/devices/{id}", api_device_delete)
+    r.add_post("/api/devices/{id}/forget", api_device_forget)
+    r.add_get("/api/nmos/check", api_nmos_check)
     r.add_get("/api/token", api_token)
     r.add_post("/api/token/rotate", api_token_rotate)
     r.add_post("/api/ha/config/config_entries/flow", flow_start)

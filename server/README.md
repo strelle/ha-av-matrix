@@ -1,6 +1,6 @@
 # Strelle AV Matrix – Server
 
-Die Kreuzschiene für **NDI®-Video und Dante®-Audio** als eigenständiger, sparsamer Dienst – ohne Home Assistant.
+Die Kreuzschiene für **NDI®-Video, Dante®-Audio und ST 2110 (NMOS)** als eigenständiger, sparsamer Dienst – ohne Home Assistant.
 Gedacht für einen kleinen Rechner am Regie- oder Schnittplatz (z. B. der Raspberry Pi, auf dem Bitfocus Companion
 läuft). Ein einzelner asyncio-Python-Prozess liefert:
 
@@ -116,6 +116,26 @@ Zielrechners. Lies die Lizenz, bevor du zustimmst: sie regelt u. a., auf welchen
 das SDK eingesetzt werden darf. NDI® ist eine eingetragene Marke der Vizrt NDI AB.
 
 Messwerte und was wir über den Empfang gelernt haben: [../docs/ndi-preview.md](../docs/ndi-preview.md).
+
+## ST 2110 (NMOS)
+
+Dritter Protokollbereich neben NDI® und Dante®: Geräte, die SMPTE ST 2110 sprechen und sich über NMOS
+(IS-04 / IS-05) steuern lassen – z. B. die Blackmagic-2110-IP-Konverter. Sie melden sich per mDNS und erscheinen
+von selbst als eigene Gruppe **ST 2110** in der Kreuzschiene, in der Mobilansicht, in Presets (auch gemischt mit
+NDI und Dante), im Companion-Modul und in der Systemanzeige.
+
+- Eine Quelle ist **Bild, Ton und Zusatzdaten gemeinsam**; ein Mehrkanalgerät zeigt je Ein-/Ausgang eine Kachel.
+- Was nicht zusammenpasst (z. B. ein komprimiertes Signal auf einen Empfänger, der es nicht kann), wird mit
+  lesbarem Grund abgelehnt, bevor etwas geschaltet wird.
+- **Keine Vorschau:** Der Server spricht nur die Steuerebene; die Kacheln sagen „Keine Vorschau verfügbar“.
+- **Geräte → ST 2110 prüfen** zeigt ohne Terminal, was die Geräte melden (Ein-/Ausgänge, PTP, Auffälligkeiten) –
+  es wird dabei nichts geschaltet; die Rohdaten gibt es als Download.
+- „Ton getrennt schalten“ (ab Werk aus), feste Adressen und eine Registry lassen sich im selben Block einstellen;
+  für ein eigenes ST-2110-Netz siehe [docs/BETRIEB.md](docs/BETRIEB.md).
+
+Der Treiber liegt vorerst in [`nmos/`](nmos/) (siehe dort, auch zum späteren Zusammenführen mit der
+Home-Assistant-Variante). Getestet ist er gegen eine Simulation der Geräte und die offiziellen AMWA-Schemata,
+**noch nicht gegen echte Geräte**.
 
 ## Symbole der Quellen
 
@@ -240,9 +260,10 @@ Tests laufen lokal; es gibt bewusst keinen GitHub-Workflow für den Server. Aufb
 | `avmatrix/testpattern.py` | eigene NDI-Testbild-Quelle und QR-Code |
 | `avmatrix/sysmon.py` | Systemauslastung aus `/proc` und `/sys` |
 | `avmatrix/source_types.py` | Gerätetyp einer NDI-Quelle (Regeltabelle) |
+| `avmatrix/nmos_check.py`, `nmos/` | ST 2110: Prüfwerkzeug und Treiber (NMOS) |
 | `avmatrix/flows.py` | „Gerät hinzufügen“ (Schritte wie in Home Assistant) |
 | `avmatrix/discovery.py` | mDNS: NDI-Quellen, Dante-Geräte, Decoder, eigene Ankündigung |
-| `avmatrix/static/` | das Panel: statisches Frontend (`app.js`, `extras.js`, `mobile.js`, `card-preview.js`), spricht nur über die Schnittstelle mit dem Backend |
+| `avmatrix/static/` | das Panel: statisches Frontend (`app.js`, `extras.js`, `mobile.js`; die Vorschau in den Kacheln macht die Karte selbst), spricht nur über die Schnittstelle mit dem Backend |
 
 Das Panel ist ein eigenständiges statisches Frontend (kein serverseitiges Rendern). Ein anderes Backend, das
 [docs/SCHNITTSTELLE.md](docs/SCHNITTSTELLE.md) erfüllt, kann es unverändert ausliefern.

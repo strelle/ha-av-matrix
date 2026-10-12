@@ -9,6 +9,7 @@ dependencies = ["aiohttp>=3.11,<4", "zeroconf>=0.140", "pillow>=11", "segno>=1.6
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
+pythonpath = ["tests/nmos"]  # die NMOS-Simulation (tests/nmos/nmos_sim)
 
 [tool.ruff]
 line-length = 130
@@ -18,6 +19,10 @@ extend-exclude = ["companion", "local"]
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]
 ignore = ["E501", "B904"]
+
+[tool.ruff.lint.isort]
+# auch ohne die gespiegelten Dateien (frischer Klon, CI) als eigenes Paket erkennen
+known-first-party = ["avmatrix", "nmos_sim"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/conftest.py" = ["E402"]  # spiegelt vor dem Import die gemeinsamen Dateien

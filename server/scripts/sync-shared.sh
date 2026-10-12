@@ -25,5 +25,10 @@ for f in dante_sim fake_http test_dante_protocol test_device_icons test_registry
       -e 's#parents\[1\] / "avmatrix/static/devices"#parents[1] / "avmatrix/static/devices"#' \
       "$ROOT/tests/$f.py" > "$SERVER/tests/$f.py"
 done
+# ST 2110 (NMOS): liegt vorerst nur im Server (nmos/), wird hier eingehängt – siehe nmos/README.md
+cp "$SERVER"/nmos/drivers/*.py "$DST/drivers/"
+cp "$SERVER"/nmos/protocols/*.py "$DST/protocols/"
+cp "$SERVER"/nmos/icons/*.svg "$DST/static/devices/"
+python3 "$SERVER/scripts/register-nmos.py" "$DST"
 python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['version'])" "$SRC/manifest.json" > "$DST/SHARED_FROM"
 [ "${1:-}" = "-q" ] || echo "gespiegelt aus der Integration v$(cat "$DST/SHARED_FROM")"

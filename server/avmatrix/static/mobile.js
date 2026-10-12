@@ -39,11 +39,15 @@
   const sel = () => dests().find((d) => d.id === M.dest) || null;
   const STATUS = { connected: "verbunden", connecting: "verbindet …", no_source: "keine Quelle", source_lost: "Quelle fehlt", offline: "offline", error: "Fehler" };
   const srcName = (id) => { if (!id) return "Aus"; const s = proto().sources.find((x) => x.id === id); return s ? s.name : id; };
-  const short = (name) => { const m = /\(([^)]+)\)\s*$/.exec(name); return m ? m[1] : name; };
+  // "RECHNER (Kanal)" → "Kanal"; "Eingang@Gerät" (Dante, ST 2110) → "Eingang"
+  const short = (name) => { const m = /\(([^)]+)\)\s*$/.exec(name); if (m) return m[1]; const at = name.lastIndexOf("@"); return at > 0 ? name.slice(0, at) : name; };
   const groupBy = (list, key) => { const m = new Map(); for (const x of list) { const g = x[key] || ""; if (!m.has(g)) m.set(g, []); m.get(g).push(x); } return [...m]; };
 
+  const hasPreview = () => proto().preview === true || (proto().preview === undefined && M.proto === "ndi");
   function pvBlock(s) {
-    if (M.proto !== "ndi" || pvAvailable === false) return "";
+    // Bildprotokoll ohne Vorschau (ST 2110): neutral sagen, nicht „kein Signal“
+    if (!hasPreview()) return proto().video ? `<span class="m-pv st-na"><span class="pvmsg">Keine Vorschau verfügbar</span></span>` : "";
+    if (pvAvailable === false) return "";
     const it = pv.get(s.id) || { state: "loading" };
     let state = s.live ? it.state : "offline";
     if (state === "ok" && Date.now() - it.at > (it.slow ? 60000 : 16000)) state = "stale";
@@ -57,7 +61,7 @@
     const grouped = list.some((x) => x.group);
     const destRow = (x) => `<button class="m-dest ${x.id === M.dest ? "sel" : ""} st-${x.status}" data-mdest="${esc(x.id)}" aria-pressed="${x.id === M.dest}">
         <i class="dot ${x.status === "connected" ? "ok" : x.status === "offline" || x.status === "error" ? "err" : x.status === "no_source" ? "" : "cue"}"></i>
-        <span class="m-dn"><b>${esc(grouped ? x.label || x.channel || x.name : x.name)}</b><span class="mono">${esc(x.current_source ? short(srcName(x.current_source)) : "keine Quelle")} · ${STATUS[x.status] || x.status}</span></span>
+        <span class="m-dn"><b>${esc(grouped ? x.label || x.channel || x.name : x.name)}</b><span class="mono">${esc(x.current_source ? short(srcName(x.current_source)) : "keine Quelle")} · ${STATUS[x.status] || x.status}${x.partial ? " · ohne Ton/Zusatzdaten" : ""}${x.breakaway ? " · Ton getrennt" : ""}${x.detail ? ` · ${esc(x.detail)}` : ""}</span></span>
         ${x.locked ? `<span class="chip">${x.protected ? "fest gesperrt" : "gesperrt"}</span>` : ""}</button>`;
     const destHtml = grouped
       ? groupBy(list, "group").map(([g, items]) => { const open = M.open.has("d:" + g) || items.some((x) => x.id === M.dest);
@@ -69,11 +73,12 @@
       const tile = (s) => { const id = s ? s.id : ""; const pgm = (d.current_source || "") === id; const pend = M.busy === d.id + "|" + id;
         return `<div class="m-src ${pgm ? "pgm" : ""} ${s && !s.live ? "dead" : ""} ${pend ? "pend" : ""}">
           <button class="m-srcmain" data-msrc="${esc(id)}" ${blocked ? "disabled" : ""} aria-pressed="${pgm}">
-            ${s ? pvBlock(s) : M.proto === "ndi" && pvAvailable !== false ? `<span class="m-pv st-off"><span class="pvmsg">Aus</span></span>` : ""}
+            ${s ? pvBlock(s) : hasPreview() && pvAvailable !== false ? `<span class="m-pv st-off"><span class="pvmsg">Aus</span></span>` : ""}
+            ${s && s.format ? `<span class="m-fmt">${esc(s.format)}</span>` : ""}
             <b>${esc(s ? (grouped ? s.channel || s.name : short(s.name)) : "Aus")}</b>
             ${s && s.icon_key && !grouped ? `<img class="m-art" src="/static/devices/${esc(s.icon_key)}.svg" alt="">` : ""}
             <span class="mono">${pgm ? "AUF SENDUNG" : pend ? "schaltet …" : s ? (s.live ? esc(s.label ? s.id : (s.group || (s.name.split(" (")[0]))) : "offline") : "keine Quelle"}</span></button>
-          ${s && s.live && M.proto === "ndi" && pvAvailable !== false ? `<button class="m-live" data-mlive="${esc(id)}" aria-label="Live-Vorschau ${esc(s.name)}"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 4h5v5M9 20H4v-5M20 4l-6.5 6.5M4 20l6.5-6.5"/></svg></button>` : ""}</div>`; };
+          ${s && s.live && hasPreview() && pvAvailable !== false ? `<button class="m-live" data-mlive="${esc(id)}" aria-label="Live-Vorschau ${esc(s.name)}"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 4h5v5M9 20H4v-5M20 4l-6.5 6.5M4 20l6.5-6.5"/></svg></button>` : ""}</div>`; };
       const srcs = proto().sources;
       const body = srcs.some((s) => s.group)
         ? `<div class="m-srcs">${tile(null)}</div>` + groupBy(srcs, "group").map(([g, items]) => { const open = M.open.has("s:" + g) || items.some((s) => s.id === d.current_source);
@@ -167,7 +172,7 @@
     M.html = ""; render();
   }
   setInterval(() => {
-    if (!M.on || M.view !== "route" || M.proto !== "ndi" || pvAvailable === false || document.visibilityState !== "visible" || $("#dlg").open) return;
+    if (!M.on || M.view !== "route" || !hasPreview() || pvAvailable === false || document.visibilityState !== "visible" || $("#dlg").open) return;
     const now = Date.now();
     let running = [...pv.values()].filter((x) => x.busy).length;
     for (const id of visible) {

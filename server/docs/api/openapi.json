@@ -3,7 +3,7 @@
   "info": {
     "title": "Strelle AV Matrix Server",
     "version": "1.0.0",
-    "description": "Kreuzschiene für NDI® (Video) und Dante® (Audio). Lesen und Schalten im Studionetz ohne Anmeldung; Schalt-Adressen gehen als GET und POST (Parameter in der Query oder als JSON-Body). Fest geschützte Ziele (Feld 'protected') lassen sich über keine Schnittstelle verändern. MCP (Streamable HTTP) unter /mcp, schreibende MCP-Werkzeuge mit Bearer-Token."
+    "description": "Kreuzschiene für NDI® (Video), Dante® (Audio) und ST 2110 (über NMOS). Lesen und Schalten im Studionetz ohne Anmeldung; Schalt-Adressen gehen als GET und POST (Parameter in der Query oder als JSON-Body). Fest geschützte Ziele (Feld 'protected') lassen sich über keine Schnittstelle verändern. MCP (Streamable HTTP) unter /mcp, schreibende MCP-Werkzeuge mit Bearer-Token."
   },
   "servers": [
     {
@@ -1197,6 +1197,71 @@
         }
       }
     },
+    "/api/devices/{id}/forget": {
+      "post": {
+        "summary": "Nicht antwortendes Gerät eines Netzwerk-Eintrags (dante, nmos) aus der Liste nehmen: {device}",
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/nmos/check": {
+      "get": {
+        "summary": "ST 2110 prüfen: NMOS-Geräte suchen (mDNS, eingetragene Adressen/Registry) und lesen, was sie melden – schaltet nichts. Antwort: discovery, devices (Name, Typ, Adresse, PTP, Ein-/Ausgänge), findings [{level: ok|hinweis|problem, text}]",
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "raw",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "1 = vollständige Rohdaten als JSON-Datei zum Herunterladen"
+          }
+        ]
+      }
+    },
     "/api/devices": {
       "get": {
         "summary": "Eingerichtete Geräte (ohne Zugangsdaten)",
@@ -1216,7 +1281,7 @@
     },
     "/api/devices/{id}": {
       "patch": {
-        "summary": "Gerät umbenennen / Optionen",
+        "summary": "Gerät umbenennen / Optionen (title, scan_interval; Netzwerk-Einträge: static_hosts, registries, audio_breakaway, check_compat, enable_senders)",
         "responses": {
           "200": {
             "description": "ok",
