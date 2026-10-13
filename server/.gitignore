@@ -28,7 +28,7 @@ companion/module/pkg/
 /tests/test_birddog.py
 
 # Anlagenspezifisch – gehört nie ins öffentliche Repo
-/local/
+/local
 config.json
 state.json
 token
