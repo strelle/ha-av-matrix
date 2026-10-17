@@ -1,0 +1,121 @@
+{
+ "id": "behringer/wing-madi",
+ "manufacturer": "Behringer",
+ "model": "WING-MADI (Expansion Card, Art.-Nr. 0606-ADO)",
+ "category": "converter",
+ "slot": "expansion",
+ "fits": [
+  "behringer/wing-rack",
+  "behringer/wing",
+  "behringer/wing-compact"
+ ],
+ "rack_units": 0,
+ "power": "über WING-Expansion-Slot",
+ "ports": [
+  {
+   "id": "sfp1",
+   "label": "SFP1",
+   "count": 1,
+   "direction": "bidi",
+   "connector": "SFP",
+   "signal": "MADI",
+   "formats": "AES10, 64 Kanäle 24 bit @ 48 kHz",
+   "notes": "Mitgeliefert: 1310-nm-MADI-SFP mit Duplex-LC, bis 2 km über 62,5/125-µm-Multimode; Singlemode-SFP für größere Distanzen"
+  },
+  {
+   "id": "sfp2",
+   "label": "SFP2",
+   "count": 1,
+   "direction": "bidi",
+   "connector": "SFP",
+   "signal": "MADI",
+   "formats": "wie SFP1",
+   "notes": "Redundanzpfad zu SFP1 (Fiber-zu-Fiber)"
+  },
+  {
+   "id": "coax",
+   "label": "MADI Coax",
+   "count": 1,
+   "direction": "bidi",
+   "connector": "BNC",
+   "signal": "MADI",
+   "formats": "75 Ohm, bis 100 m",
+   "notes": "Alternativer Redundanzpfad zu SFP1"
+  },
+  {
+   "id": "slot_bus",
+   "label": "WING Expansion-Slot-Anschluss",
+   "count": 1,
+   "direction": "bidi",
+   "connector": "card-edge",
+   "signal": "expansion",
+   "formats": "64x64 Kanäle @ 48 kHz",
+   "notes": "Source-Gruppe 'Exp Card' (WING-MADI)"
+  }
+ ],
+ "logic": [
+  {
+   "type": "converter",
+   "from": [
+    "slot_bus"
+   ],
+   "to": [
+    "sfp1",
+    "sfp2",
+    "coax"
+   ],
+   "notes": "64 Kanäle WING -> MADI"
+  },
+  {
+   "type": "converter",
+   "from": [
+    "sfp1",
+    "sfp2",
+    "coax"
+   ],
+   "to": [
+    "slot_bus"
+   ],
+   "notes": "64 MADI -> WING; Redundanz SFP1+SFP2 oder SFP1+BNC"
+  }
+ ],
+ "control": [
+  {
+   "protocol": "WING (Konsole)",
+   "notes": "Routing über Source-/Output-Gruppe Exp Card"
+  }
+ ],
+ "sources": [
+  {
+   "url": "https://www.behringer.com/en/products/0606-ADO",
+   "what": "Produktseite: 'WING Expansion Card for 64x64-Channel MADI over LC Fiber Optic or BNC Coaxial Connections'; 2 SFP-Cages + BNC, 1310-nm-SFP mit Duplex-LC inkl., 2 km MM, 100 m Coax, Redundanz SFP1/SFP2 oder SFP1/BNC, 64 ch 24 bit @ 48 kHz"
+  },
+  {
+   "url": "https://cdn-media.empowertribe.com/25951c6f808c0a79abc407c07d5639d1/User-Manual_WING-series_2025-10-20.pdf",
+   "what": "User Manual S. 12 (MADI-Karten im Expansion-Slot), S. 39 Source-Gruppe 'Exp Card: WING-LIVE, WING-DANTE, WING-MADI'"
+  },
+  {
+   "url": "https://www.behringer.com/en/wing/wing-rack",
+   "what": "Produktseite WING RACK: Expansion Slot 'e.g. Dante, WSG, MADI', WING LIVE vorinstalliert, interne AoIP-Module AoIP-Dante/AoIP-WSG"
+  },
+  {
+   "url": "https://www.behringer.com/en/wing/wing-black",
+   "what": "Produktseite WING: gleiche Aussagen zu Expansion Slot und internen AoIP-Modulen"
+  },
+  {
+   "url": "https://www.behringer.com/en/wing/wing-compact",
+   "what": "Produktseite WING COMPACT: gleiche Aussagen zu Expansion Slot und internen AoIP-Modulen"
+  }
+ ],
+ "unverified": [
+  "96 kHz nicht unterstützt (nur 48 kHz belegt); Kanalzahl 56/64-Modus und 44,1 kHz nicht belegt",
+  "BNC: Anzahl/Richtung (getrennte In/Out-BNCs oder eine Buchse) nicht belegt – Produktseite spricht nur von 'coaxial BNC'",
+  "Mindest-Firmware, Tech-Specs-Tabelle und Quick Start Guide auf der Produktseite nicht abrufbar",
+  "Schließt WING-LIVE und WING-DANTE aus (nur ein Expansion-Slot)",
+  "AES50/MADI-Bridge: keine Behringer-Herstellerquelle für ein WING-Modul gefunden (AES50 ist am WING ohnehin 3x onboard)",
+  "Produktseite nennt keine Modellkompatibilität explizit; RACK/COMPACT/WING aus Manual ('All WING models' Slot) und Modellseiten ('Dante, WSG, MADI') abgeleitet"
+ ],
+ "format": "avdp/0.1",
+ "status": "draft",
+ "kind": "module"
+}

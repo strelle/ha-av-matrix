@@ -1,0 +1,108 @@
+{
+ "id": "behringer/aoip-wsg",
+ "manufacturer": "Behringer",
+ "model": "AOIP-WSG (internes AoIP-Modul Waves SoundGrid, Art.-Nr. 0606-ADN)",
+ "category": "converter",
+ "slot": "internal",
+ "fits": [
+  "behringer/wing-rack",
+  "behringer/wing",
+  "behringer/wing-compact"
+ ],
+ "rack_units": 0,
+ "power": "über internen Mainboard-Steckplatz",
+ "ports": [
+  {
+   "id": "wing_eth",
+   "label": "WING Ethernet 1/2 (Pult-Buchsen)",
+   "count": 2,
+   "direction": "bidi",
+   "connector": "RJ45",
+   "signal": "SoundGrid",
+   "formats": "64x64 Kanäle, 44,1/48 kHz, 24 bit; 100 Mbit/s oder 1 Gbit/s, DSCP-QoS",
+   "notes": "Keine eigenen Buchsen; QSG: beide Ports als dual-redundante Verbindung, je 64x64; Manual: NETWORK CONFIG Switched (Audio+Steuerung auf beiden) oder Separated (links Steuerung, rechts Audio); Sync über Ethernet"
+  },
+  {
+   "id": "mainboard",
+   "label": "Interner AoIP-Modulsockel",
+   "count": 1,
+   "direction": "bidi",
+   "connector": "internal",
+   "signal": "expansion",
+   "formats": "bis 64x64 @ 48 kHz",
+   "notes": "Am WING Source-/Output-Gruppe 'WSG' bzw. 'Module'"
+  }
+ ],
+ "logic": [
+  {
+   "type": "converter",
+   "from": [
+    "mainboard"
+   ],
+   "to": [
+    "wing_eth"
+   ],
+   "notes": "64 Kanäle WING -> SoundGrid (z. B. Waves-Racks, DAW über SoundGrid-Treiber ASIO/CoreAudio)"
+  },
+  {
+   "type": "converter",
+   "from": [
+    "wing_eth"
+   ],
+   "to": [
+    "mainboard"
+   ],
+   "notes": "64 SoundGrid-Returns -> WING; nutzbar als EXTERNAL FX-Insert"
+  }
+ ],
+ "control": [
+  {
+   "protocol": "Waves SoundGrid (SuperRack SoundGrid / SoundGrid Studio)",
+   "notes": "Gerät erscheint im SETUP-Tab; Direktverbindung zum Host oder Stern über 1-Gbit-Switch"
+  },
+  {
+   "protocol": "WING Console Options",
+   "notes": "UTILITY beim Einschalten halten, 'MOD-WSG' eingeben; ab FW 3.1 auch auf WING-DANTE-Karte betreibbar ('CRD-WDWSG')"
+  }
+ ],
+ "sources": [
+  {
+   "url": "https://www.behringer.com/en/products/0606-ADN",
+   "what": "Produktseite: 64x64, 48 kHz, 24 bit, 100M/1G, DSCP-QoS, SoundGrid-Treiber ASIO/CoreAudio"
+  },
+  {
+   "url": "https://cdn-media.empowertribe.com/fce178bb208e6b9993867ecddff60e89/FACE-PRIN-PH1_QSG_BE_0606-ADN_AoIP-WSG_A4_WW_2024-05-17_Rev.0.pdf",
+   "what": "Quick Start Guide AoIP-WSG (2024-05-17): 64 in/64 out @ 44,1/48 kHz, 24 bit, über beide Ethernet-Ports (dual-redundant), Einbau nur durch zertifizierte Servicecenter, MOD-WSG, WSG-Routing/EXTERNAL FX"
+  },
+  {
+   "url": "https://cdn-media.empowertribe.com/25951c6f808c0a79abc407c07d5639d1/User-Manual_WING-series_2025-10-20.pdf",
+   "what": "User Manual S. 39 Source-Gruppe Module, S. 44 NETWORK CONFIG Switched/Separated (nur mit AoIP-WSG), S. 91 MOD-WSG, S. 166 internal module socket 64x64 @ 48 kHz"
+  },
+  {
+   "url": "https://cdn-media.empowertribe.com/a9fcb86bb447f7c8a51263f3f3366fcc/WING-AoIP-module-relocation-instructions_2025-07-23.pdf",
+   "what": "AoIP module relocation 2025-07-23: ab FW 3.1 WSG-Modul in WING-DANTE-Expansion-Card betreibbar ('CRD-WDWSG') – WSG damit auch als Karten-Lösung im Expansion-Slot"
+  },
+  {
+   "url": "https://www.behringer.com/en/wing/wing-rack",
+   "what": "Produktseite WING RACK: Expansion Slot 'e.g. Dante, WSG, MADI', WING LIVE vorinstalliert, interne AoIP-Module AoIP-Dante/AoIP-WSG"
+  },
+  {
+   "url": "https://www.behringer.com/en/wing/wing-black",
+   "what": "Produktseite WING: gleiche Aussagen zu Expansion Slot und internen AoIP-Modulen"
+  },
+  {
+   "url": "https://www.behringer.com/en/wing/wing-compact",
+   "what": "Produktseite WING COMPACT: gleiche Aussagen zu Expansion Slot und internen AoIP-Modulen"
+  }
+ ],
+ "unverified": [
+  "96 kHz nicht unterstützt (nur 44,1/48 kHz belegt)",
+  "Schließt AOIP-DANTE im internen Sockel aus; als Karten-Variante (auf WING-DANTE-Träger) belegt es den Expansion-Slot und schließt dann WING-LIVE/WING-MADI aus",
+  "Eine eigenständige WSG-Expansion-Card (z. B. 'WING-WSG') existiert laut Herstellerseiten nicht als Produkt; Produktseiten sprechen nur von 'planning other expansion cards for ... Waves Soundgrid'",
+  "Widerspruch: QSG nennt beide Ports 'dual-redundant', Manual nennt Modi Switched/Separated",
+  "Produktseite 0606-ADN nennt nur 'WING'; RACK/COMPACT aus Manual und Modellseiten abgeleitet"
+ ],
+ "format": "avdp/0.1",
+ "status": "draft",
+ "kind": "module"
+}

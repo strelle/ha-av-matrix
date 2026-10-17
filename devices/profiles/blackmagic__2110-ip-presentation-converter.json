@@ -1,0 +1,234 @@
+{
+ "id": "blackmagic/2110-ip-presentation-converter",
+ "manufacturer": "Blackmagic Design",
+ "model": "Blackmagic 2110 IP Presentation Converter",
+ "category": "converter",
+ "rack_units": 1,
+ "power": "1 x intern 100-240 V AC (IEC C14) oder PoE++ über den 10G-Port; Leistungsaufnahme lt. Tech Specs 'TBA'",
+ "ports": [
+  {
+   "id": "usbc_front",
+   "label": "PC Video In (Front)",
+   "count": 1,
+   "direction": "in",
+   "connector": "USB-C",
+   "signal": "USB",
+   "formats": "USB-C 3.1 Gen 1 (5 Gb/s); Video vom Rechner als externes Display, 45 W Ladeleistung zum Host",
+   "notes": "Auch Konfiguration/Updates via Converters Setup"
+  },
+  {
+   "id": "usbc_rear",
+   "label": "PC Video In (Rear)",
+   "count": 1,
+   "direction": "in",
+   "connector": "USB-C",
+   "signal": "USB",
+   "formats": "wie Front, 45 W Ladeleistung",
+   "notes": "Auch Konfiguration/Updates"
+  },
+  {
+   "id": "hdmi_in",
+   "label": "HDMI 4K In",
+   "count": 1,
+   "direction": "in",
+   "connector": "HDMI-A",
+   "signal": "HDMI",
+   "formats": "HDMI 2.0; HD bis 1080p60, 2160p bis 60, 4K DCI bis 60; 8 Kanäle Audio",
+   "notes": "Kein HDCP"
+  },
+  {
+   "id": "hdmi_out",
+   "label": "HDMI 4K Out",
+   "count": 1,
+   "direction": "out",
+   "connector": "HDMI-A",
+   "signal": "HDMI",
+   "formats": "HDMI 2.0 bis 2160p60; 8 Kanäle Audio",
+   "notes": "Wählbar: Video-Input (Loop) oder 2110-Return; eigener Standardkonverter passt auf Projektor (EDID) an"
+  },
+  {
+   "id": "sdi_out",
+   "label": "12G-SDI Out",
+   "count": 1,
+   "direction": "out",
+   "connector": "BNC",
+   "signal": "SDI-12G",
+   "formats": "270Mb-12G; HD/2K/UHD/4K; 16 Kanäle Embedded Audio; Level A/B wählbar",
+   "notes": "Zeigt Laptop-Input (auf Ausgabestandard konvertiert) oder abonnierten 2110-Stream"
+  },
+  {
+   "id": "ip_10g",
+   "label": "10G 2110 IP PoE++",
+   "count": 1,
+   "direction": "bidi",
+   "connector": "RJ45",
+   "signal": "ST2110",
+   "formats": "10/100/1000/10GBASE-T; ST 2110-20/-21/-30/-40, IP10",
+   "notes": "PoE++-Eingang versorgt Gerät und per USB-C angeschlossenen Laptop; auch Konfiguration/Updates"
+  },
+  {
+   "id": "mic_line_in",
+   "label": "Mic/Line 1-2",
+   "count": 2,
+   "direction": "in",
+   "connector": "XLR3F/TRS-6.3 Combo",
+   "signal": "analog-audio",
+   "formats": "Mic oder Line (+24 dBu), +48 V Phantom",
+   "notes": "Als 2 x Mono oder 1 x Stereo; mischbar mit Video-Audio"
+  },
+  {
+   "id": "line_out",
+   "label": "Line Out 1-2",
+   "count": 2,
+   "direction": "out",
+   "connector": "XLR3M",
+   "signal": "analog-audio",
+   "formats": "symmetrisch, 2 Kanäle",
+   "notes": "Quelle: Video-Input-Audio oder 2110-Eingang; einstellbares Delay"
+  },
+  {
+   "id": "headphones",
+   "label": "Headphones",
+   "count": 1,
+   "direction": "out",
+   "connector": "TRS-6.3",
+   "signal": "analog-audio",
+   "notes": "Front, plus Monitor-Lautsprecher"
+  },
+  {
+   "id": "power",
+   "label": "AC Power",
+   "count": 1,
+   "direction": "in",
+   "connector": "IEC",
+   "signal": "power",
+   "formats": "100-240 V AC"
+  }
+ ],
+ "logic": [
+  {
+   "type": "switch",
+   "from": [
+    "usbc_front",
+    "usbc_rear",
+    "hdmi_in"
+   ],
+   "to": [
+    "ip_10g"
+   ],
+   "notes": "Videoeingang Auto/HDMI/USB-C (erstgesteckter gewinnt bei Auto)"
+  },
+  {
+   "type": "converter",
+   "from": [
+    "usbc_front",
+    "usbc_rear",
+    "hdmi_in"
+   ],
+   "to": [
+    "ip_10g",
+    "sdi_out"
+   ],
+   "notes": "Standardkonverter 1: Eingang immer auf eingestellten Ausgabestandard"
+  },
+  {
+   "type": "encoder",
+   "from": [
+    "usbc_front",
+    "usbc_rear",
+    "hdmi_in",
+    "mic_line_in"
+   ],
+   "to": [
+    "ip_10g"
+   ],
+   "notes": "2110-Sender: Video + gemischtes Audio (Video-Audio + XLR, CH1&2 Input Mixer)"
+  },
+  {
+   "type": "decoder",
+   "from": [
+    "ip_10g"
+   ],
+   "to": [
+    "hdmi_out",
+    "sdi_out",
+    "line_out"
+   ],
+   "notes": "2110-Receiver (Menü oder NMOS) als Return-Feed"
+  },
+  {
+   "type": "switch",
+   "from": [
+    "usbc_front",
+    "usbc_rear",
+    "hdmi_in",
+    "ip_10g"
+   ],
+   "to": [
+    "hdmi_out"
+   ],
+   "notes": "HDMI Out: Video-Input oder 2110-Receiver; Standardkonverter 2 nur für HDMI Out"
+  },
+  {
+   "type": "switch",
+   "from": [
+    "usbc_front",
+    "usbc_rear",
+    "hdmi_in",
+    "ip_10g"
+   ],
+   "to": [
+    "sdi_out"
+   ],
+   "notes": "SDI Out: Laptop-Input oder 2110-Receiver"
+  },
+  {
+   "type": "switch",
+   "from": [
+    "usbc_front",
+    "usbc_rear",
+    "hdmi_in",
+    "ip_10g"
+   ],
+   "to": [
+    "line_out"
+   ],
+   "notes": "XLR-Out-Quelle: Video-Input oder 2110-10G-Input, mit Delay"
+  }
+ ],
+ "control": [
+  {
+   "protocol": "NMOS IS-04 v1.3.2 / IS-05 v1.1.2",
+   "notes": "BCP-002-01, BCP-004-01"
+  },
+  {
+   "protocol": "PTP IEEE 1588-2008 / ST 2059-1/-2"
+  },
+  {
+   "protocol": "Blackmagic Converters Setup (USB oder Ethernet)"
+  },
+  {
+   "protocol": "Front-Panel",
+   "notes": "3 Tasten, Drehknopf, 2,2\" LCD, Lautsprecher-Taste"
+  }
+ ],
+ "sources": [
+  {
+   "url": "https://www.blackmagicdesign.com/products/blackmagic2110ipconverter/techspecs",
+   "what": "techspecs, Abschnitt Blackmagic 2110 IP Presentation Converter (abgerufen 2026-10-17)"
+  },
+  {
+   "url": "https://documents.blackmagicdesign.com/UserManuals/Blackmagic2110IPConvertersManual.pdf",
+   "what": "manual (Stand September 2026) S. 12-15 Getting Started, S. 84-95 Front/Rear Panel und Einstellungen"
+  }
+ ],
+ "unverified": [
+  "Leistungsaufnahme (Tech Specs: TBA) und PoE-Klasse/Leistungsbedarf am 10G-Port",
+  "Ob SDI Out unabhängig von HDMI Out umschaltbar ist (Handbuch beschreibt beide Auswahlen getrennt, Signalfluss nicht als Diagramm)",
+  "Art des USB-C-Videosignals (Handbuch: Rechner sieht 'extended display'; Alt-Mode-Typ nicht genannt)",
+  "Rack-Maß: halbe Rackbreite, 1 HE (rack_units=1 bezieht sich auf Höhe)"
+ ],
+ "format": "avdp/0.1",
+ "status": "draft",
+ "slots": []
+}

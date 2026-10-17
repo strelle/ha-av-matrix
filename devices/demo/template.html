@@ -1,0 +1,226 @@
+<title>Signalfluss Krems</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: links Quellen, Mitte Wandlung/Netz und Mischer, rechts Senken – Signal läuft von links nach rechts; Seitenleiste zeigt das Profil */
+:root {
+  --bg: #eef1f4; --panel: #ffffff; --ink: #172028; --muted: #5b6875; --line: #c9d1d9; --node: #ffffff; --node-head: #e3e9ef;
+  --video: #1f6fd1; --audio: #c77700; --net: #7a4bd6; --ctrl: #6b7785; --dim: 0.14;
+  --display: "Barlow Condensed", "Arial Narrow", system-ui, sans-serif;
+  --body: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0f1418; --panel: #161d23; --ink: #e4e9ee; --muted: #8d9aa6; --line: #2c3740; --node: #18212a; --node-head: #212c36;
+  --video: #4d9bff; --audio: #ffaa33; --net: #a98bff; --ctrl: #8d9aa6; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #0f1418; --panel: #161d23; --ink: #e4e9ee; --muted: #8d9aa6; --line: #2c3740; --node: #18212a; --node-head: #212c36;
+  --video: #4d9bff; --audio: #ffaa33; --net: #a98bff; --ctrl: #8d9aa6; color-scheme: dark }
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--ink); font-family: var(--body); }
+.wrap { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 18px 28px; display: grid; gap: 14px; }
+header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 18px; }
+h1 { font-family: var(--display); font-weight: 700; font-size: 30px; letter-spacing: .01em; margin: 0; text-wrap: balance; }
+.sub { color: var(--muted); font-size: 13px; }
+.bar { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; font-size: 13px; }
+.legend { display: flex; gap: 12px; flex-wrap: wrap; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); }
+.legend i { width: 22px; height: 3px; border-radius: 2px; display: inline-block; }
+.legend i.dash { background: repeating-linear-gradient(90deg, var(--net) 0 5px, transparent 5px 9px) !important; }
+label.tg { display: inline-flex; gap: 6px; align-items: center; color: var(--muted); cursor: pointer; }
+.main { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 14px; align-items: start; }
+@media (max-width: 900px) { .main { grid-template-columns: minmax(0, 1fr); } }
+.canvas { overflow: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; max-height: calc(100vh - 140px); }
+svg { display: block; }
+.node rect.box { fill: var(--node); stroke: var(--line); }
+.node rect.head { fill: var(--node-head); }
+.node text.t { font-family: var(--display); font-weight: 600; font-size: 15px; fill: var(--ink); }
+.node text.m { font-family: var(--mono); font-size: 10px; fill: var(--muted); }
+.node text.p { font-family: var(--mono); font-size: 10.5px; fill: var(--ink); }
+.node text.pm { font-family: var(--mono); font-size: 9.5px; fill: var(--muted); }
+.node circle.pin { stroke: var(--panel); stroke-width: 1.5; }
+.node { cursor: pointer; transition: opacity .15s; }
+.node.sel rect.box { stroke: var(--ink); stroke-width: 1.6; }
+.node .draft { fill: var(--audio); }
+path.e { fill: none; stroke-width: 2; opacity: .85; transition: opacity .15s, stroke-width .15s; }
+path.e.net { stroke-dasharray: 5 4; stroke-width: 1.6; }
+path.e.lan { stroke: var(--line); stroke-width: 1.2; opacity: .9; }
+path.e.assumed { stroke-dasharray: 2 4; }
+.dimmed .node:not(.hot) { opacity: var(--dim); }
+.dimmed path.e:not(.hot) { opacity: .06; }
+path.e.hot { stroke-width: 3; opacity: 1; stroke-dasharray: 7 9; animation: flow .7s linear infinite; }
+@keyframes flow { to { stroke-dashoffset: -16; } }
+@media (prefers-reduced-motion: reduce) { path.e.hot { animation: none; stroke-dasharray: none; } }
+.hidelan path.e.lan, .hidelan .node.lanonly { display: none; }
+aside { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; display: grid; gap: 10px; font-size: 13px; min-width: 0; }
+aside h2 { font-family: var(--display); font-size: 22px; margin: 0; font-weight: 600; }
+aside .kv { color: var(--muted); }
+aside table { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 11px; }
+aside td { border-top: 1px solid var(--line); padding: 4px 4px 4px 0; vertical-align: top; }
+aside .tbl { overflow-x: auto; }
+aside ul { margin: 0; padding-left: 18px; }
+aside a { color: var(--video); word-break: break-all; }
+.pill { display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 99px; border: 1px solid var(--line); color: var(--muted); }
+.pill.draft { color: var(--audio); border-color: var(--audio); }
+.hint { color: var(--muted); font-size: 12px; }
+#tip { position: fixed; pointer-events: none; background: var(--ink); color: var(--bg); font-size: 12px; padding: 4px 8px; border-radius: 5px; display: none; max-width: 280px; z-index: 5; }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Signalfluss Krems</h1>
+    <span class="sub" id="meta"></span>
+  </header>
+  <div class="bar">
+    <div class="legend">
+      <span><i style="background:var(--video)"></i>Bild</span>
+      <span><i style="background:var(--audio)"></i>Ton</span>
+      <span><i class="dash"></i>Netzstrom (NDI, Dante, 2110, RTMP)</span>
+      <span><i style="background:var(--line)"></i>Netzkabel</span>
+    </div>
+    <label class="tg"><input type="checkbox" id="lan"> Netzkabel zeigen</label>
+    <span class="hint">Maus über Gerät oder Buchse zeigt den Fluss · Klick öffnet das Profil</span>
+  </div>
+  <div class="main">
+    <div class="canvas"><svg id="svg"></svg></div>
+    <aside id="side"><h2>Gerät wählen</h2><p class="hint">Ein Klick auf ein Gerät zeigt sein Profil: alle Buchsen laut Hersteller, innere Logik, Steckplätze und Quellen.</p></aside>
+  </div>
+</div>
+<div id="tip"></div>
+
+<script>
+const DATA = /*DATA*/null;
+const P = DATA.project, PROF = DATA.profiles;
+const prof = id => PROF[id] || P.generic[id] || {model: id, ports: []};
+const inst = Object.fromEntries(P.instances.map(i => [i.id, i]));
+const NS = "http://www.w3.org/2000/svg";
+const el = (t, a = {}, parent) => { const e = document.createElementNS(NS, t); for (const k in a) e.setAttribute(k, a[k]); if (parent) parent.appendChild(e); return e; };
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const split = ref => { const [i, p] = ref.split(":"); return [i, p]; };
+const VIRTUAL = new Set(["me1", "main1", "main2"]);
+document.getElementById("meta").textContent = `${P.name} · Stand ${P.date} · ${P.instances.length} Geräte`;
+
+// Signalart je Port (aus dem Profil), für die Farbe
+function sig(i, port) {
+  const base = port.split(".")[0];
+  const p = (prof(inst[i].profile).ports || []).find(x => x.id === base);
+  const s = ((p && (p.signal + " " + p.connector)) || port).toLowerCase();
+  if (/audio|dante|xlr|aes|trs/.test(s) || base.startsWith("aoip") || base.startsWith("main")) return "audio";
+  if (/ethernet|rj45|usb/.test(s) && !/2110/.test(s)) return /usb/.test(s) && !/display/.test(s) ? "ctrl" : "net";
+  return "video";
+}
+const color = k => `var(--${k})`;
+
+// Benutzte Ports je Gerät und Seite (in links, out rechts)
+const used = {}; const side = {};
+const touch = (ref, s) => { const [i, p] = split(ref); if (VIRTUAL.has(p)) return; (used[i] ||= new Set()).add(p); if (!side[ref] || s === "R") side[ref] = side[ref] === "L" && s === "R" ? "R" : (side[ref] || s); };
+P.cables.forEach(c => { touch(c.from, "R"); touch(c.to, "L"); });
+P.flows.forEach(f => { touch(f.from, "R"); touch(f.to, "L"); });
+P.routes.forEach(r => { touch(`${r.device}:${r.from}`, "L"); touch(`${r.device}:${r.to}`, "R"); });
+
+const COLX = [20, 330, 640, 950], W = 250, ROW = 17, HEAD = 40, GAP = 22;
+const pos = {}, colY = [16, 16, 16, 16];
+const svg = document.getElementById("svg");
+const gE = el("g", {}, svg), gN = el("g", {}, svg);
+const sorted = [...P.instances].sort((a, b) => a.col - b.col || a.row - b.row);
+for (const n of sorted) {
+  const ports = [...(used[n.id] || [])].sort((a, b) => a.localeCompare(b, "de", {numeric: true}));
+  const L = ports.filter(p => side[`${n.id}:${p}`] !== "R"), R = ports.filter(p => side[`${n.id}:${p}`] === "R");
+  const rows = Math.max(L.length, R.length, 1), h = HEAD + rows * ROW + 10;
+  const x = COLX[n.col], y = colY[n.col]; colY[n.col] += h + GAP;
+  const pr = prof(n.profile);
+  const lanonly = ports.length > 0 && ports.every(p => (n.id === "lan"));
+  const g = el("g", {class: "node" + (n.id === "lan" ? " lanonly" : ""), "data-id": n.id, tabindex: 0}, gN);
+  el("rect", {class: "box", x, y, width: W, height: h, rx: 6}, g);
+  el("rect", {class: "head", x: x + 1, y: y + 1, width: W - 2, height: HEAD - 6, rx: 5}, g);
+  el("text", {class: "t", x: x + 10, y: y + 17}, g).textContent = n.name;
+  { let m = (pr.model || "").replace(/^(Blackmagic|Behringer|Shure|Elgato|Magewell|Apple)\s+/i, "") + (n.address ? " · " + n.address : ""); if (m.length > 40) m = m.slice(0, 39) + "…"; el("text", {class: "m", x: x + 10, y: y + 30}, g).textContent = m; }
+  if (pr.status === "draft") el("circle", {class: "draft", cx: x + W - 12, cy: y + 13, r: 4}, g).appendChild(el("title")).textContent = "Profil: Entwurf, noch nicht am Gerät geprüft";
+  const place = (list, right) => list.forEach((p, k) => {
+    const py = y + HEAD + 8 + k * ROW, px = right ? x + W : x, ref = `${n.id}:${p}`;
+    pos[ref] = {x: px, y: py, right};
+    el("circle", {class: "pin", cx: px, cy: py, r: 4.2, fill: color(sig(n.id, p)), "data-ref": ref}, g);
+    const t = el("text", {class: "p", x: right ? px - 9 : px + 9, y: py + 3.5, "text-anchor": right ? "end" : "start", "data-ref": ref}, g);
+    t.textContent = p;
+  });
+  place(L, false); place(R, true);
+  pos[n.id] = {x, y, h};
+}
+const maxH = Math.max(...colY);
+svg.setAttribute("width", COLX[3] + W + 30); svg.setAttribute("height", maxH + 10);
+svg.setAttribute("viewBox", `0 0 ${COLX[3] + W + 30} ${maxH + 10}`);
+
+// Kanten: Kabel, Netzströme; innere Wege nur für die Verfolgung
+const edges = [];
+function curve(a, b) {
+  const dx = Math.max(40, Math.abs(b.x - a.x) * 0.45);
+  const c1 = a.x + (a.right ? dx : -dx), c2 = b.x + (b.right ? dx : -dx);
+  return `M${a.x},${a.y} C${c1},${a.y} ${c2},${b.y} ${b.x},${b.y}`;
+}
+function addEdge(from, to, cls, k, title) {
+  const a = pos[from], b = pos[to]; if (!a || !b) return;
+  const p = el("path", {class: "e " + cls, d: curve(a, b), stroke: cls.includes("lan") ? "" : color(k)}, gE);
+  p.dataset.title = title; edges.push({from, to, p});
+}
+P.cables.forEach(c => { const [ti] = split(c.to); const lan = ti === "lan" || (split(c.from)[0] === "lan");
+  addEdge(c.from, c.to, (lan ? "lan" : "") + (c.assumed ? " assumed" : ""), sig(...split(c.from)), `${c.medium}${c.assumed ? " · angenommen, nicht geprüft" : ""}`); });
+P.flows.filter(f => f.kind !== "intern").forEach(f => addEdge(f.from, f.to, "net" + (f.assumed ? " assumed" : ""), f.kind === "Dante" ? "audio" : f.kind === "ST 2110" ? "video" : "net", `${f.kind}: ${f.label}${f.via ? " · über " + inst[f.via].name : ""}`));
+
+// Verfolgungsgraph: gerichtete Kanten ohne LAN-Kabel (die laufen als Netzströme)
+const fwd = {}, bwd = {};
+const link = (a, b) => { (fwd[a] ||= []).push(b); (bwd[b] ||= []).push(a); };
+P.cables.forEach(c => { if (![c.from, c.to].some(r => ["lan", "sw360"].includes(split(r)[0]))) link(c.from, c.to); });
+P.flows.forEach(f => link(f.from, f.to));
+P.routes.forEach(r => link(`${r.device}:${r.from}`, `${r.device}:${r.to}`));
+function trace(starts) {
+  const seen = new Set(starts), hot = new Set();
+  for (const [map, dir] of [[fwd, 1], [bwd, -1]]) {
+    const q = [...starts], vis = new Set(starts);
+    while (q.length) { const a = q.shift(); for (const b of map[a] || []) { hot.add(dir > 0 ? a + ">" + b : b + ">" + a); if (!vis.has(b)) { vis.add(b); q.push(b); seen.add(b); } } }
+  }
+  return {nodes: new Set([...seen].map(r => split(r)[0])), hot};
+}
+const keysOf = id => Object.keys({...fwd, ...bwd}).filter(k => split(k)[0] === id);
+function show(starts) {
+  const {nodes, hot} = trace(starts);
+  svg.classList.add("dimmed");
+  document.querySelectorAll(".node").forEach(n => n.classList.toggle("hot", nodes.has(n.dataset.id)));
+  P.flows.forEach(f => { if (f.via && hot.has(f.from + ">" + f.to)) nodes.add(f.via); });
+  document.querySelectorAll(".node").forEach(n => n.classList.toggle("hot", nodes.has(n.dataset.id)));
+  edges.forEach(e => e.p.classList.toggle("hot", hot.has(e.from + ">" + e.to)));
+}
+function clear() { svg.classList.remove("dimmed"); document.querySelectorAll(".hot").forEach(x => x.classList.remove("hot")); }
+
+const tip = document.getElementById("tip");
+svg.addEventListener("pointerover", ev => {
+  const pin = ev.target.closest("[data-ref]"), node = ev.target.closest(".node"), edge = ev.target.closest("path.e");
+  if (pin) { show([pin.dataset.ref]); tip.textContent = pin.dataset.ref.split(":")[1] + " · " + portInfo(pin.dataset.ref); tip.style.display = "block"; }
+  else if (node) { show(keysOf(node.dataset.id)); tip.style.display = "none"; }
+  else if (edge) { tip.textContent = edge.dataset.title; tip.style.display = "block"; edge.classList.add("hot"); }
+});
+svg.addEventListener("pointermove", ev => { tip.style.left = ev.clientX + 14 + "px"; tip.style.top = ev.clientY + 12 + "px"; });
+svg.addEventListener("pointerout", ev => { if (!ev.relatedTarget || !svg.contains(ev.relatedTarget) || ev.relatedTarget === svg) { clear(); tip.style.display = "none"; } });
+function portInfo(ref) { const [i, p] = split(ref); const d = (prof(inst[i].profile).ports || []).find(x => x.id === p.split(".")[0]); return d ? `${d.connector} · ${d.signal}${d.formats ? " · " + d.formats : ""}` : "intern"; }
+
+// Seitenleiste: Profil
+const sideEl = document.getElementById("side");
+svg.addEventListener("click", ev => {
+  const node = ev.target.closest(".node"); if (!node) return;
+  document.querySelectorAll(".node.sel").forEach(n => n.classList.remove("sel")); node.classList.add("sel");
+  const n = inst[node.dataset.id], pr = prof(n.profile);
+  const mods = n.modules ? Object.entries(n.modules).map(([s, m]) => `<li>${esc((pr.slots || []).find(x => x.id === s)?.label || s)}: <b>${esc(m)}</b></li>`).join("") : "";
+  const slots = (pr.slots || []).map(s => `<li>${esc(s.label)} – passt: ${esc(s.accepts.join(", "))}</li>`).join("");
+  sideEl.innerHTML = `<h2>${esc(n.name)}</h2>
+    <div class="kv">${esc([pr.manufacturer, pr.model].filter(Boolean).join(" "))} · ${esc(pr.category || "")} ${pr.status ? `<span class="pill ${pr.status === "draft" ? "draft" : ""}">${pr.status === "draft" ? "Entwurf" : "geprüft"}</span>` : ""}</div>
+    ${n.address ? `<div class="kv">Adresse ${esc(n.address)}</div>` : ""}
+    ${mods ? `<div><b>Gesteckte Module</b><ul>${mods}</ul></div>` : ""}${slots ? `<div><b>Steckplätze</b><ul>${slots}</ul></div>` : ""}
+    <div><b>Anschlüsse laut Hersteller</b><div class="tbl"><table>${(pr.ports || []).map(p => `<tr><td>${esc(p.id)}</td><td>${p.count > 1 ? p.count + "× " : ""}${esc(p.direction)}</td><td>${esc(p.connector)}</td><td>${esc(p.signal)}</td></tr>`).join("")}</table></div></div>
+    ${(pr.logic || []).length ? `<div><b>Innere Logik</b><ul>${pr.logic.map(l => `<li>${esc(l.type)}: ${esc((l.from || []).join(", "))} → ${esc((l.to || []).join(", "))}</li>`).join("")}</ul></div>` : ""}
+    ${(pr.unverified || []).length ? `<div><b>Nicht belegt</b><ul>${pr.unverified.map(u => `<li>${esc(u)}</li>`).join("")}</ul></div>` : ""}
+    ${(pr.sources || []).length ? `<div><b>Quellen</b><ul>${pr.sources.map(s => `<li><a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.what || s.url)}</a></li>`).join("")}</ul></div>` : ""}`;
+});
+const lanBox = document.getElementById("lan");
+const applyLan = () => svg.classList.toggle("hidelan", !lanBox.checked);
+lanBox.addEventListener("change", applyLan); applyLan();
+</script>

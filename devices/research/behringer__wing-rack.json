@@ -1,0 +1,55 @@
+{
+  "id": "behringer/wing-rack",
+  "manufacturer": "Behringer",
+  "model": "WING RACK",
+  "category": "mixer",
+  "rack_units": 4,
+  "power": "Schaltnetzteil, Auto-Range 100-240 VAC 50/60 Hz, 130 W, IEC-Netzbuchse mit Netzschalter",
+  "ports": [
+    {"id": "local_in", "label": "Local In 1-24 (Midas PRO Mic-Preamp)", "count": 24, "direction": "in", "connector": "XLR/TRS-6.3 Combo", "signal": "analog-audio", "formats": "Mic/Line, +48 V Phantom je Eingang schaltbar, max. +21 dBu, A/D 48 kHz/24 bit", "notes": "Source-Gruppe LOCAL IN; Gain/Phantom/Polarität fernsteuerbar"},
+    {"id": "xlr_out", "label": "Local Out 1-8 (Midas PRO XLR)", "count": 8, "direction": "out", "connector": "XLR3M", "signal": "analog-audio", "formats": "+4 dBu nominal / +21 dBu max, 75 Ohm, symmetrisch", "notes": "Paarweise (1/2, 3/4, 5/6, 7/8) hart auf die 4 rückseitigen Kopfhörerbuchsen gespiegelt"},
+    {"id": "phones_rear", "label": "Phones 1-4 (Rückseite)", "count": 4, "direction": "out", "connector": "TRS-6.3", "signal": "analog-audio", "formats": "stereo, eigener Kopfhörerverstärker", "notes": "Hardwired-Kopie der Signale auf XLR Out 1/2, 3/4, 5/6, 7/8 (für IEM)"},
+    {"id": "phones_front", "label": "Phones (Front)", "count": 1, "direction": "out", "connector": "TRS-6.3", "signal": "analog-audio", "formats": "stereo", "notes": "Unabhängiger Kopfhörerausgang, entspricht den Signalen auf AUX OUT 7/8; Pegel per PHONES LEVEL"},
+    {"id": "aes50", "label": "AES50 A/B/C", "count": 3, "direction": "bidi", "connector": "etherCON", "signal": "AES50", "formats": "je 48 In / 48 Out, 48 kHz, Klark Teknik SuperMAC 100 Mbit/s", "notes": "Stageboxen (Behringer S-/Midas DL-Serie), X32/M32; HA-Remote; geschirmtes CAT5e, max. 80 m"},
+    {"id": "stageconnect", "label": "StageConnect", "count": 1, "direction": "bidi", "connector": "XLR3F", "signal": "StageConnect", "formats": "32 Kanäle (In/Out-Aufteilung frei), 44,1/48 kHz, 24 bit", "notes": "HOST/Master, speist 12 V / 18 W; 110-Ohm-DMX-Kabel, max. 40 m; XLR-Geschlecht nicht belegt"},
+    {"id": "aes3_in", "label": "AES/EBU In", "count": 1, "direction": "in", "connector": "XLR3F", "signal": "AES3", "formats": "2 Kanäle (stereo)", "notes": "Source-Gruppe AES/EBU"},
+    {"id": "aes3_out", "label": "AES/EBU Out", "count": 1, "direction": "out", "connector": "XLR3M", "signal": "AES3", "formats": "2 Kanäle (stereo)", "notes": ""},
+    {"id": "eth", "label": "Ethernet 1/2", "count": 2, "direction": "bidi", "connector": "RJ45", "signal": "Ethernet", "formats": "1 Gbit/s, intern geswitcht", "notes": "Fernsteuerung; tragen zusätzlich Audio des optionalen internen AoIP-Moduls (AOIP-DANTE/WSG); Modi Switched/Separated (bei AOIP-DANTE auch Redundancy)"},
+    {"id": "usb_b", "label": "USB Audio/Data", "count": 1, "direction": "bidi", "connector": "USB-B", "signal": "USB", "formats": "USB 2.0, 48x48 Kanäle 24 bit, MIDI", "notes": "Audiointerface (ASIO), DAW-Controller, Firmware-Update, Datenaustausch"},
+    {"id": "usb_a", "label": "USB Host (Front)", "count": 1, "direction": "bidi", "connector": "USB-A", "signal": "USB", "formats": "USB 2.0 Host, 5 V/1 A; WAV 2/4 Spuren 44,1/48 kHz 16/24 bit", "notes": "Stick für Shows/Snapshots, 4-Spur-Recorder/Player"},
+    {"id": "midi_in", "label": "MIDI In", "count": 1, "direction": "in", "connector": "DIN", "signal": "MIDI", "formats": "5-pol.", "notes": ""},
+    {"id": "midi_out", "label": "MIDI Out", "count": 1, "direction": "out", "connector": "DIN", "signal": "MIDI", "formats": "5-pol.", "notes": ""},
+    {"id": "gpio", "label": "GPIO", "count": 2, "direction": "bidi", "connector": "TRS-6.3", "signal": "GPIO", "formats": "2x2 = 4 GPIO, konfigurierbar", "notes": ""},
+    {"id": "exp_slot", "label": "Expansion Slot", "count": 1, "direction": "bidi", "connector": "card-slot", "signal": "expansion", "formats": "64x64 Kanäle", "notes": "Ab Werk WING-LIVE (Dual-SD-Recorder, 64 Spuren 48 kHz/32 bit); alternativ z. B. WING-DANTE"},
+    {"id": "aoip_module", "label": "Interner AoIP-Modulsockel", "count": 1, "direction": "bidi", "connector": "internal", "signal": "Dante|SoundGrid", "formats": "bis 64x64 @ 48 kHz", "notes": "Optional AOIP-DANTE oder AOIP-WSG; Audio über die beiden Ethernet-Buchsen; Einbau durch Servicecenter"},
+    {"id": "power_in", "label": "AC In", "count": 1, "direction": "in", "connector": "IEC", "signal": "power", "formats": "100-240 VAC", "notes": "mit Netzschalter"}
+  ],
+  "logic": [
+    {"type": "matrix", "from": ["local_in", "aes3_in", "aes50", "stageconnect", "usb_b", "exp_slot", "aoip_module", "usb_a"], "to": ["xlr_out", "phones_front", "aes3_out", "aes50", "stageconnect", "usb_b", "exp_slot", "aoip_module", "usb_a"], "notes": "Point-to-point Routingmatrix 500x502: jede Source auf jeden Kanal oder direkt auf jeden physischen Ausgang (ROUTING>OUTPUTS)"},
+    {"type": "mixer", "from": ["local_in", "aes3_in", "aes50", "stageconnect", "usb_b", "exp_slot", "aoip_module"], "to": ["xlr_out", "aes3_out", "aes50", "stageconnect", "usb_b", "exp_slot", "aoip_module"], "notes": "40 Stereo-Inputkanäle + 8 Stereo-Aux-Kanäle (Main+Alt-Source) -> 16 Stereo-Busse, 4 Stereo-Mains, 8 Stereo-Matrizen; Matrizen nur auf Ausgänge; 16 FX-Slots, 16 DCAs, 8 Mutegruppen; 40-bit float, 48 kHz; I/O-Latenz 1,0 ms"},
+    {"type": "splitter", "from": ["xlr_out"], "to": ["phones_rear"], "notes": "Rückseitige Phones 1-4 sind hardwired Kopien von XLR Out 1/2, 3/4, 5/6, 7/8"},
+    {"type": "recorder", "from": ["exp_slot"], "to": ["exp_slot"], "notes": "WING-LIVE: bis 64 Spuren auf 2 SD-Karten (32 je Karte), Routing über Output-Gruppe WLIVE REC; Wiedergabe als Source"}
+  ],
+  "control": [
+    {"protocol": "WING native (UDP/TCP 2222)", "notes": "Discovery per UDP-Datagramm 'WING?' an Port 2222"},
+    {"protocol": "OSC (UDP 2223)", "notes": "OSC-Remote-Server, Get/Set/Subscribe"},
+    {"protocol": "MIDI (DIN-5 und USB), MIDI SysEx, DAW-Control HUI/Mackie", "notes": ""},
+    {"protocol": "WING Co-Pilot / WING Edit Apps über Ethernet", "notes": ""}
+  ],
+  "sources": [
+    {"url": "https://www.behringer.com/en/wing/wing-rack", "what": "Produktseite mit Tech Specs (4HU, 130 W, Leistungsdaten)"},
+    {"url": "https://www.behringer.com/en/products/0604-AAE", "what": "Produktseite (Features: 24 Preamps, 8 Outputs, 3 AES50, StageConnect 32ch, USB 48x48, AoIP-Option)"},
+    {"url": "https://cdn-media.empowertribe.com/25951c6f808c0a79abc407c07d5639d1/User-Manual_WING-series_2025-10-20.pdf", "what": "User Manual 2025-10-20: S. 6 Source-Gruppen, S. 11-12 Rear Panel WING RACK/Digital-I/O/Expansion Slot, S. 24 Phones front = AUX OUT 7/8, S. 44 Network Config, S. 165-167 Specifications"},
+    {"url": "https://cdn-media.empowertribe.com/de639f879a931567172978e01373a84f/QSG_BE_0604-AAE_WING%20RACK_WW.pdf", "what": "Quick Start Guide WING RACK, Kap. 2-6 (Routing, Rear Panel, Source-Gruppen)"},
+    {"url": "https://cdn-media.empowertribe.com/2106004e217b8eb2639d93672823eef5/WING_Remote-Protocols-3.1-03.pdf", "what": "Remote Protocols 3.1: Ports 2222/2223"}
+  ],
+  "unverified": [
+    "Rack-Höhe: Produktseite 0604-AAE nennt 6U, Produktseite wing-rack und Manual 4HU (183 mm hoch) – 4 übernommen",
+    "Die im Auftrag genannten '8 Aux In/Out TRS' existieren laut Manual-Spezifikation am WING RACK NICHT (nur am großen WING); stattdessen 4 rückseitige + 1 frontseitige Kopfhörerbuchse",
+    "Keine dedizierte Talkback-Mic-Buchse am WING RACK belegt; Talkback läuft über Kanal 40 oder Aux 8 mit beliebiger zugewiesener Source",
+    "Kein Word-Clock-BNC belegt; Sync Source wird nur im Menü SETUP>AUDIO erwähnt",
+    "XLR-Geschlecht der StageConnect- und AES/EBU-Buchsen nicht explizit belegt (StageConnect als Host vermutlich XLR-F)",
+    "Exakte Lage des Front-USB-A und Front-Phones laut Abbildungen, nicht Textbeleg",
+    "Gewichtsangaben widersprüchlich: Produktseite 9,44 kg, Manual 15,4 kg"
+  ]
+}

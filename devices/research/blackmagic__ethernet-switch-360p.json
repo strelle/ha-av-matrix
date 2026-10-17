@@ -1,0 +1,43 @@
+{
+  "id": "blackmagic/ethernet-switch-360p",
+  "manufacturer": "Blackmagic Design",
+  "model": "Blackmagic Ethernet Switch 360P",
+  "category": "router",
+  "rack_units": 1,
+  "power": "intern 100-240 V AC (IEC C14) + 12 V DC über 4-pol. XLR (Redundanz/Akku); 100 W",
+  "ports": [
+    {"id": "eth_10g", "label": "10G Ethernet 1-16", "count": 16, "direction": "bidi", "connector": "RJ45", "signal": "Ethernet",
+     "formats": "100/1000/10GBASE-T", "notes": "Rückseite; ST 2110-Geräte erscheinen automatisch als Quelle/Ziel; CAT6 lt. Handbuch"},
+    {"id": "eth_100g", "label": "100G Ethernet 1-2", "count": 2, "direction": "bidi", "connector": "QSFP28", "signal": "Ethernet",
+     "formats": "100 Gb/s", "notes": "Kupfer-DAC oder Glasfaser; Kaskadierung mehrerer Switches empfohlen über 100G"},
+    {"id": "sdi_mon", "label": "SDI Monitor Out", "count": 1, "direction": "out", "connector": "BNC", "signal": "SDI-3G",
+     "formats": "1080p50/59.94/60; Level A/B wählbar", "notes": "Status-Display oder als 2110-Ziel 'Monitor SDI' beliebigen 2110-Stream anzeigen"},
+    {"id": "hdmi_mon", "label": "HDMI Monitor Out", "count": 1, "direction": "out", "connector": "HDMI-A", "signal": "HDMI",
+     "formats": "1080p50/59.94/60", "notes": "Status-Display (Gerätename, Datenrate je Port)"},
+    {"id": "usb_c", "label": "USB-C", "count": 1, "direction": "bidi", "connector": "USB-C", "signal": "USB", "notes": "Ethernet Switch Setup, Updates"},
+    {"id": "power_ac", "label": "AC Power", "count": 1, "direction": "in", "connector": "IEC", "signal": "power", "formats": "100-240 V AC"},
+    {"id": "power_dc", "label": "12V DC In", "count": 1, "direction": "in", "connector": "XLR4", "signal": "power", "formats": "+12 V DC", "notes": "zweite Versorgung, z. B. Akku"}
+  ],
+  "logic": [
+    {"type": "matrix", "from": ["eth_10g", "eth_100g"], "to": ["eth_10g", "eth_100g"], "notes": "Layer-2/3-Switch; Bedienung wie Videohub: OUT wählen, IN wählen, TAKE (NMOS-Routing der 2110-Sender auf Receiver); Route brechen mit 'none'"},
+    {"type": "matrix", "from": ["eth_10g", "eth_100g"], "to": ["sdi_mon"], "notes": "SDI-Monitorausgang ist selbst 2110-Ziel ('Monitor SDI'); Quelle 'Status' = Statusdisplay"},
+    {"type": "encoder", "from": [], "to": ["hdmi_mon", "sdi_mon", "eth_10g", "eth_100g"], "notes": "Statusdisplay (Datenrate je Port) als HDMI/SDI und als 2110-Sender (nur Video) im Netz"}
+  ],
+  "control": [
+    {"protocol": "NMOS-Controller (eingebaut)", "notes": "Routing per Frontpanel; Registry auto/peer-to-peer/manuell; IS-04 v1.3.2, IS-05 v1.1.2, BCP-002-01, BCP-004-01"},
+    {"protocol": "PTP IEEE 1588-2008 / ST 2059-1/-2 (eingebaute PTP-Clock)", "notes": "Kann Grandmaster werden (Priority einstellbar) oder 'PTP follower only'; Domain Default 127"},
+    {"protocol": "Blackmagic Ethernet Switch Setup (USB/Ethernet)", "notes": "Button-Mapping, 2110-Sender-SDP-Export, Netzwerk, NTP"},
+    {"protocol": "Front-Panel", "notes": "24 Tasten inkl. Shortcut-Filter (MON, CAM, EDIT ...), 2,2\" LCD, Drehknopf"}
+  ],
+  "sources": [
+    {"url": "https://www.blackmagicdesign.com/products/blackmagicethernetswitch/techspecs", "what": "techspecs, Abschnitt Blackmagic Ethernet Switch 360P (abgerufen 2026-10-17)"},
+    {"url": "file:///Volumes/Blackmagic Ethernet Switch/Ethernet Switch Manual.pdf", "what": "manual (Stand September 2026, aus Installer Ethernet Switch 2.0) S. 5-8 Power/Ports/PTP/NMOS, S. 10-13 Routing 360P, S. 19-21 Monitor Output, S. 24-26 PTP/NMOS-Einstellungen"},
+    {"url": "https://documents.blackmagicdesign.com/UserManuals/Blackmagic2110IPConvertersManual.pdf", "what": "manual S. 25 (360P als NMOS-Controller)"}
+  ],
+  "unverified": [
+    "PoE an den 10G-Ports: weder Tech Specs noch Handbuch erwähnen PoE (das 'P' ist nicht erklärt)",
+    "Separater 1G-Management-/Control-Port beim 360P: Handbuch nennt '1G Management/1G Control/PTP'-Netze allgemein, Tech Specs des 360P listen keinen",
+    "Externes Steuerprotokoll (z. B. Videohub TCP 9990 oder REST) nicht dokumentiert",
+    "Anschlusstyp der HDMI-Buchse (vermutlich Typ A) nicht explizit genannt"
+  ]
+}

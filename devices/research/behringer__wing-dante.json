@@ -1,0 +1,33 @@
+{
+  "id": "behringer/wing-dante",
+  "manufacturer": "Behringer",
+  "model": "WING-DANTE (Expansion Card, Art.-Nr. 0606-ADL)",
+  "category": "converter",
+  "rack_units": 0,
+  "power": "über WING-Expansion-Slot (keine eigene Versorgung)",
+  "ports": [
+    {"id": "dante_primary", "label": "Primary", "count": 1, "direction": "bidi", "connector": "etherCON", "signal": "Dante", "formats": "64x64 Kanäle, 48 kHz, 24 bit; 100 Mbit/s oder 1 Gbit/s; AES67-kompatibel", "notes": "Neutrik-etherCON-kompatible RJ45-Buchse"},
+    {"id": "dante_secondary", "label": "Secondary", "count": 1, "direction": "bidi", "connector": "etherCON", "signal": "Dante", "formats": "wie Primary", "notes": "Dante-Modus Switched (Default) oder Redundant (Umschaltung in Dante Controller > Network Config); im Switched-Modus auch zum Durchschleifen/Anschluss eines PCs bzw. des WING-Netzwerkports nutzbar"},
+    {"id": "slot_bus", "label": "WING Expansion-Slot-Anschluss", "count": 1, "direction": "bidi", "connector": "card-edge", "signal": "expansion", "formats": "64x64 Kanäle", "notes": "Erscheint am WING als Source-/Output-Gruppe 'EXP CARD' bzw. WING-DANTE"}
+  ],
+  "logic": [
+    {"type": "converter", "from": ["slot_bus"], "to": ["dante_primary", "dante_secondary"], "notes": "64 Kanäle WING -> Dante-Transmit; Belegung im WING unter ROUTING>OUTPUTS (Gruppe WING-DANTE)"},
+    {"type": "converter", "from": ["dante_primary", "dante_secondary"], "to": ["slot_bus"], "notes": "64 Dante-Receive-Kanäle -> WING-Sources, routbar auf Kanäle oder direkt auf physische Ausgänge"}
+  ],
+  "control": [
+    {"protocol": "Dante (Audinate Dante Controller)", "notes": "Routing, Clock (Preferred Master / Slave to External Word Clock), Gerätename; Chip erscheint als BKLYN-II-xxxxxx (Brooklyn II)"},
+    {"protocol": "WING (über Konsole)", "notes": "Kanalnamen/Routing der 64 Kanäle am WING"}
+  ],
+  "sources": [
+    {"url": "https://www.behringer.com/en/products/0606-ADL", "what": "Produktseite: 64x64, 48 kHz, 24 bit, 100M/1G, DSCP-QoS, AES67, Secondary für Redundanz, ersetzt WING-LIVE im Expansion-Slot"},
+    {"url": "https://cdn-media.empowertribe.com/7ee4b1099c6c4254b99643621a308c97/QSG_BE_0606-ADL_WING-DANTE_WW.pdf", "what": "Quick Start Guide WING-DANTE: Kap. 1 Introduction, 2 Installation (min. FW 1.08), 4 Connector Plate, 5 Connection Scenarios, 6 WING Setup/Synchronisation"},
+    {"url": "https://cdn-media.empowertribe.com/25951c6f808c0a79abc407c07d5639d1/User-Manual_WING-series_2025-10-20.pdf", "what": "User Manual S. 12: alle WING-Modelle (inkl. RACK) haben denselben Expansion-Slot; S. 165 Expansion card interface 64x64"},
+    {"url": "https://www.behringer.com/en/products/0606-ADM", "what": "Alternative AOIP-DANTE: internes Modul (64x64 Dante/AES67) auf dem Mainboard, nutzt die beiden WING-Ethernet-Buchsen, Slot bleibt für WING-LIVE frei"}
+  ],
+  "unverified": [
+    "Einbau der WING-DANTE ersetzt die WING-LIVE-Karte (Slot nur einfach) – kein SD-Recording mehr; wer beides will, braucht das interne AOIP-DANTE-Modul (Einbau nur durch Servicecenter)",
+    "Produktseite nennt explizit nur 'WING'; Kompatibilität mit WING RACK nur indirekt über Manual ('All WING models include the WING-LIVE card' im Expansion Slot) belegt",
+    "LEDs: ACT/LINK grün und 1G amber laut QSG – ob je Port oder gemeinsam, nicht eindeutig",
+    "Sample-Rate 44,1 kHz nicht belegt (nur 48 kHz)"
+  ]
+}

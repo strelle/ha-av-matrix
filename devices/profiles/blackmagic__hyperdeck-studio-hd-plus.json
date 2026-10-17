@@ -1,0 +1,254 @@
+{
+ "id": "blackmagic/hyperdeck-studio-hd-plus",
+ "manufacturer": "Blackmagic Design",
+ "model": "HyperDeck Studio HD Plus",
+ "category": "recorder",
+ "rack_units": 1,
+ "power": "1 x intern 100-240 V AC 50/60 Hz (IEC) + 1 x 4-pol. XLR 12 V DC In; 100 W max.",
+ "ports": [
+  {
+   "id": "sdi_in",
+   "label": "SDI In",
+   "count": 1,
+   "direction": "in",
+   "connector": "BNC",
+   "signal": "SDI-6G",
+   "formats": "270Mb/1.5G/3G/6G; SD, HD bis 1080p60, 2K DCI/2160p/4K DCI bis 30p; 16 Kanäle Embedded Audio"
+  },
+  {
+   "id": "hdmi_in",
+   "label": "HDMI In",
+   "count": 1,
+   "direction": "in",
+   "connector": "HDMI-A",
+   "signal": "HDMI",
+   "formats": "HDMI 2.0; SD bis 2160p30/4K DCI 30; 8 Kanäle Audio",
+   "notes": "kein HDCP"
+  },
+  {
+   "id": "sdi_out",
+   "label": "SDI Out A/B",
+   "count": 2,
+   "direction": "out",
+   "connector": "BNC",
+   "signal": "SDI-6G",
+   "formats": "wie SDI In; 16 Kanäle Embedded Audio; Level A/B wählbar",
+   "notes": "ProRes-4444-Playback: Fill auf A, Key auf B (bis 1080p60); Produktbeschreibung nennt 'SDI loop out'"
+  },
+  {
+   "id": "sdi_mon",
+   "label": "SDI Monitor Out",
+   "count": 1,
+   "direction": "out",
+   "connector": "BNC",
+   "signal": "SDI-3G",
+   "formats": "heruntergerechnet, mit Overlays; 33-Punkt-3D-LUT anwendbar"
+  },
+  {
+   "id": "hdmi_out",
+   "label": "HDMI Out",
+   "count": 1,
+   "direction": "out",
+   "connector": "HDMI-A",
+   "signal": "HDMI",
+   "formats": "HDMI 2.0; 8 Kanäle Audio; SDR/HDR-Erkennung"
+  },
+  {
+   "id": "ref_in",
+   "label": "Ref In",
+   "count": 1,
+   "direction": "in",
+   "connector": "BNC",
+   "signal": "reference",
+   "formats": "Tri-Sync oder Black Burst"
+  },
+  {
+   "id": "ref_out",
+   "label": "Ref Out",
+   "count": 1,
+   "direction": "out",
+   "connector": "BNC",
+   "signal": "reference",
+   "formats": "Tri-Sync oder Black Burst",
+   "notes": "interner Sync-Generator"
+  },
+  {
+   "id": "tc_in",
+   "label": "Timecode In",
+   "count": 1,
+   "direction": "in",
+   "connector": "BNC",
+   "signal": "timecode",
+   "formats": "LTC"
+  },
+  {
+   "id": "tc_out",
+   "label": "Timecode Out",
+   "count": 1,
+   "direction": "out",
+   "connector": "BNC",
+   "signal": "timecode",
+   "formats": "LTC",
+   "notes": "interner Time-of-Day-Generator"
+  },
+  {
+   "id": "rs422_in",
+   "label": "Remote In",
+   "count": 1,
+   "direction": "in",
+   "connector": "DE-9",
+   "signal": "RS-422",
+   "notes": "RS-422 Deck Control"
+  },
+  {
+   "id": "rs422_out",
+   "label": "Remote Out",
+   "count": 1,
+   "direction": "out",
+   "connector": "DE-9",
+   "signal": "RS-422",
+   "notes": "Frontpanel-Tastendrücke werden ausgegeben"
+  },
+  {
+   "id": "ethernet",
+   "label": "Ethernet",
+   "count": 1,
+   "direction": "bidi",
+   "connector": "RJ45",
+   "signal": "Ethernet",
+   "formats": "1 Gb/s",
+   "notes": "FTP, Web Media Manager, HyperDeck Ethernet Protocol, ATEM-Steuerung"
+  },
+  {
+   "id": "usb_c",
+   "label": "Ext Disk (USB-C)",
+   "count": 1,
+   "direction": "bidi",
+   "connector": "USB-C",
+   "signal": "USB",
+   "formats": "USB 3.0 (5 Gb/s)",
+   "notes": "externe Aufnahme, Webcam-Ausgang, Setup/Updates"
+  },
+  {
+   "id": "headphones",
+   "label": "Headphones",
+   "count": 1,
+   "direction": "out",
+   "connector": "TRS-6.3",
+   "signal": "analog-audio",
+   "notes": "Front, plus Mono-Lautsprecher"
+  },
+  {
+   "id": "power_ac",
+   "label": "AC Power",
+   "count": 1,
+   "direction": "in",
+   "connector": "IEC",
+   "signal": "power",
+   "formats": "100-240 V AC"
+  },
+  {
+   "id": "power_dc",
+   "label": "12V DC In",
+   "count": 1,
+   "direction": "in",
+   "connector": "XLR4",
+   "signal": "power",
+   "formats": "12 V DC"
+  }
+ ],
+ "logic": [
+  {
+   "type": "switch",
+   "from": [
+    "sdi_in",
+    "hdmi_in"
+   ],
+   "to": [
+    "sdi_out"
+   ],
+   "notes": "Eingangswahl SDI oder HDMI für Aufnahme"
+  },
+  {
+   "type": "recorder",
+   "from": [
+    "sdi_in",
+    "hdmi_in"
+   ],
+   "to": [
+    "sdi_out",
+    "hdmi_out",
+    "sdi_mon"
+   ],
+   "notes": "Aufnahme/Wiedergabe auf 2 x SD (UHS-I/II) oder USB-C-Disk; ProRes, DNxHD/HR, H.264; Ausgänge zeigen Input (E-E) bzw. Playback"
+  },
+  {
+   "type": "splitter",
+   "from": [
+    "sdi_out"
+   ],
+   "to": [
+    "sdi_mon",
+    "hdmi_out"
+   ],
+   "notes": "Monitor-Out mit Overlays/LUT, HDMI-Out parallel"
+  },
+  {
+   "type": "encoder",
+   "from": [
+    "sdi_in",
+    "hdmi_in"
+   ],
+   "to": [
+    "usb_c"
+   ],
+   "notes": "UVC-Webcam-Ausgang"
+  }
+ ],
+ "control": [
+  {
+   "protocol": "HyperDeck Ethernet Protocol, TCP 9993",
+   "notes": "textbasiert; Zugang offen, mit Benutzer/Passwort oder deaktiviert"
+  },
+  {
+   "protocol": "RS-422 Deck Control",
+   "notes": "In + Out"
+  },
+  {
+   "protocol": "FTP / Web Media Manager",
+   "notes": "Dateiübertragung"
+  },
+  {
+   "protocol": "ATEM-Steuerung über Ethernet",
+   "notes": "ATEM-Switcher oder ATEM-Hardwarepanel"
+  },
+  {
+   "protocol": "SDI Start/Stop, Timecode Run",
+   "notes": "Aufnahmetrigger"
+  }
+ ],
+ "sources": [
+  {
+   "url": "https://www.blackmagicdesign.com/products/hyperdeckstudio/techspecs",
+   "what": "techspecs, Abschnitt HyperDeck Studio HD Plus (abgerufen 2026-10-17)"
+  },
+  {
+   "url": "https://documents.blackmagicdesign.com/UserManuals/HyperDeckHDManual.pdf",
+   "what": "manual S. 26-27 (Timecode/SDI-Out/Genlock), S. 30-31 Rear Panel, S. 47-48 Ethernet Protocol-Zugang, S. 60 RS-422"
+  },
+  {
+   "url": "https://documents.blackmagicdesign.com/DeveloperManuals/HyperDeckEthernetProtocol.pdf",
+   "what": "Developer-Doku S. 1 (TCP 9993)"
+  }
+ ],
+ "unverified": [
+  "Exakte Funktion SDI Out B: Tech Specs '2 SDI outputs', Beschreibung 'SDI loop out' und 'zwei 6G-SDI-Ausgänge für Fill/Key' - ob B im Normalbetrieb Loop des Inputs oder Kopie von A ist, nicht geklärt",
+  "Timecode-Signal als LTC nicht wörtlich genannt (nur 'Timecode BNC In/Out')",
+  "Kein analoger Audio-Ein-/Ausgang außer Kopfhörer laut Tech Specs",
+  "HDMI-Buchsentyp (Typ A) nicht explizit genannt",
+  "Eingangswahl SDI/HDMI aus Handbuch-Prosa (S. 4, 32 'selected SDI or HDMI source'), Menüpfad nicht geprüft"
+ ],
+ "format": "avdp/0.1",
+ "status": "draft",
+ "slots": []
+}

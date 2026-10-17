@@ -1,0 +1,36 @@
+{
+  "id": "magewell/pro-convert-ndi-to-aio",
+  "manufacturer": "Magewell",
+  "model": "Pro Convert for NDI to AIO",
+  "category": "decoder",
+  "rack_units": 0,
+  "power": "USB 5 V/2,1 A (Netzteil beiliegend) oder PoE IEEE 802.3af; max. ca. 5,5 W",
+  "ports": [
+    {"id": "eth", "label": "Ethernet (PoE)", "count": 1, "direction": "in", "connector": "RJ45", "signal": "Ethernet", "formats": "10/100/1000 Mbit/s; NDI HB/HX/HX2/HX3 (NDI 6.3), RTSP, HTTP, HLS, RTMP Pull/Push, MPEG-TS über UDP/SRT/RTP; SpeedHQ/H.264/H.265, AAC/MP3; bis 2Kp60", "notes": "PoE 802.3af PD; zugleich Steuerung (Web UI, API)"},
+    {"id": "hdmi_out", "label": "HDMI Out", "count": 1, "direction": "out", "connector": "HDMI-A", "signal": "HDMI", "formats": "HDMI 1.4, bis 1920x1080p60, Formatwahl nach EDID; YUV BT.601/709; Audio 48 kHz 8 Kanäle", "notes": ""},
+    {"id": "sdi_out", "label": "SDI Out", "count": 1, "direction": "out", "connector": "BNC", "signal": "SDI-3G", "formats": "SD/HD/3G (ST 259/292/425), 1080p23.98-60, 1080i50/59.94/60, 720p23.98-60, 576i50, 480i59.94; Audio 48 kHz 8 Kanäle embedded; CEA-608/708", "notes": "Reichweite 3G-SDI 130 m"},
+    {"id": "usb", "label": "USB (Power / Ethernet over USB)", "count": 1, "direction": "in", "connector": "USB-B", "signal": "power|USB", "formats": "USB 2.0; RNDIS/ECM, Default-IP 192.168.66.1", "notes": "Stromversorgung oder Web-UI-Zugang per USB; kein USB-Host am AIO-Modell"},
+    {"id": "dip", "label": "Rotary DIP (Board Index 0-F)", "count": 1, "direction": "in", "connector": "rotary-switch", "signal": "control", "formats": "16 Positionen", "notes": "zusätzlich Tasten MENU/SELECT, LEDs Power und Decode"}
+  ],
+  "logic": [
+    {"type": "decoder", "from": ["eth"], "to": ["hdmi_out", "sdi_out"], "notes": "Ein Decoder-Pfad; HDMI und SDI geben gleichzeitig dasselbe dekodierte Bild aus (gemeinsame Ausgabeauflösung, Manual: bei gleichzeitigem Anschluss passende Auflösung für beide wählen)"},
+    {"type": "splitter", "from": ["eth"], "to": ["hdmi_out", "sdi_out"], "notes": "Audio 48 kHz, bis 8 Kanäle embedded auf HDMI und SDI; kein separater Analog-Audioausgang"}
+  ],
+  "control": [
+    {"protocol": "Web UI (HTTP)", "notes": "Status inkl. NDI-Tally-Anzeige, Quellwahl, Ausgabeformat, Audio-Gain/Channel-Mapping"},
+    {"protocol": "HTTP API", "notes": "Magewell HTTP APIs"},
+    {"protocol": "Magewell Control Hub", "notes": "zentrale Verwaltung"},
+    {"protocol": "OSD-Menü über MENU/SELECT", "notes": ""}
+  ],
+  "sources": [
+    {"url": "https://www.magewell.com/tech-specs/pro-convert-for-ndi-to-aio", "what": "Tech Specs (Interfaces, Formate, Audio, Power, Maße 100,9x60,2x23,3 mm, 0-40 °C)"},
+    {"url": "https://www.magewell.com/products/pro-convert-for-ndi-to-aio", "what": "Produktseite"},
+    {"url": "https://www.magewell.com/files/documents/User_Manual/ProConvert_Decoder-UserManual_en_US.pdf", "what": "Pro Convert Decoder User Manual: S. 9/12 Interfaces AIO, S. 11 Connections (kein USB-Host beim AIO), S. 18 Ethernet over USB 192.168.66.1, S. 19 Tally, Output-Abschnitt (HDMI+SDI gleichzeitig)"}
+  ],
+  "unverified": [
+    "Ob HDMI und SDI unterschiedliche Auflösungen gleichzeitig ausgeben können – Manual deutet auf eine gemeinsame Ausgabeauflösung hin, nicht explizit",
+    "NDI-Tally-Rückmeldung an die Quelle (nur Anzeige im Web UI belegt)",
+    "Kein analoger Audioausgang – nur aus fehlender Erwähnung abgeleitet",
+    "Betriebstemperatur: Tech-Spec-Seite 0-40 °C, Modul-Variante 0-50 °C"
+  ]
+}

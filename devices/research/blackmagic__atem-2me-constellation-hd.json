@@ -1,0 +1,59 @@
+{
+  "id": "blackmagic/atem-2me-constellation-hd",
+  "manufacturer": "Blackmagic Design",
+  "model": "ATEM 2 M/E Constellation HD",
+  "category": "switcher",
+  "rack_units": 1,
+  "power": "1 x intern 100-240 V AC (IEC), 52 W",
+  "ports": [
+    {"id": "sdi_in", "label": "SDI In 1-20", "count": 20, "direction": "in", "connector": "BNC", "signal": "SDI-3G",
+     "formats": "1.5G/3G-SDI; 720p50/59.94/60, 1080i50/59.94/60, 1080p23.98-60; kein SD; 8 Kanäle Embedded Audio je Eingang",
+     "notes": "Re-Sync sowie Frame-Rate- und Formatkonverter auf allen 20 Eingängen"},
+    {"id": "sdi_out", "label": "SDI Out 1-12 (Aux)", "count": 12, "direction": "out", "connector": "BNC", "signal": "SDI-3G",
+     "formats": "HD bis 1080p60; 16 Kanäle Embedded Audio je Ausgang; Level A/B wählbar",
+     "notes": "Jeder der 12 Ausgänge frei als Aux, Program oder Preview belegbar; Mix-Minus je Ausgang; kein downkonvertierter PGM-Ausgang"},
+    {"id": "multiview_out", "label": "Multiview Out 1-2", "count": 2, "direction": "out", "connector": "BNC", "signal": "SDI-3G",
+     "formats": "HD; bei Projekt ab 1080p25 auf niedrigere Rate (z. B. 1080i) herunterkonvertierbar",
+     "notes": "Je 16/13/10/7/4 Fenster; keine Kamerasteuerdaten auf den Multiview-Ausgängen"},
+    {"id": "audio_in", "label": "Analog Audio In 1-2", "count": 2, "direction": "in", "connector": "TRS-6.3", "signal": "analog-audio",
+     "formats": "symmetrisch", "notes": "Gehen in den Fairlight-Mixer (48 Kanäle)"},
+    {"id": "talkback_xlr", "label": "Talkback (Headset)", "count": 1, "direction": "bidi", "connector": "XLR5", "signal": "analog-audio",
+     "notes": "Headset mit Mikrofon an der Front; Talkback in Tech Specs als Audio In und Out gelistet"},
+    {"id": "talkback_rj45", "label": "Talkback 3rd party", "count": 1, "direction": "bidi", "connector": "RJ45", "signal": "analog-audio",
+     "notes": "RJ45 für Fremd-Talkbacksysteme; Produktions-Talkback auf SDI-Kanälen 15/16, Engineering auf 13/14"},
+    {"id": "ref_in", "label": "Reference In", "count": 1, "direction": "in", "connector": "BNC", "signal": "reference",
+     "formats": "Tri-Sync oder Black Burst"},
+    {"id": "ethernet", "label": "Ethernet", "count": 1, "direction": "bidi", "connector": "RJ45", "signal": "Ethernet",
+     "formats": "10/100/1000BASE-T", "notes": "Steuerpanels direkt oder übers Netz, ATEM Software Control, GPI-and-Tally-Interface (Tally nur darüber)"},
+    {"id": "usb_c", "label": "USB-C", "count": 1, "direction": "bidi", "connector": "USB-C", "signal": "USB",
+     "formats": "USB 2.0; Webcam 720p oder 1080p mit PGM-Framerate",
+     "notes": "Webcam-Ausgang, Software-Updates, ATEM Setup (IP-Adresse setzen)"},
+    {"id": "power", "label": "AC Power", "count": 1, "direction": "in", "connector": "IEC", "signal": "power", "formats": "100-240 V AC"}
+  ],
+  "logic": [
+    {"type": "converter", "from": ["sdi_in"], "to": ["sdi_in"], "notes": "Jeder Eingang mit Frame-Sync und Standardkonverter auf das Projektformat"},
+    {"type": "mixer", "from": ["sdi_in"], "to": ["sdi_out", "multiview_out"], "notes": "2 M/E; 8 Upstream-Keyer, 2 Downstream-Keyer, 8 Advanced Chroma Keyer, 11 Linear/Luma-Keyer, 2 DVE, 2 Stinger; 15 Layer gesamt"},
+    {"type": "mixer", "from": ["sdi_in"], "to": ["sdi_out"], "notes": "SuperSource: 1 Prozessor (in M/E- und Aux-Quellen wählbar)"},
+    {"type": "matrix", "from": ["sdi_in"], "to": ["sdi_out"], "notes": "Aux-Kreuzschiene: Tech Specs 'Aux/Program/Preview: Any of the 12 SDI outputs'; Handbuch S. 8 'multiple outputs that can have any source routed to them'"},
+    {"type": "splitter", "from": ["sdi_in"], "to": ["multiview_out"], "notes": "2 Multiviews, je 16/13/10/7/4 Fenster mit PGM, PVW, Inputs, Media Player, M/Es, DSKs, SuperSource, Clean Feed, Labels, Audiometer"},
+    {"type": "matrix", "from": [], "to": ["sdi_out"], "notes": "2 Media Player (Fill + Key), Media Pool 40 Stills, 2 Clips (400 Frames 1080 / 800 Frames 720)"},
+    {"type": "mixer", "from": ["sdi_in", "audio_in", "talkback_xlr", "talkback_rj45"], "to": ["sdi_out", "usb_c"], "notes": "Fairlight-Audiomixer 48 Kanäle, 6-Band-EQ, Dynamics, AFV; Mix-Minus auf SDI-Ausgängen"},
+    {"type": "encoder", "from": [], "to": ["usb_c"], "notes": "UVC-Webcam-Ausgang des Programms (720p/1080p)"}
+  ],
+  "control": [
+    {"protocol": "ATEM Software Control / ATEM Hardware-Panels über Ethernet", "notes": "Steuerpanel direkt oder über Netzwerk; IP-Adresse per ATEM Setup über USB"},
+    {"protocol": "Front-Panel", "notes": "2,2\" LCD, Notfall-Umschaltung, Menüs"},
+    {"protocol": "Tally über Blackmagic GPI and Tally Interface (Ethernet)", "notes": "nicht enthalten"}
+  ],
+  "sources": [
+    {"url": "https://www.blackmagicdesign.com/products/atemconstellation/techspecs", "what": "techspecs, Abschnitt ATEM 2 M/E Constellation HD (abgerufen 2026-10-17)"},
+    {"url": "https://documents.blackmagicdesign.com/UserManuals/ATEM_Constellation_HD_Switchers_Manual.pdf", "what": "manual S. 8-11 (Anschlüsse, Audio, Multiview, Talkback), S. 23-24 (Multiview-Format, Level A/B), S. 50 (Headset 5-pol. XLR), S. 59 (keine CCU-Daten auf Multiview)"}
+  ],
+  "unverified": [
+    "Ob die 2 Multiview-Ausgänge eigene BNC-Buchsen zusätzlich zu den 12 SDI-Ausgängen sind (Tech Specs: 'Total Video Outputs 12' + 'Total Multi Views 2 x 3G-SDI'; Handbuch S. 59 spricht von separaten 'multiview outputs')",
+    "Kein MADI, kein Timecode-Anschluss, kein RS-422 (RJ12) und kein Analog-Audio-Ausgang laut Tech Specs beim 2 M/E HD; RJ12/MADI nur bei 4 M/E und 8K (Handbuch S. 10, 32)",
+    "Steckerbelegung der RJ45-Talkback-Buchse nicht geprüft",
+    "ATEM-Netzwerkprotokoll (UDP 9910) ist nicht in den Herstellerquellen dokumentiert; offiziell nur ATEM SDK",
+    "Anzahl SuperSource-Boxen (üblicherweise 4) in den gelesenen Seiten nicht belegt"
+  ]
+}

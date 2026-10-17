@@ -1,0 +1,119 @@
+{
+ "id": "behringer/wing-dante",
+ "manufacturer": "Behringer",
+ "model": "WING-DANTE (Expansion Card, Art.-Nr. 0606-ADL)",
+ "category": "converter",
+ "slot": "expansion",
+ "fits": [
+  "behringer/wing-rack",
+  "behringer/wing",
+  "behringer/wing-compact"
+ ],
+ "rack_units": 0,
+ "power": "über WING-Expansion-Slot",
+ "ports": [
+  {
+   "id": "dante_primary",
+   "label": "Primary",
+   "count": 1,
+   "direction": "bidi",
+   "connector": "etherCON",
+   "signal": "Dante",
+   "formats": "64x64 Kanäle, 48 kHz, 24 bit; 100 Mbit/s oder 1 Gbit/s; AES67",
+   "notes": "RJ45 in etherCON-Gehäuse"
+  },
+  {
+   "id": "dante_secondary",
+   "label": "Secondary",
+   "count": 1,
+   "direction": "bidi",
+   "connector": "etherCON",
+   "signal": "Dante",
+   "formats": "wie Primary",
+   "notes": "Redundant oder Switched (Dante Controller > Network Config)"
+  },
+  {
+   "id": "slot_bus",
+   "label": "WING Expansion-Slot-Anschluss",
+   "count": 1,
+   "direction": "bidi",
+   "connector": "card-edge",
+   "signal": "expansion",
+   "formats": "64x64 Kanäle @ 48 kHz",
+   "notes": "Source-Gruppe 'Exp Card' bzw. WING-DANTE"
+  }
+ ],
+ "logic": [
+  {
+   "type": "converter",
+   "from": [
+    "slot_bus"
+   ],
+   "to": [
+    "dante_primary",
+    "dante_secondary"
+   ],
+   "notes": "64 Kanäle WING -> Dante TX"
+  },
+  {
+   "type": "converter",
+   "from": [
+    "dante_primary",
+    "dante_secondary"
+   ],
+   "to": [
+    "slot_bus"
+   ],
+   "notes": "64 Dante RX -> WING-Sources"
+  }
+ ],
+ "control": [
+  {
+   "protocol": "Dante Controller (Audinate)",
+   "notes": "Routing, Clock, Redundanz; Brooklyn II; Dante Virtual Soundcard für PC/Mac-Recording laut Produktseite"
+  },
+  {
+   "protocol": "WING Console Options",
+   "notes": "Ab FW 3.1: Kennung 'CRD-WDANTE' (Dante-Modul) bzw. 'CRD-WDWSG' (WSG-Modul auf der Karte) – Karte kann statt des Dante- auch ein AoIP-WSG-Modul tragen"
+  }
+ ],
+ "sources": [
+  {
+   "url": "https://www.behringer.com/en/products/0606-ADL",
+   "what": "Produktseite: 64x64, 48 kHz, 24 bit, 100M/1G, DSCP-QoS, AES67, Secondary für Redundanz, ersetzt WING-LIVE im Expansion-Slot"
+  },
+  {
+   "url": "https://cdn-media.empowertribe.com/7ee4b1099c6c4254b99643621a308c97/QSG_BE_0606-ADL_WING-DANTE_WW.pdf",
+   "what": "Quick Start Guide WING-DANTE: Einbau in Expansion-Slot, min. FW 1.08, 64x64 über einfache oder redundante Verbindung, 100M/1G"
+  },
+  {
+   "url": "https://cdn-media.empowertribe.com/25951c6f808c0a79abc407c07d5639d1/User-Manual_WING-series_2025-10-20.pdf",
+   "what": "User Manual S. 12 (Expansion Slot, Dante/MADI-Karten), S. 39 Source-Gruppe 'Exp Card: WING-LIVE, WING-DANTE, WING-MADI', S. 165 64x64"
+  },
+  {
+   "url": "https://cdn-media.empowertribe.com/a9fcb86bb447f7c8a51263f3f3366fcc/WING-AoIP-module-relocation-instructions_2025-07-23.pdf",
+   "what": "AoIP module relocation instructions 2025-07-23: ab FW 3.1 kann die WING-DANTE-Karte ein Dante- oder WSG-AoIP-Modul aufnehmen; Strings CRD-WDANTE / CRD-WDWSG"
+  },
+  {
+   "url": "https://www.behringer.com/en/wing/wing-rack",
+   "what": "Produktseite WING RACK: Expansion Slot 'e.g. Dante, WSG, MADI', WING LIVE vorinstalliert, interne AoIP-Module AoIP-Dante/AoIP-WSG"
+  },
+  {
+   "url": "https://www.behringer.com/en/wing/wing-black",
+   "what": "Produktseite WING: gleiche Aussagen zu Expansion Slot und internen AoIP-Modulen"
+  },
+  {
+   "url": "https://www.behringer.com/en/wing/wing-compact",
+   "what": "Produktseite WING COMPACT: gleiche Aussagen zu Expansion Slot und internen AoIP-Modulen"
+  }
+ ],
+ "unverified": [
+  "96 kHz nicht unterstützt (nur 48 kHz belegt); 44,1 kHz nicht belegt",
+  "Schließt WING-LIVE und WING-MADI aus (nur ein Expansion-Slot); SD-Recording + Dante gleichzeitig nur mit internem AOIP-DANTE",
+  "Kompatibilität WING RACK/COMPACT aus Manual ('All WING models' gleicher Slot) und Modellseiten abgeleitet; die 0606-ADL-Seite nennt nur 'WING'",
+  "Ob für den Betrieb der Karte mit AoIP-WSG-Modul ein zweites, separat gekauftes AOIP-WSG nötig ist und ob dann noch Dante auf der Karte läuft, nicht explizit belegt (vermutlich ersetzt das WSG-Modul das Dante-Modul)"
+ ],
+ "format": "avdp/0.1",
+ "status": "draft",
+ "kind": "module"
+}
