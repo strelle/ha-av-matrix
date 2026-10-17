@@ -64,6 +64,12 @@ aside a { color: var(--video); word-break: break-all; }
 .pill { display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 99px; border: 1px solid var(--line); color: var(--muted); }
 .pill.draft { color: var(--audio); border-color: var(--audio); }
 .hint { color: var(--muted); font-size: 12px; }
+aside .hints { display: grid; gap: 8px; }
+aside .hint-i { border-left: 3px solid var(--line); padding: 4px 8px; cursor: default; }
+aside .hint-i.warn { border-color: var(--audio); }
+aside .hint-i.info { border-color: var(--video); }
+aside .hint-i b { display: block; font-weight: 600; }
+aside .hint-i span { color: var(--muted); font-size: 12px; }
 #tip { position: fixed; pointer-events: none; background: var(--ink); color: var(--bg); font-size: 12px; padding: 4px 8px; border-radius: 5px; display: none; max-width: 280px; z-index: 5; }
 </style>
 
@@ -85,7 +91,7 @@ aside a { color: var(--video); word-break: break-all; }
   </div>
   <div class="main">
     <div class="canvas"><svg id="svg"></svg></div>
-    <aside id="side"><h2>Gerät wählen</h2><p class="hint">Ein Klick auf ein Gerät zeigt sein Profil: alle Buchsen laut Hersteller, innere Logik, Steckplätze und Quellen.</p></aside>
+    <aside id="side"></aside>
   </div>
 </div>
 <div id="tip"></div>
@@ -216,7 +222,7 @@ svg.addEventListener("click", ev => {
   const n = inst[node.dataset.id], pr = prof(n.profile);
   const mods = n.modules ? Object.entries(n.modules).map(([s, m]) => `<li>${esc((pr.slots || []).find(x => x.id === s)?.label || s)}: <b>${esc(m)}</b></li>`).join("") : "";
   const slots = (pr.slots || []).map(s => `<li>${esc(s.label)} – passt: ${esc(s.accepts.join(", "))}</li>`).join("");
-  sideEl.innerHTML = `<h2>${esc(n.name)}</h2>
+  sideEl.innerHTML = `<p><a href="#" id="back">← Hinweise</a></p><h2>${esc(n.name)}</h2>
     <div class="kv">${esc([pr.manufacturer, pr.model].filter(Boolean).join(" "))} · ${esc(pr.category || "")} ${pr.status ? `<span class="pill ${pr.status === "draft" ? "draft" : ""}">${pr.status === "draft" ? "Entwurf" : "geprüft"}</span>` : ""}</div>
     ${n.address ? `<div class="kv">Adresse ${esc(n.address)}</div>` : ""}
     ${RACK[n.id] ? `<div><b>Rack: ${esc(RACK[n.id].name)}</b> – fest verbaut mit ${esc(RACK[n.id].members.filter(m => m !== n.id).map(m => inst[m].name).join(", "))}<br><span class="kv">Übergabe: ${esc((RACK[n.id].ports || []).join("; "))}</span></div>` : ""}
@@ -226,6 +232,40 @@ svg.addEventListener("click", ev => {
     ${(pr.unverified || []).length ? `<div><b>Nicht belegt</b><ul>${pr.unverified.map(u => `<li>${esc(u)}</li>`).join("")}</ul></div>` : ""}
     ${(pr.sources || []).length ? `<div><b>Quellen</b><ul>${pr.sources.map(s => `<li><a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.what || s.url)}</a></li>`).join("")}</ul></div>` : ""}`;
 });
+
+// Empfehlungen: aus Regeln über das Projekt berechnet, ändern nichts
+function findings() {
+  const out = [], name = id => inst[id]?.name || id;
+  const unmanaged = P.instances.filter(i => /unmanaged|tl-sg1024/i.test(i.profile));
+  for (const sw of unmanaged) {
+    const mc = P.flows.filter(f => f.via === sw.id && ["Dante", "NDI"].includes(f.kind));
+    if (mc.length) out.push({level: "warn", title: `${name(sw.id)}: Multicast ohne IGMP-Snooping`, text: `${[...new Set(mc.map(f => f.kind))].join(" und ")} laufen über einen unmanaged Switch und gehen an alle Ports. Für diese Größe unkritisch; mit mehr Strömen einen Switch mit IGMP-Snooping vorsehen. ST 2110 nie über diesen Switch.`, ids: [sw.id, ...mc.flatMap(f => [split(f.from)[0], split(f.to)[0]])]});
+  }
+  for (const r of P.racks || []) {
+    const links = P.cables.filter(c => { const a = split(c.from)[0], b = split(c.to)[0]; return r.members.includes(a) !== r.members.includes(b) && (P.racks || []).some(o => o !== r && (o.members.includes(a) || o.members.includes(b))); });
+    if (links.length === 1) out.push({level: "info", title: `Ein einziges Kabel zwischen ${r.name} und dem Rest`, text: `Fällt es aus, sind Steuerung, NDI, DHCP und Internet getrennt. Ein zweites Kabel bringt nur mit Switches mit Spanning Tree oder Link-Aggregation etwas; sonst Ersatzkabel bereitlegen.`, ids: links.flatMap(c => [split(c.from)[0], split(c.to)[0]])});
+  }
+  const st = P.flows.filter(f => f.kind === "ST 2110");
+  if (st.length) out.push({level: "info", title: "ST 2110 nur an 10G-Ports", text: "Die Blackmagic-Wandler verhandeln 1G oder 10G, kein 2,5G. An 1G senden sie nur Ton und Zusatzdaten, kein Bild.", ids: [...new Set(st.flatMap(f => [split(f.from)[0], split(f.to)[0], f.via]))]});
+  const assumed = [...P.cables, ...P.flows].filter(c => c.assumed);
+  if (assumed.length) out.push({level: "warn", title: `${assumed.length} Verbindungen nicht geprüft`, text: assumed.map(c => `${name(split(c.from)[0])} → ${name(split(c.to)[0])}`).join("; "), ids: assumed.flatMap(c => [split(c.from)[0], split(c.to)[0]])});
+  const drafts = P.instances.filter(i => prof(i.profile).status === "draft");
+  if (drafts.length) out.push({level: "info", title: `${drafts.length} Geräteprofile im Entwurf`, text: "Aus Herstellerquellen erstellt, noch nicht am Gerät geprüft. Erst nach der Prüfung als „geprüft“ markieren.", ids: drafts.map(i => i.id)});
+  const generic = P.instances.filter(i => P.generic[i.profile] && /offen/i.test(P.generic[i.profile].model || ""));
+  if (generic.length) out.push({level: "info", title: "Modell unbekannt", text: generic.map(i => i.name).join(", ") + " – Modell nennen, dann gibt es ein echtes Profil.", ids: generic.map(i => i.id)});
+  return out;
+}
+function showHints() {
+  const f = findings();
+  sideEl.innerHTML = `<h2>Hinweise</h2><p class="hint">Empfehlungen aus dem Projekt – nichts davon wird geändert. Maus über einen Hinweis zeigt die betroffenen Geräte; Klick auf ein Gerät öffnet sein Profil.</p>
+    <div class="hints">${f.map((h, k) => `<div class="hint-i ${h.level}" data-k="${k}"><b>${esc(h.title)}</b><span>${esc(h.text)}</span></div>`).join("")}</div>`;
+  sideEl.querySelectorAll(".hint-i").forEach(d => {
+    d.addEventListener("pointerenter", () => { const ids = new Set(f[d.dataset.k].ids); svg.classList.add("dimmed"); document.querySelectorAll(".node").forEach(n => n.classList.toggle("hot", ids.has(n.dataset.id))); });
+    d.addEventListener("pointerleave", clear);
+  });
+}
+showHints();
+sideEl.addEventListener("click", ev => { if (ev.target.id === "back") { ev.preventDefault(); document.querySelectorAll(".node.sel").forEach(n => n.classList.remove("sel")); showHints(); } });
 const lanBox = document.getElementById("lan");
 const applyLan = () => svg.classList.toggle("hidelan", !lanBox.checked);
 lanBox.addEventListener("change", applyLan); applyLan();
