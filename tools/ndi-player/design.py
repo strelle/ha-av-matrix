@@ -4,7 +4,7 @@ ohne Unterbrechung des NDI-Bilds.
 
 Zustand (overlay_state.json) besteht aus unabhängigen Ebenen:
   main: countdown {type, label, until "HH:MM", after_text, hide_at} | text {type, title, subtitle, hide_at} | {type: off}
-  wifi: {on, label, ssid, password, security "WPA"|"WEP"|"nopass", show_password, hidden, note, hide_at}
+  wifi: {on, label, ssid, password, security "WPA"|"WEP"|"nopass", show_password, hidden, note_label, note, hide_at}
 """
 from datetime import datetime
 from pathlib import Path
@@ -80,7 +80,7 @@ def wifi_phase(c):
     if not c or not c.get("on") or hidden(c):
         return None
     return ("wifi", c.get("label") or "WLAN", c.get("ssid", ""), c.get("password", ""), c.get("security", "WPA"),
-            bool(c.get("show_password", True)), bool(c.get("hidden")), (c.get("note") or "").strip())
+            bool(c.get("show_password", True)), bool(c.get("hidden")), (c.get("note") or "").strip(), (c.get("note_label") or "").strip())
 
 
 def showing(cfg):
@@ -136,20 +136,21 @@ def _esc(s): return "".join("\\" + ch if ch in '\\;,:"' else ch for ch in s)
 
 
 def render_wifi(ph):
-    _, label, ssid, pw, sec, show_pw, hid, note = ph
+    _, label, ssid, pw, sec, show_pw, hid, note, note_label = ph
     payload = f"WIFI:T:{sec};S:{_esc(ssid)};" + (f"P:{_esc(pw)};" if sec != "nopass" else "") + ("H:true;" if hid else "") + ";"
     qr = segno.make(payload, error="m")
     q = 300; buf = __import__("io").BytesIO(); qr.save(buf, kind="png", scale=10, border=2); buf.seek(0)
     qimg = Image.open(buf).convert("RGBA").resize((q, q), Image.NEAREST)
     pw_line = pw if (show_pw and sec != "nopass") else ""
-    bw = 360; nf = font(34)
+    bw = 360; nf = font(52) if note_label else font(34)
     note_lines = []
     for word in note.split():  # Sonderfeld auf Kastenbreite umbrechen
         if note_lines and ImageDraw.Draw(Image.new("L", (1, 1))).textlength(note_lines[-1] + " " + word, font=nf) <= bw - 48:
             note_lines[-1] += " " + word
         else:
             note_lines.append(word)
-    bh = 104 + q + 20 + 52 + (44 if pw_line else 0) + 40 * len(note_lines) + 26
+    lh = 56 if note_label else 40
+    bh = 104 + q + 20 + 52 + (44 if pw_line else 0) + (44 if note_label and note_lines else 0) + lh * len(note_lines) + 26
     img, d = _panel(bw, bh)
     d.rectangle([0, 0, bw - 1, 12], fill=ORANGE + (255,))
     wifi_icon(d, 52, 86, 42, WHITE + (255,), 7)
@@ -161,8 +162,10 @@ def render_wifi(ph):
     if pw_line:
         d.text((24, y + 52), pw_line, font=font(38), fill=BLUE + (255,))
     ny = y + 52 + (44 if pw_line else 0)
+    if note_label and note_lines:  # z. B. „PASSWORT“ für die Anmeldeseite, Inhalt groß darunter
+        d.text((24, ny + 4), note_label.upper(), font=font(34), fill=ORANGE + (255,)); ny += 44
     for i, ln in enumerate(note_lines):
-        d.text((24, ny + 40 * i), ln, font=nf, fill=ORANGE + (255,))
+        d.text((24, ny + lh * i), ln, font=nf, fill=(WHITE if note_label else ORANGE) + (255,))
     return _layer(img, 1920 - bw - 40, 40)
 
 
