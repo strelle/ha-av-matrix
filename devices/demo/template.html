@@ -84,7 +84,7 @@ aside .hint-i span { color: var(--muted); font-size: 12px; }
       <span><i style="background:var(--audio)"></i>Ton</span>
       <span><i class="dash"></i>Netzstrom (NDI, Dante, 2110, RTMP)</span>
       <span><i style="background:var(--line)"></i>Netzkabel</span>
-      <span><i style="background:var(--audio);width:4px;height:14px"></i>WING-Rack</span><span><i style="background:var(--video);width:4px;height:14px"></i>Videoregie</span>
+      <span id="rackleg"></span>
     </div>
     <label class="tg"><input type="checkbox" id="lan"> Netzkabel zeigen</label>
     <span class="hint">Maus über Gerät oder Buchse zeigt den Fluss · Klick öffnet das Profil</span>
@@ -109,6 +109,7 @@ const VIRTUAL = new Set(["me1", "main1", "main2"]);
 const NETDEV = new Set(["ux", "poe", "tpl", "house"]);
 const RACK = {}; (P.racks || []).forEach((r, k) => r.members.forEach(m => RACK[m] = {...r, k}));
 const RACKCOL = ["var(--audio)", "var(--video)", "var(--net)"];
+document.getElementById("rackleg").innerHTML = (P.racks || []).map((r, k) => `<span><i style="background:${RACKCOL[k % 3]};width:4px;height:14px"></i>Rack ${esc(r.name)}</span>`).join(" ");
 document.getElementById("meta").textContent = `${P.name} · Stand ${P.date} · ${P.instances.length} Geräte`;
 
 // Signalart je Port (aus dem Profil), für die Farbe
@@ -142,7 +143,7 @@ for (const n of sorted) {
   const pr = prof(n.profile);
   const lanonly = ports.length > 0 && ports.every(p => (n.id === "lan"));
   const g = el("g", {class: "node", "data-id": n.id, tabindex: 0}, gN);
-  el("rect", {class: "box", x, y, width: W, height: h, rx: 6}, g);
+  el("rect", {class: "box", x, y, width: W, height: h, rx: 6, ...(n.added ? {"stroke-dasharray": "5 3"} : {})}, g);
   el("rect", {class: "head", x: x + 1, y: y + 1, width: W - 2, height: HEAD - 6, rx: 5}, g);
   if (RACK[n.id]) { el("rect", {x: x, y: y + 4, width: 4, height: h - 8, rx: 2, fill: RACKCOL[RACK[n.id].k % 3]}, g).appendChild(el("title")).textContent = "Rack: " + RACK[n.id].name; }
   el("text", {class: "t", x: x + 10, y: y + 17}, g).textContent = n.name;
@@ -247,6 +248,11 @@ function findings() {
   }
   const st = P.flows.filter(f => f.kind === "ST 2110");
   if (st.length) out.push({level: "info", title: "ST 2110 nur an 10G-Ports", text: "Die Blackmagic-Wandler verhandeln 1G oder 10G, kein 2,5G. An 1G senden sie nur Ton und Zusatzdaten, kein Bild.", ids: [...new Set(st.flatMap(f => [split(f.from)[0], split(f.to)[0], f.via]))]});
+  for (const ch of P.changes || []) {
+    if (ch.kind === "removed") out.push({level: "warn", title: `${ch.rack}: ${ch.name} herausgelöst`, text: "Abwandlung nur in diesem Projekt; die Rack-Vorlage bleibt unverändert. Fehlende feste Kabel prüfen.", ids: []});
+    if (ch.kind === "added") out.push({level: "info", title: `${ch.rack}: ${ch.name} angebaut`, text: "Abwandlung nur in diesem Projekt. Kommt das öfter vor, als neue Rack-Vorlage speichern.", ids: [ch.id]});
+    if (ch.kind === "modules") out.push({level: "info", title: `${ch.name}: Modul getauscht`, text: `${JSON.stringify(ch.from)} → ${JSON.stringify(ch.to)}`, ids: [ch.id]});
+  }
   const assumed = [...P.cables, ...P.flows].filter(c => c.assumed);
   if (assumed.length) out.push({level: "warn", title: `${assumed.length} Verbindungen nicht geprüft`, text: assumed.map(c => `${name(split(c.from)[0])} → ${name(split(c.to)[0])}`).join("; "), ids: assumed.flatMap(c => [split(c.from)[0], split(c.to)[0]])});
   const drafts = P.instances.filter(i => prof(i.profile).status === "draft");

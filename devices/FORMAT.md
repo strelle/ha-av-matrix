@@ -42,3 +42,14 @@ Optionales Zubehör, das als Einheit transportiert und gesteckt wird – z. B. K
 nach außen nur seine Übergabe-Ports (`ports[]`). `accepts[]` nennt die Buchsen, an die es passt (z. B. Patchfeld LC I/O 1/2).
 Im Konfigurator wird ein Set per Drag and Drop auf eine passende Buchse gezogen; die ganze Kette ist danach verbunden.
 Sets liegen in `kits/`.
+
+## Racks als Vorlagen, Abwandlungen im Projekt (`avrig/0.2`, `avrack/0.1`)
+
+Rack-Vorlagen liegen in `racks/`. Ein Projekt zieht ein Rack ganz oder gar nicht: `racks: [{ref, overrides}]`.
+Sonderfälle werden im Projekt abgewandelt, die Vorlage bleibt unverändert:
+
+- `remove: [id]` – Gerät aus dem Rack herauslösen (seine Kabel entfallen)
+- `add: {instances, cables}` – Gerät anbauen (in der Ansicht gestrichelt umrandet)
+- `modules: {id: {slot: modul}}` – Modul tauschen
+
+`demo/build.py` löst Vorlagen und Abwandlungen auf; die Hinweise zeigen jede Abwandlung an.
