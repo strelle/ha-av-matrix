@@ -207,6 +207,13 @@
    "name": "SDI→HDMI Converter 1 (MV1)",
    "col": 2,
    "row": 4
+  },
+  {
+   "id": "mini",
+   "profile": "generic/2110-mini-bidirect-12g",
+   "name": "2110 IP Mini BiDirect 12G (heute nicht gesteckt)",
+   "col": 1,
+   "row": 8
   }
  ],
  "cables": [
@@ -979,6 +986,35 @@
     }
    ],
    "notes": "weitere Buchsen: SDI In 6, SDI Out 5/6/9, HDMI Out 5/10, LC I/O 1/2, ADAT Out"
+  },
+  "generic/2110-mini-bidirect-12g": {
+   "manufacturer": "Blackmagic Design",
+   "model": "2110 IP Mini BiDirect 12G",
+   "category": "converter",
+   "ports": [
+    {
+     "id": "sdi_in",
+     "direction": "in",
+     "connector": "BNC",
+     "signal": "SDI-12G"
+    },
+    {
+     "id": "sdi_out",
+     "direction": "out",
+     "connector": "BNC",
+     "signal": "SDI-12G"
+    },
+    {
+     "id": "ip_10g",
+     "direction": "bidi",
+     "connector": "RJ45",
+     "signal": "ST2110",
+     "notes": "PoE-versorgt; nur an echten 10G-Ports Bild"
+    }
+   ],
+   "unverified": [
+    "Profil noch nicht recherchiert; Ports aus NMOS-Meldung 14.10.2026"
+   ]
   }
  },
  "racks": [
@@ -1009,7 +1045,8 @@
     "tpl",
     "patch",
     "hdconv",
-    "mvconv"
+    "mvconv",
+    "mini"
    ],
    "ports": [
     "Patchfeld: SDI In 5/6, SDI Out 5/6/9, HDMI Out 5 (MV1 mit Ton) und 10 (Aux 10), LC I/O 1/2 (Fiber), ADAT Out, XLR In L/R",
