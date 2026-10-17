@@ -2,7 +2,7 @@
  "format": "avrig/0.1",
  "name": "Schnittplatz ÖGSW Krems",
  "date": "2026-10-17",
- "notes": "Stand Showtag 2. Kabel und Patch aus Bestandsaufnahme und Live-Abfrage; mit 'assumed' markierte Verbindungen sind nicht am Gerät geprüft. Patch laut Default-Plan 07.10.2026 (Synology home/Veranstlatungstechnik/Blackmagic/00_DEFAULT_Schnittplatz_2026-10-07). Audio-Ports des Presentation Converters heute ungenutzt.",
+ "notes": "Stand Showtag 2. Kabel und Patch aus Bestandsaufnahme und Live-Abfrage; mit 'assumed' markierte Verbindungen sind nicht am Gerät geprüft. Patch laut Default-Plan 07.10.2026 (Synology home/Veranstlatungstechnik/Blackmagic/00_DEFAULT_Schnittplatz_2026-10-07). Audio-Ports des Presentation Converters heute ungenutzt. DeckLink IP/SDI HD vorhanden (Thunderbolt-Gehäuse), für Regietool/Zeitnehmung/Foyer über 2110 vorgesehen.",
  "instances": [
   {
    "id": "cam1",
@@ -228,6 +228,13 @@
    "name": "BiDirectional Converter Comfort (SDI→HDMI)",
    "col": 2,
    "row": 5
+  },
+  {
+   "id": "decklink",
+   "profile": "blackmagic/decklink-ip-sdi-hd",
+   "name": "DeckLink IP/SDI HD (eGPU-Gehäuse, heute nicht gesteckt)",
+   "col": 0,
+   "row": 7
   }
  ],
  "cables": [

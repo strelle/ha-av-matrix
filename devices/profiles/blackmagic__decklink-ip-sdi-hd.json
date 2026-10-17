@@ -1,0 +1,112 @@
+{
+ "format": "avdp/0.1",
+ "status": "draft",
+ "id": "blackmagic/decklink-ip-sdi-hd",
+ "manufacturer": "Blackmagic Design",
+ "model": "DeckLink IP/SDI HD",
+ "category": "converter",
+ "rack_units": 0,
+ "power": "Über PCIe-Bus, 10 W Leistungsaufnahme lt. Tech Specs; kein Zusatzstromanschluss gelistet. Hier betrieben in einem Thunderbolt-PCIe-Erweiterungsgehäuse (eGPU-Gehäuse) am Mac",
+ "ports": [
+  {
+   "id": "sdi_io",
+   "label": "SDI 1-2",
+   "count": 2,
+   "direction": "bidi",
+   "connector": "BNC",
+   "signal": "SDI-3G",
+   "formats": "SD/HD: 525i59.94, 625i50, 720p50/59.94/60, 1080i50/59.94/60, 1080p23.98-60, 1080PsF23.98-30 (PsF nur SDI); SMPTE 259M, 292M, 296M, 424M, 425M Level A/B; 16 Kanäle Embedded Audio 48 kHz/24 bit; RP 188 Timecode, Closed Captioning",
+   "notes": "Laut Tech Specs 2 bidirektionale 12-bit-SDI-Ports, jeder unabhängig als Eingang oder Ausgang einstellbar"
+  },
+  {
+   "id": "ip_10g",
+   "label": "10G Ethernet (2110 IP)",
+   "count": 1,
+   "direction": "bidi",
+   "connector": "RJ45",
+   "signal": "ST2110",
+   "formats": "10GBASE-T; ST 2110-20 (IGMP v2/v3), -21, -30 (Level C), -40; bis 1080p60; 16 Kanäle Audio; PTP IEEE 1588-2008 / SMPTE ST 2059-1/-2",
+   "notes": "2 Capture- und 2 Playback-Kanäle über diesen einen Port; kein SMPTE 2022-7 gelistet. IP-Adresse statisch oder DHCP über Desktop Video Setup; Handbuch empfiehlt Cat-6-Kabel, dedizierten PTP-Grandmaster und IGMPv3-fähiges Netz"
+  },
+  {
+   "id": "ref_out",
+   "label": "Sync Out (Ref Out)",
+   "count": 1,
+   "direction": "out",
+   "connector": "BNC",
+   "signal": "reference",
+   "formats": "Tri-Sync oder Black Burst",
+   "notes": "Laut Tech Specs ein Referenz-AUSGANG (\"Sync Output\", Produktseite: \"ref out\"), kein Referenzeingang; Taktbasis der Karte ist PTP über das Netzwerk"
+  },
+  {
+   "id": "pcie",
+   "label": "PCIe Host Interface",
+   "count": 1,
+   "direction": "bidi",
+   "connector": "PCIe x4",
+   "signal": "PCIe",
+   "formats": "PCI Express 4 Lanes Gen 2; passt in x4-, x8- und x16-Slots",
+   "notes": "Full-Height-Karte. Hier in Thunderbolt-PCIe-Gehäuse am Mac betrieben (siehe unverified)"
+  }
+ ],
+ "logic": [
+  {
+   "type": "recorder",
+   "from": ["ip_10g"],
+   "to": ["pcie"],
+   "notes": "2 Capture-Kanäle von SMPTE 2110 (Video/Audio/Anc) in den Rechner; Videostandard je Kanal über Desktop Video Utility setzbar; Empfänger per NMOS IS-05 verbindbar"
+  },
+  {
+   "type": "encoder",
+   "from": ["pcie"],
+   "to": ["ip_10g"],
+   "notes": "2 Playback-Kanäle vom Rechner als SMPTE 2110-Sender; Multicast-Zieladresse je Stream in Desktop Video Setup ('2110 Multicast Output', 224.0.0.0-239.255.255.255)"
+  },
+  {
+   "type": "converter",
+   "from": ["sdi_io"],
+   "to": ["pcie"],
+   "notes": "SDI-Ports als Eingang konfiguriert: Capture SD/HD-SDI in den Rechner"
+  },
+  {
+   "type": "converter",
+   "from": ["pcie"],
+   "to": ["sdi_io", "ref_out"],
+   "notes": "SDI-Ports als Ausgang konfiguriert: Playback auf SDI; Sync-Ausgang Tri-Sync/Black Burst. Hardware-Farbraumwandlung Rec 601/709/2020 in Echtzeit; HDR-Static-Metadata, HLG, PQ"
+  }
+ ],
+ "control": [
+  {
+   "protocol": "Blackmagic Desktop Video (Desktop Video Setup / Utility)",
+   "notes": "Treiber + Setup: Netzwerk (DHCP/statisch), 2110-Multicast-Ausgangsadressen je Stream, Videostandard je Kanal; mitgeliefert Media Express, Disk Speed Test, LiveKey"
+  },
+  {
+   "protocol": "NMOS IS-04 v1.3.2 / IS-05 v1.1.2",
+   "notes": "Discovery/Registration und Connection Management; BCP-002-01 (Grouping), BCP-004-01 (Receiver Capabilities)"
+  },
+  {
+   "protocol": "PTP IEEE 1588-2008 / SMPTE ST 2059-1/-2",
+   "notes": "Synchronisation aller Quellen über gemeinsamen PTP-Takt"
+  },
+  {
+   "protocol": "DeckLink SDK",
+   "notes": "Kostenloses SDK für Mac, Windows, Linux; SDK-Handbuch nennt DeckLink IP/SDI HD als SMPTE-2110-fähig"
+  }
+ ],
+ "sources": [
+  {"url": "https://www.blackmagicdesign.com/products/decklinkip/techspecs/W-DLK-41", "what": "techspecs DeckLink IP/SDI HD (Anschlüsse, Standards, IP-Compliance, NMOS, PTP, PCIe, 10 W, OS)"},
+  {"url": "https://www.blackmagicdesign.com/products/decklinkip", "what": "Produktseite (2 Capture-/Playback-Kanäle 2110 via RJ45, 3G-SDI, ref out; IS-04/IS-05; PTP)"},
+  {"url": "https://documents.blackmagicdesign.com/UserManuals/DesktopVideoManual.pdf", "what": "manual S. 7-8 (Anschluss via Thunderbolt/USB/PCIe), S. 29 (Setup-Tab DeckLink IP: DHCP/static, Cat 6, PTP-Grandmaster, IGMPv3, 2110 Multicast Output)"},
+  {"url": "https://documents.blackmagicdesign.com/UserManuals/DeckLinkSDKManual.pdf", "what": "SDK-Manual (2110-Unterstützung DeckLink IP/SDI HD)"}
+ ],
+ "unverified": [
+  "Betrieb im Thunderbolt-eGPU/PCIe-Erweiterungsgehäuse: Blackmagic nennt für Mac nur 'Mac Pro with PCIe slots' bzw. 'latest Mac Pro'; keine offizielle Aussage zu Thunderbolt-Erweiterungsgehäusen gefunden (nur Forenberichte, z. B. Sonnet Echo mit anderen DeckLinks auf Apple Silicon)",
+  "macOS-Version: Tech Specs nennen macOS 15 Sequoia bzw. macOS 26 Tahoe oder neuer; Handbuch nur 'latest versions of Mac OS'",
+  "Steckertyp des Sync-Ausgangs und der SDI-Buchsen (BNC vs. DIN 1.0/2.3) in den Tech Specs nicht explizit genannt",
+  "Signalbezeichnung SDI-3G laut Produktseite ('3G-SDI'); Tech Specs nennen nur SD/HD bis 1080p60 und SMPTE 424M/425M",
+  "Ob IP-Kanäle und SDI-Ports gleichzeitig als zusätzliche Kanäle nutzbar sind oder sich die 2 Kanäle teilen, ist nicht belegt",
+  "Einstellung der SDI-Richtung (in Desktop Video Setup?) im Handbuch nicht beschrieben",
+  "PTP-Domain/Profil-Einstellungen nicht in Herstellerquellen dokumentiert (Forum: Domain fest 127)",
+  "rack_units 0 gesetzt, da PCIe-Karte (kein Rackgerät)"
+ ]
+}
