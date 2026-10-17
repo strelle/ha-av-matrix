@@ -74,8 +74,11 @@ aside .hint-i span { color: var(--muted); font-size: 12px; }
 .btn { font: inherit; font-size: 13px; padding: 4px 12px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); cursor: pointer; }
 .btn:hover { border-color: var(--muted); }
 .btn:focus-visible { outline: 2px solid var(--video); outline-offset: 2px; }
-#app:fullscreen { background: var(--bg); overflow: auto; }
-#app:fullscreen .canvas { max-height: calc(100vh - 110px); }
+#app:fullscreen, #app:-webkit-full-screen { background: var(--bg); overflow: auto; }
+#app:fullscreen .canvas, #app:-webkit-full-screen .canvas, #app.pseudo-fs .canvas { max-height: calc(100vh - 110px); }
+#app.pseudo-fs { position: fixed; inset: 0; z-index: 20; background: var(--bg); overflow: auto; }
+#app.noside .main { grid-template-columns: minmax(0, 1fr); }
+#app.noside aside { display: none; }
 #tip { position: fixed; pointer-events: none; background: var(--ink); color: var(--bg); font-size: 12px; padding: 4px 8px; border-radius: 5px; display: none; max-width: 280px; z-index: 5; }
 </style>
 
@@ -93,6 +96,7 @@ aside .hint-i span { color: var(--muted); font-size: 12px; }
       <span id="rackleg"></span>
     </div>
     <label class="tg"><input type="checkbox" id="lan"> Netzkabel zeigen</label>
+    <button type="button" id="sidebtn" class="btn" aria-expanded="true" aria-controls="side">Hinweise ausblenden</button>
     <button type="button" id="fs" class="btn">Vollbild</button>
     <span class="hint">Maus über Gerät oder Buchse zeigt den Fluss · Klick öffnet das Profil</span>
   </div>
@@ -315,13 +319,22 @@ function showHints() {
 }
 showHints();
 sideEl.addEventListener("click", ev => { if (ev.target.id === "back") { ev.preventDefault(); document.querySelectorAll(".node.sel").forEach(n => n.classList.remove("sel")); showHints(); } });
-const fsBtn = document.getElementById("fs"), app = document.getElementById("app");
+const fsBtn = document.getElementById("fs"), app = document.getElementById("app"), sideBtn = document.getElementById("sidebtn");
+const fsEl = () => document.fullscreenElement || document.webkitFullscreenElement;
+const isFull = () => !!fsEl() || app.classList.contains("pseudo-fs");
+function syncFs() { fsBtn.textContent = isFull() ? "Vollbild beenden" : "Vollbild"; }
 fsBtn.addEventListener("click", async () => {
-  try { if (document.fullscreenElement) await document.exitFullscreen(); else await app.requestFullscreen(); }
-  catch { fsBtn.textContent = "Vollbild nicht verfügbar"; fsBtn.disabled = true; }
+  if (isFull()) {
+    if (fsEl()) { try { await (document.exitFullscreen || document.webkitExitFullscreen).call(document); } catch {} }
+    app.classList.remove("pseudo-fs"); syncFs(); return;
+  }
+  const req = app.requestFullscreen || app.webkitRequestFullscreen;
+  try { if (!req) throw 0; await req.call(app); } catch { app.classList.add("pseudo-fs"); }
+  syncFs();
 });
-document.addEventListener("fullscreenchange", () => { fsBtn.textContent = document.fullscreenElement ? "Vollbild beenden" : "Vollbild"; });
-if (!document.fullscreenEnabled) fsBtn.hidden = true;
+document.addEventListener("fullscreenchange", syncFs); document.addEventListener("webkitfullscreenchange", syncFs);
+document.addEventListener("keydown", e => { if (e.key === "Escape" && app.classList.contains("pseudo-fs")) { app.classList.remove("pseudo-fs"); syncFs(); } });
+sideBtn.addEventListener("click", () => { const off = app.classList.toggle("noside"); sideBtn.textContent = off ? "Hinweise einblenden" : "Hinweise ausblenden"; sideBtn.setAttribute("aria-expanded", String(!off)); });
 const lanBox = document.getElementById("lan");
 const applyLan = () => svg.classList.toggle("hidelan", !lanBox.checked);
 lanBox.addEventListener("change", applyLan); applyLan();
