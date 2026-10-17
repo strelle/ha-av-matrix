@@ -106,7 +106,7 @@ const NS = "http://www.w3.org/2000/svg";
 const el = (t, a = {}, parent) => { const e = document.createElementNS(NS, t); for (const k in a) e.setAttribute(k, a[k]); if (parent) parent.appendChild(e); return e; };
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const split = ref => { const [i, p] = ref.split(":"); return [i, p]; };
-const VIRTUAL = new Set(["me1", "main1", "main2"]);
+const VIRTUAL = new Set(["me1", "main1", "main2", "pgm"]);
 const NETDEV = new Set(["ux", "poe", "tpl", "house"]);
 const RACK = {}; (P.racks || []).forEach((r, k) => r.members.forEach(m => RACK[m] = {...r, k}));
 const RACKCOL = ["var(--audio)", "var(--video)", "var(--net)"];
@@ -254,6 +254,9 @@ function findings() {
     if (ch.kind === "added") out.push({level: "info", title: `${ch.rack}: ${ch.name} angebaut`, text: "Abwandlung nur in diesem Projekt. Kommt das öfter vor, als neue Rack-Vorlage speichern.", ids: [ch.id]});
     if (ch.kind === "modules") out.push({level: "info", title: `${ch.name}: Modul getauscht`, text: `${JSON.stringify(ch.from)} → ${JSON.stringify(ch.to)}`, ids: [ch.id]});
   }
+  const conn = r => { const [i, p] = split(r); const d = (prof(inst[i]?.profile || "").ports || []).find(x => x.id === p.split(".")[0]); return d ? (d.connector + " " + d.signal).toLowerCase() : ""; };
+  const mism = P.cables.filter(c => { const a = conn(c.from), b = conn(c.to); return (/sdi/.test(a) && /hdmi/.test(b) && !/sdi/.test(b)) || (/hdmi/.test(a) && !/sdi/.test(a) && /bnc/.test(b)); });
+  if (mism.length) out.push({level: "warn", title: "Buchsen passen nicht zusammen", text: mism.map(c => `${name(split(c.from)[0])} → ${name(split(c.to)[0])}: Wandler SDI↔HDMI einplanen`).join("; "), ids: mism.flatMap(c => [split(c.from)[0], split(c.to)[0]])});
   const assumed = [...P.cables, ...P.flows].filter(c => c.assumed);
   if (assumed.length) out.push({level: "warn", title: `${assumed.length} Verbindungen nicht geprüft`, text: assumed.map(c => `${name(split(c.from)[0])} → ${name(split(c.to)[0])}`).join("; "), ids: assumed.flatMap(c => [split(c.from)[0], split(c.to)[0]])});
   const drafts = P.instances.filter(i => prof(i.profile).status === "draft");

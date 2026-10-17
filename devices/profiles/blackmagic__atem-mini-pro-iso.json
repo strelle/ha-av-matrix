@@ -1,0 +1,156 @@
+{
+ "format": "avdp/0.1",
+ "status": "draft",
+ "id": "blackmagic/atem-mini-pro-iso",
+ "manufacturer": "Blackmagic Design",
+ "model": "ATEM Mini Pro ISO",
+ "category": "switcher",
+ "rack_units": 0,
+ "power": "1 x externes 12-V-Netzteil (DC, mitgeliefert mit internationalen Adaptern), max. 36 W",
+ "ports": [
+  {
+   "id": "hdmi_in",
+   "label": "HDMI In 1-4",
+   "count": 4,
+   "direction": "in",
+   "connector": "HDMI-A",
+   "signal": "HDMI",
+   "formats": "720p50/59.94/60, 1080i50/59.94/60, 1080p23.98-60; 10 Bit 4:2:2 YUV, Rec 709; kein Ultra HD; 2 Kanäle Embedded Audio je Eingang",
+   "notes": "Re-Sync und Frame-Rate-Konvertierung auf allen 4 Eingängen; Computer-Auflösungen 720p/1080i/1080p wie oben"
+  },
+  {
+   "id": "hdmi_out",
+   "label": "HDMI Out (Program/Aux)",
+   "count": 1,
+   "direction": "out",
+   "connector": "HDMI-A",
+   "signal": "HDMI",
+   "formats": "1080p23.98-60; Embedded Audio",
+   "notes": "Tech Specs: 1 Aux-Ausgang, 1 HDMI-Program-Ausgang; Produktseite: am Front-Panel per Video-Output-Tasten auf Multiview (M/V) oder einzelnen Eingang umschaltbar"
+  },
+  {
+   "id": "mic_in",
+   "label": "Mic In 1-2",
+   "count": 2,
+   "direction": "in",
+   "connector": "TRS-3.5",
+   "signal": "analog-audio",
+   "formats": "Stereo, unsymmetrisch; Impedanz 1,8 kOhm; max. +6 dBV; bis 8 Frames Eingangsverzögerung",
+   "notes": "Mikrofonspeisung (Mic Power) auf beiden Buchsen; beide gehen in den Fairlight-Mixer"
+  },
+  {
+   "id": "usb_c",
+   "label": "USB-C",
+   "count": 1,
+   "direction": "bidi",
+   "connector": "USB-C",
+   "signal": "USB",
+   "formats": "USB-C 3.1 Gen 1; Webcam 1080p; Aufnahme H.264 MP4 + WAV",
+   "notes": "Aufnahme auf externes Laufwerk (ExFAT/HFS+), Webcam-Ausgang, Software Control, Updates, Panel-Anschluss, Streaming über geteilte Internetverbindung, digitaler Audioausgang (Fairlight Live)"
+  },
+  {
+   "id": "ethernet",
+   "label": "Ethernet",
+   "count": 1,
+   "direction": "bidi",
+   "connector": "RJ45",
+   "signal": "Ethernet",
+   "formats": "10/100/1000BASE-T",
+   "notes": "Streaming (RTMP/SRT), Software Control, Updates, Panels direkt oder übers Netzwerk"
+  },
+  {
+   "id": "power",
+   "label": "Power 12 V",
+   "count": 1,
+   "direction": "in",
+   "connector": "DC",
+   "signal": "power",
+   "formats": "12 V DC, max. 36 W"
+  }
+ ],
+ "logic": [
+  {
+   "type": "converter",
+   "from": ["hdmi_in"],
+   "to": ["hdmi_in"],
+   "notes": "Re-Sync und Frame-Rate-Konvertierung je Eingang auf das Projektformat"
+  },
+  {
+   "type": "switch",
+   "from": ["hdmi_in"],
+   "to": ["hdmi_out", "usb_c", "ethernet"],
+   "notes": "4 Eingänge + Media Player -> Program; Program geht auf HDMI Out, Webcam (USB-C), Stream und Program-Aufnahme"
+  },
+  {
+   "type": "matrix",
+   "from": ["hdmi_in"],
+   "to": ["hdmi_out"],
+   "notes": "HDMI Out wählbar: Program, Multiview (M/V) oder einzelner Eingang (Aux), per Front-Panel-Tasten"
+  },
+  {
+   "type": "splitter",
+   "from": ["hdmi_in"],
+   "to": ["hdmi_out"],
+   "notes": "Multiview 10 Fenster: Program/Preview (L/R tauschbar), 4 HDMI-Eingänge, Media Player, Streaming-Status, Recording-Status, Audiometer; nur HD"
+  },
+  {
+   "type": "recorder",
+   "from": ["hdmi_in"],
+   "to": ["usb_c"],
+   "notes": "ISO-Aufnahme: 4 HDMI-Eingänge als H.264 MP4 bis 70 Mb/s + AAC, Program als H.264 MP4 in Streamingqualität + AAC (5 Streams); 6 Stereo-Audioquellen (2 analog, 4 HDMI) als 24 Bit/48 kHz WAV; Schnittliste als DaVinci Resolve .drp"
+  },
+  {
+   "type": "encoder",
+   "from": ["hdmi_in"],
+   "to": ["ethernet", "usb_c"],
+   "notes": "Hardware-Streaming-Engine RTMP und SRT direkt über Ethernet (ohne Computer) oder über geteilte Internetverbindung via USB-C; Streaming 1080p23.98-60; Blackmagic Cloud Stream Router unterstützt"
+  },
+  {
+   "type": "encoder",
+   "from": ["hdmi_in"],
+   "to": ["usb_c"],
+   "notes": "USB-Webcam-Ausgang des Programms in 1080 HD"
+  },
+  {
+   "type": "mixer",
+   "from": ["hdmi_in", "mic_in"],
+   "to": ["hdmi_out", "usb_c", "ethernet"],
+   "notes": "Fairlight-Audiomixer 6 Eingänge (4x HDMI, 2x Mic), 2 Kanäle; je Kanal On/Off/AFV, Gain, Kompressor, Gate, Limiter, 6-Band-EQ; Master-Gain; keine analogen Audioausgänge"
+  }
+ ],
+ "control": [
+  {
+   "protocol": "ATEM Software Control (Mac/Windows) über Ethernet oder USB-C",
+   "notes": "kostenlos; mehrere Instanzen bzw. Panels übers Netzwerk; Fernsteuerung übers Internet laut Produktseite"
+  },
+  {
+   "protocol": "ATEM Hardware-Panels",
+   "notes": "ATEM Micro Panel, Advanced Panel 1/2/4 M/E, Camera Control Panel, Micro Camera Panel"
+  },
+  {
+   "protocol": "Front-Panel",
+   "notes": "integriertes Bedienpanel inkl. Output-Wahl (M/V)"
+  },
+  {
+   "protocol": "ATEM Setup (USB)",
+   "notes": "IP-Adresse setzen, Firmware-Updates"
+  },
+  {
+   "protocol": "ATEM-Protokoll (Netzwerk), Bitfocus Companion Modul bmd-atem",
+   "notes": "Produktseite nennt nur ein Developer-SDK; Protokoll/Port und Companion siehe unverified"
+  }
+ ],
+ "sources": [
+  {"url": "https://www.blackmagicdesign.com/products/atemmini/techspecs/W-APS-15", "what": "techspecs ATEM Mini Pro ISO"},
+  {"url": "https://www.blackmagicdesign.com/products/atemmini", "what": "Produktseite (HDMI-Out M/V/Aux, Webcam, Streaming, ISO, Fairlight, Ethernet-Steuerung)"}
+ ],
+ "unverified": [
+  "ATEM-Netzwerkprotokoll Port 9910/UDP – in den gelesenen Herstellerquellen nicht genannt (nur 'Developer SDK')",
+  "Bitfocus-Companion-Modul bmd-atem – keine Herstellerquelle",
+  "Genaue Benennung/Bedienung der HDMI-Out-Quellwahl im Handbuch nicht geprüft (nur Produktseite)",
+  "Webcam-Ausgang: unterstützte Bildraten/720p-Option nicht in Tech Specs belegt",
+  "Abmessungen/Gewicht: Tech-Specs-Seite ohne Zahlenangabe; rack_units 0 = Tischgerät (Annahme)",
+  "DC-Steckertyp des 12-V-Eingangs nicht spezifiziert",
+  "Handbuch-PDF nicht ausgewertet"
+ ]
+}
