@@ -2,13 +2,13 @@
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Mono:wght@400;600&family=Atkinson+Hyperlegible+Next:wght@400;500;600;700&display=swap">
 <style>
-/* Strelle Pult-UI: Bibliothek links, Arbeitsbereich mit Racks als Rahmen, Inspektor rechts.
+/* Strelle Pult-UI. Bibliothek | Arbeitsfläche (Raster, Zoom, Wegsucher) | Inspektor.
    Rot = wirkt aufs Signal, Bernstein = vorgemerkt/Warnung, Grün = ok, Strelle-Blau nur Auswahl, Ziel, Fokus. */
 :root {
   --sp-bg: #e9edf2; --sp-surface: #ffffff; --sp-surface-2: #f3f5f8; --sp-surface-3: #e1e6ed;
   --sp-line: #c9d0da; --sp-line-strong: #6f7884; --sp-fg: #0d1117; --sp-fg-muted: #3d444f;
   --sp-select: oklch(0.5361 0.1495 253.41); --sp-on-select: #ffffff; --sp-focus: oklch(0.47 0.15 253);
-  --sp-live: #d42b24; --sp-cue: #9c6200; --sp-cue-bg: #f0a21a; --sp-ok: #1a8a4a;
+  --sp-live: #d42b24; --sp-cue: #9c6200; --sp-ok: #1a8a4a; --grid-dot: #c9d0da;
   --sig-video: #2f6fe0; --sig-audio: #e5781a; --sig-net: #7f52e0; --sig-ctrl: #3b3f46;
   --ui: "Atkinson Hyperlegible Next", "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono: "Atkinson Hyperlegible Mono", ui-monospace, "SF Mono", Menlo, monospace;
@@ -17,75 +17,83 @@
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
   --sp-bg: #0a0a0a; --sp-surface: #121212; --sp-surface-2: #1a1b1e; --sp-surface-3: #24262b;
   --sp-line: #2c2f35; --sp-line-strong: #6b7380; --sp-fg: #efedea; --sp-fg-muted: #a3a19c;
-  --sp-focus: oklch(0.72 0.12 250); --sp-live: #ff4b42; --sp-cue: #ffb020; --sp-cue-bg: #ffb020; --sp-ok: #3ddc84;
+  --sp-focus: oklch(0.72 0.12 250); --sp-live: #ff4b42; --sp-cue: #ffb020; --sp-ok: #3ddc84; --grid-dot: #24262b;
   --sig-video: #4e8fff; --sig-audio: #ff9b3d; --sig-net: #a87bff; --sig-ctrl: #a3a19c; color-scheme: dark } }
 :root[data-theme="dark"] {
   --sp-bg: #0a0a0a; --sp-surface: #121212; --sp-surface-2: #1a1b1e; --sp-surface-3: #24262b;
   --sp-line: #2c2f35; --sp-line-strong: #6b7380; --sp-fg: #efedea; --sp-fg-muted: #a3a19c;
-  --sp-focus: oklch(0.72 0.12 250); --sp-live: #ff4b42; --sp-cue: #ffb020; --sp-cue-bg: #ffb020; --sp-ok: #3ddc84;
+  --sp-focus: oklch(0.72 0.12 250); --sp-live: #ff4b42; --sp-cue: #ffb020; --sp-ok: #3ddc84; --grid-dot: #24262b;
   --sig-video: #4e8fff; --sig-audio: #ff9b3d; --sig-net: #a87bff; --sig-ctrl: #a3a19c; color-scheme: dark }
 html, body { height: 100%; }
 body { background: var(--sp-bg); color: var(--sp-fg); font-family: var(--ui); font-size: 15px; }
 .app { height: 100%; display: grid; grid-template-rows: auto 1fr; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 12px; gap: 10px; box-sizing: border-box; }
-.top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
-.top h1 { font-size: 20px; font-weight: 700; margin: 0 8px 0 0; }
+.top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+.top h1 { font-size: 20px; font-weight: 700; margin: 0 6px 0 0; }
 .top .proj { font-family: var(--mono); color: var(--sp-fg-muted); font-size: 13px; }
 .spacer { flex: 1; }
-.btn { font: 600 14px var(--ui); min-height: 44px; padding: 0 16px; border-radius: var(--r-ctl); border: 1px solid var(--sp-line-strong); background: var(--sp-surface-3); color: var(--sp-fg); cursor: pointer; }
+.btn { font: 600 14px var(--ui); min-height: 44px; min-width: 44px; padding: 0 14px; border-radius: var(--r-ctl); border: 1px solid var(--sp-line-strong); background: var(--sp-surface-3); color: var(--sp-fg); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
 .btn:hover { border-color: var(--sp-fg-muted); }
+.btn:disabled { opacity: .4; cursor: default; }
 .btn.take { background: var(--sp-select); color: var(--sp-on-select); border-color: transparent; border-radius: var(--r-pill); }
-.btn:focus-visible, .lib-item:focus-visible, .node:focus-visible { outline: 3px solid var(--sp-focus); outline-offset: 2px; }
+.btn:focus-visible, .lib-item:focus-visible, .node:focus-visible, .seg button:focus-visible { outline: 3px solid var(--sp-focus); outline-offset: 2px; }
 .seg { display: inline-flex; border: 1px solid var(--sp-line-strong); border-radius: var(--r-ctl); overflow: hidden; }
 .seg button { font: 600 14px var(--ui); min-height: 44px; padding: 0 14px; border: 0; background: var(--sp-surface-3); color: var(--sp-fg); cursor: pointer; }
 .seg button[aria-pressed="true"] { background: var(--sp-select); color: var(--sp-on-select); }
+.zoom { display: inline-flex; align-items: center; gap: 4px; }
+.zoom output { font-family: var(--mono); font-size: 13px; min-width: 48px; text-align: center; }
 .cols { display: grid; grid-template-columns: 240px minmax(0, 1fr) 320px; gap: 10px; min-height: 0; }
 @media (max-width: 1000px) { .cols { grid-template-columns: minmax(0, 1fr); } .lib, .insp { max-height: 40vh; } }
 .panel { background: var(--sp-surface-2); border: 1px solid var(--sp-line); border-radius: var(--r-module); overflow: auto; min-height: 0; }
 .panel h2 { font-size: 13px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--sp-fg-muted); margin: 14px 14px 6px; }
 .lib-item { display: flex; flex-direction: column; justify-content: center; min-height: 52px; margin: 6px 10px; padding: 6px 12px; border-radius: var(--r-ctl); border: 1px solid var(--sp-line-strong); background: var(--sp-surface-3); cursor: grab; user-select: none; }
-.lib-item b { font-weight: 600; font-size: 14px; }
-.lib-item span { font-size: 12px; color: var(--sp-fg-muted); }
+.lib-item b { font-weight: 600; font-size: 14px; } .lib-item span { font-size: 12px; color: var(--sp-fg-muted); }
 .lib-item.kit { border-style: dashed; }
-.lib-search { margin: 4px 10px 8px; width: calc(100% - 20px); box-sizing: border-box; min-height: 40px; border-radius: var(--r-ctl); border: 1px solid var(--sp-line-strong); background: var(--sp-surface); color: var(--sp-fg); font: 14px var(--ui); padding: 0 10px; }
+.lib-search { margin: 4px 10px 8px; width: calc(100% - 20px); box-sizing: border-box; min-height: 44px; border-radius: var(--r-ctl); border: 1px solid var(--sp-line-strong); background: var(--sp-surface); color: var(--sp-fg); font: 14px var(--ui); padding: 0 10px; }
 .ws { position: relative; overflow: auto; background: var(--sp-bg); border: 1px solid var(--sp-line); border-radius: var(--r-module); }
 .ws.drop { outline: 3px dashed var(--sp-select); outline-offset: -6px; }
-.stage { position: relative; }
-svg.wires { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
-svg.wires path { fill: none; stroke-width: 2.2; stroke-linejoin: round; pointer-events: stroke; cursor: pointer; }
-svg.wires path.fixed { stroke-dasharray: none; opacity: .75; }
-svg.wires path.sel { stroke-width: 4; }
+.sizer { position: relative; }
+.stage { position: absolute; left: 0; top: 0; transform-origin: 0 0;
+  background-image: radial-gradient(var(--grid-dot) 1px, transparent 1.2px); background-size: 10px 10px; }
+svg.wires { position: absolute; left: 0; top: 0; pointer-events: none; overflow: visible; z-index: 3; }
+svg.wires path { fill: none; stroke-width: 2.2; stroke-linejoin: round; stroke-linecap: round; pointer-events: stroke; cursor: pointer; }
+svg.wires path.halo { stroke: var(--sp-bg); stroke-width: 12; pointer-events: stroke; cursor: pointer; }
+svg.wires path.csel { stroke-width: 4.5; filter: drop-shadow(0 0 3px var(--sp-select)); }
+svg.wires path.fixed { opacity: .8; }
 svg.wires path.drag { stroke: var(--sp-select); stroke-dasharray: 6 5; stroke-width: 2.5; pointer-events: none; }
-svg.wires path.hot { stroke-width: 3.2; stroke-dasharray: 7 9; animation: flow .7s linear infinite; }
+svg.wires path.hot { stroke-width: 3.4; stroke-dasharray: 7 9; animation: flow .7s linear infinite; }
 @keyframes flow { to { stroke-dashoffset: -16; } }
 @media (prefers-reduced-motion: reduce) { svg.wires path.hot { animation: none; stroke-dasharray: none; } }
-.rack { position: absolute; border: 2px solid var(--sp-line-strong); border-radius: var(--r-module); background: color-mix(in oklab, var(--sp-surface-2) 60%, transparent); }
-.rack > .rh { position: absolute; top: -14px; left: 14px; background: var(--sp-bg); padding: 0 8px; font-weight: 700; font-size: 14px; cursor: grab; }
-.rack > .rh small { font-weight: 500; color: var(--sp-fg-muted); font-family: var(--mono); font-size: 11px; margin-left: 6px; }
-.node { position: absolute; width: 230px; background: var(--sp-surface-2); border: 1px solid var(--sp-line-strong); border-radius: var(--r-ctl); box-shadow: 0 1px 0 var(--sp-line); }
+.rack { position: absolute; border: 2px solid var(--sp-line-strong); border-radius: var(--r-module); z-index: 1; }
+.rack > .rh { position: absolute; top: -15px; left: 14px; background: var(--sp-bg); padding: 0 8px; font-weight: 700; font-size: 14px; cursor: grab; display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+.rack > .rh small { font-weight: 500; color: var(--sp-fg-muted); font-family: var(--mono); font-size: 11px; }
+.fold { font: 600 12px var(--ui); min-height: 26px; padding: 0 10px; border-radius: var(--r-pill); border: 1px solid var(--sp-line-strong); background: var(--sp-surface-3); color: var(--sp-fg); cursor: pointer; }
+.node { position: absolute; z-index: 2; width: max-content; min-width: 200px; max-width: 420px; background: var(--sp-surface-2); border: 1px solid var(--sp-line-strong); border-radius: var(--r-ctl); }
 .node.sel { box-shadow: inset 0 3px 0 var(--sp-select); border-color: var(--sp-select); }
-.node.added { border-style: dashed; }
-.node .nh { padding: 8px 10px 6px; background: var(--sp-surface-3); border-radius: var(--r-ctl) var(--r-ctl) 0 0; cursor: grab; }
-.node .nh b { display: block; font-size: 14px; font-weight: 700; line-height: 1.2; }
-.node .nh span { font-family: var(--mono); font-size: 11px; color: var(--sp-fg-muted); }
-.ports { display: grid; grid-template-columns: 1fr 1fr; padding: 4px 0 6px; }
+.node.group { border-width: 2px; border-style: double; }
+.node .nh { padding: 8px 12px 6px; background: var(--sp-surface-3); border-radius: var(--r-ctl) var(--r-ctl) 0 0; cursor: grab; }
+.node .nh b { display: block; font-size: 14px; font-weight: 700; line-height: 1.25; }
+.node .nh .model { display: block; font-family: var(--mono); font-size: 11px; color: var(--sp-fg-muted); line-height: 1.35; white-space: normal; }
+.node .contents { padding: 6px 12px; font-size: 12px; color: var(--sp-fg-muted); display: grid; gap: 2px; border-bottom: 1px solid var(--sp-line); }
+.ports { display: grid; grid-template-columns: max-content max-content; column-gap: 28px; justify-content: space-between; padding: 4px 0 6px; }
 .pcol.r { text-align: right; }
-.port { position: relative; font-family: var(--mono); font-size: 11.5px; padding: 3px 14px; min-height: 20px; line-height: 20px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: crosshair; }
-.port i { position: absolute; top: 50%; width: 11px; height: 11px; margin-top: -6px; border-radius: 50%; border: 2px solid var(--sp-surface-2); }
-.pcol.l .port i { left: -7px; } .pcol.r .port i { right: -7px; }
-.port.ok i { box-shadow: 0 0 0 3px var(--sp-select); }
-.port.ok { color: var(--sp-select); font-weight: 600; }
+.port { position: relative; font-family: var(--mono); font-size: 11.5px; line-height: 20px; height: 22px; padding: 0 22px; white-space: nowrap; cursor: crosshair; }
+.port i { position: absolute; top: 5px; width: 10px; height: 10px; border-radius: 50%; }
+.pcol.l .port i { left: 7px; } .pcol.r .port i { right: 7px; }
+.port.ok i { box-shadow: 0 0 0 3px var(--sp-select); } .port.ok { color: var(--sp-select); font-weight: 600; }
 .port.no { opacity: .35; }
 .port .cnt { color: var(--sp-fg-muted); }
+.z-mid .node .model, .z-low .node .model, .z-low .ports, .z-low .contents { display: none; }
+.z-low .node { min-width: 160px; } .z-low .nh b { font-size: 18px; }
 .insp { padding-bottom: 12px; }
 .insp .sec { margin: 0 14px 12px; }
 .insp dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; margin: 0; font-size: 13px; }
 .insp dt { color: var(--sp-fg-muted); } .insp dd { margin: 0; font-family: var(--mono); font-size: 12px; overflow-wrap: anywhere; }
-.insp select { font: 14px var(--ui); min-height: 40px; width: 100%; border-radius: var(--r-ctl); border: 1px solid var(--sp-line-strong); background: var(--sp-surface); color: var(--sp-fg); padding: 0 8px; }
+.insp select { font: 14px var(--ui); min-height: 44px; width: 100%; border-radius: var(--r-ctl); border: 1px solid var(--sp-line-strong); background: var(--sp-surface); color: var(--sp-fg); padding: 0 8px; }
 .hint { display: grid; grid-template-columns: 18px 1fr; gap: 2px 8px; padding: 8px 0; border-top: 1px solid var(--sp-line); font-size: 13px; }
 .hint b { font-weight: 600; } .hint p { margin: 0; grid-column: 2; color: var(--sp-fg-muted); }
 .shape { width: 12px; height: 12px; margin-top: 3px; }
 .shape.ok { border-radius: 50%; background: var(--sp-ok); }
-.shape.warn { width: 0; height: 0; border-left: 7px solid transparent; border-right: 7px solid transparent; border-bottom: 12px solid var(--sp-cue); background: none; }
+.shape.warn { width: 0; height: 0; border-left: 7px solid transparent; border-right: 7px solid transparent; border-bottom: 12px solid var(--sp-cue); }
 .shape.err { background: var(--sp-live); border-radius: 2px; }
 .toast { position: fixed; left: 50%; bottom: max(16px, env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--sp-fg); color: var(--sp-bg); padding: 10px 16px; border-radius: var(--r-ctl); font-size: 14px; display: none; z-index: 30; max-width: 80vw; }
 .cablelist { font-family: var(--mono); font-size: 12px; display: grid; gap: 4px; }
@@ -99,16 +107,16 @@ input[type=file] { display: none; }
     <h1>Rig-Konfigurator</h1>
     <span class="proj" id="projname"></span>
     <span class="spacer"></span>
-    <div class="seg" role="group" aria-label="Beispiel laden">
-      <button type="button" data-load="schlank">Schlank</button><button type="button" data-load="krems">Krems</button><button type="button" data-load="leer">Leer</button>
-    </div>
-    <button type="button" class="btn" id="undo">Rückgängig</button>
-    <label class="btn" for="imp" style="display:inline-flex;align-items:center">Importieren</label><input type="file" id="imp" accept=".json,.avrig">
+    <div class="seg" role="group" aria-label="Beispiel laden"><button type="button" data-load="schlank">Schlank</button><button type="button" data-load="krems">Krems</button><button type="button" data-load="leer">Leer</button></div>
+    <button type="button" class="btn" id="undo" title="Rückgängig (Cmd+Z)">↶ Rückgängig</button>
+    <button type="button" class="btn" id="redo" title="Wiederholen (Shift+Cmd+Z)">↷ Wiederholen</button>
+    <div class="zoom" role="group" aria-label="Zoom"><button type="button" class="btn" id="zout" aria-label="Verkleinern">−</button><output id="zval">100 %</output><button type="button" class="btn" id="zin" aria-label="Vergrößern">+</button><button type="button" class="btn" id="zfit">Einpassen</button></div>
+    <label class="btn" for="imp">Importieren</label><input type="file" id="imp" accept=".json,.avrig">
     <button type="button" class="btn take" id="exp">Projekt exportieren</button>
   </div>
   <div class="cols">
     <div class="panel lib" id="lib"></div>
-    <div class="ws" id="ws"><div class="stage" id="stage"><svg class="wires" id="wires"></svg></div></div>
+    <div class="ws" id="ws"><div class="sizer" id="sizer"><div class="stage" id="stage"><svg class="wires" id="wires"></svg></div></div></div>
     <div class="panel insp" id="insp"></div>
   </div>
 </div>
@@ -117,33 +125,37 @@ input[type=file] { display: none; }
 <script>
 const DATA = /*DATA*/null;
 const PROF = DATA.profiles, RACKS = DATA.racks, KITS = DATA.kits, GEN = DATA.generic;
+const G = 10, GAPN = 30; // Raster und Mindestabstand zwischen Kacheln
 const prof = id => PROF[id] || GEN[id] || {model: id, ports: []};
 const $ = s => document.querySelector(s), esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-const split = r => r.split(":"), base = p => p.split(".")[0];
-let S = null, sel = null, hist = [];
+const split = r => r.split(":"), base = p => p.split(".")[0], snap = v => Math.round(v / G) * G;
+let S = null, sel = null, selCable = null, past = [], future = [], Z = 1;
 const toast = msg => { const t = $("#toast"); t.textContent = msg; t.style.display = "block"; clearTimeout(toast.t); toast.t = setTimeout(() => t.style.display = "none", 3200); };
-const save = () => { hist.push(JSON.stringify(S)); if (hist.length > 60) hist.shift(); };
+const commit = () => { past.push(JSON.stringify(S)); if (past.length > 100) past.shift(); future = []; syncUndo(); };
+function syncUndo() { $("#undo").disabled = !past.length; $("#redo").disabled = !future.length; }
+function undo() { if (!past.length) return toast("Nichts zum Rückgängigmachen"); future.push(JSON.stringify(S)); S = JSON.parse(past.pop()); render(); showHints(); syncUndo(); }
+function redo() { if (!future.length) return; past.push(JSON.stringify(S)); S = JSON.parse(future.pop()); render(); showHints(); syncUndo(); }
 
 // ---------- Signalart und Passprüfung ----------
-const portDef = (iid, p) => { const n = S.instances.find(i => i.id === iid); return n && (prof(n.profile).ports || []).find(x => x.id === base(p)); };
+const inst = id => S.instances.find(i => i.id === id);
+const portDef = (iid, p) => { const n = inst(iid); return n && (prof(n.profile).ports || []).find(x => x.id === base(p)); };
 function kind(d) { const s = ((d?.signal || "") + " " + (d?.connector || "")).toLowerCase();
   if (/audio|dante|aes|xlr|trs|madi/.test(s)) return "audio"; if (/ethernet|rj45|internet|rtmp|ndi/.test(s) && !/2110/.test(s)) return "net";
   if (/usb/.test(s) && !/display/.test(s)) return "ctrl"; return "video"; }
 const fam = c => { c = (c || "").toLowerCase();
   return /bnc/.test(c) ? "bnc" : /hdmi/.test(c) ? "hdmi" : /xlr|combo/.test(c) ? "xlr" : /trs|klinke/.test(c) ? "trs" : /rj45|ethercon/.test(c) ? "rj45" : /lc|sfp/.test(c) ? "lc" : /usb/.test(c) ? "usb" : /internet/.test(c) ? "inet" : c; };
-function check(a, b) { // a: Quelle {i,p}, b: Ziel {i,p}
+function check(a, b) {
   if (a.i === b.i) return {ok: false, why: "Gleiches Gerät"};
   const da = portDef(a.i, a.p), db = portDef(b.i, b.p); if (!da || !db) return {ok: false, why: "Unbekannte Buchse"};
   if (da.direction === "in") return {ok: false, why: "Start ist ein Eingang"};
   if (db.direction === "out") return {ok: false, why: "Ausgang auf Ausgang"};
-  const fa = fam(da.connector), fb = fam(db.connector);
-  const sa = (da.signal || "").toLowerCase(), sb = (db.signal || "").toLowerCase();
-  if (/2110/.test(sa + sb)) { const tgt = /2110/.test(sa) ? db : da; if (/2110/.test(sa) && /2110/.test(sb)) return {ok: false, why: "2110 läuft über einen 10G-Switch, nicht direkt"};
-    if (!/10g|2110/i.test((tgt.signal || "") + (tgt.notes || "") + tgt.id)) return {ok: false, why: "ST 2110 braucht einen echten 10G-Port – an 1G/2,5G kommt kein Bild"}; }
-  const audioPair = new Set(["xlr", "trs"]);
-  if (fa === fb || (audioPair.has(fa) && audioPair.has(fb))) return {ok: true, warn: fa !== fb ? "Adapter XLR↔Klinke nötig" : null};
+  const fa = fam(da.connector), fb = fam(db.connector), sa = (da.signal || "").toLowerCase(), sb = (db.signal || "").toLowerCase();
+  if (/2110/.test(sa + sb)) { if (/2110/.test(sa) && /2110/.test(sb)) return {ok: false, why: "2110 läuft über einen 10G-Switch, nicht direkt"};
+    const tgt = /2110/.test(sa) ? db : da; if (!/10g|2110/i.test((tgt.signal || "") + (tgt.notes || "") + tgt.id)) return {ok: false, why: "ST 2110 braucht einen echten 10G-Port – an 1G/2,5G kommt kein Bild"}; }
+  const audio = new Set(["xlr", "trs"]);
+  if (fa === fb || (audio.has(fa) && audio.has(fb))) return {ok: true, warn: fa !== fb ? "Adapter XLR↔Klinke nötig" : null};
   if ((fa === "bnc" && fb === "hdmi") || (fa === "hdmi" && fb === "bnc")) return {ok: false, why: "SDI und HDMI passen nicht – Wandler einplanen"};
-  if (fa === "rj45" && fb === "inet" || fa === "inet" && fb === "rj45") return {ok: true};
+  if ((fa === "rj45" && fb === "inet") || (fa === "inet" && fb === "rj45")) return {ok: true};
   return {ok: false, why: `${da.connector} passt nicht auf ${db.connector}`};
 }
 const used = (iid, p) => S.cables.filter(c => c.from.startsWith(iid + ":" + p) || c.to.startsWith(iid + ":" + p));
@@ -151,180 +163,267 @@ function nextFree(iid, p) { const d = portDef(iid, p), n = d?.count || 1; if (n 
   const taken = new Set(S.cables.flatMap(c => [c.from, c.to]).filter(r => r.startsWith(iid + ":" + p + ".")).map(r => +r.split(".").pop()));
   for (let k = 1; k <= n; k++) if (!taken.has(k)) return `${p}.${k}`; return null; }
 
+// ---------- Größen, Raster, keine Überlagerung ----------
+const SZ = {}; // gemessene Größe je Kachel
+const box = n => ({x: n.x, y: n.y, w: SZ[n.id]?.w || 240, h: SZ[n.id]?.h || 200});
+const visible = () => S.instances.filter(n => !collapsedRack(n));
+const collapsedRack = n => n.rack && S.racks.find(r => r.id === n.rack)?.collapsed;
+function hit(a, b) { return a.x < b.x + b.w + GAPN && b.x < a.x + a.w + GAPN && a.y < b.y + b.h + GAPN && b.y < a.y + a.h + GAPN; }
+function blockers(ids) { const set = new Set(ids); return [...visible().filter(n => !set.has(n.id)).map(box), ...groupBoxes().filter(g => !ids.includes(g.id))]; }
+function placeGroup(ids, prefer) { // Gruppe von Kacheln ins Raster und auf freien Platz schieben
+  const ns = ids.map(inst).filter(Boolean); if (!ns.length) return;
+  const others = blockers(ids);
+  const fits = (dx, dy) => ns.every(n => { const b = box(n); b.x += dx; b.y += dy; return b.x >= 0 && b.y >= 20 && !others.some(o => hit(b, o)); });
+  const sx = snap(ns[0].x) - ns[0].x, sy = snap(ns[0].y) - ns[0].y;
+  for (let r = 0; r < 400; r++) for (let a = -r; a <= r; a++) for (const [dx, dy] of [[a, -r], [a, r], [-r, a], [r, a]]) {
+    const X = sx + dx * G, Y = sy + dy * G; if (fits(X, Y)) { ns.forEach(n => { n.x += X; n.y += Y; }); return; } }
+}
+
 // ---------- Projekt laden / Bausteine einfügen ----------
 function uid(id) { let k = id, n = 2; while (S.instances.some(i => i.id === k)) k = `${id}${n++}`; return k; }
-function insertBlock(insts, cables, at, rackMeta) {
-  const map = {}; insts.forEach((it, k) => { const id = uid(it.id); map[it.id] = id;
-    S.instances.push({...it, id, x: at.x + (rackMeta ? 24 + (k % 2) * 260 : 0), y: at.y + (rackMeta ? 40 + Math.floor(k / 2) * 0 : 0), rack: rackMeta?.id}); });
+function insertBlock(insts, cables, extra) { const map = {};
+  insts.forEach(it => { const id = uid(it.id); map[it.id] = id; S.instances.push({...it, id, ...extra, x: 0, y: 0}); });
   cables.forEach(c => { const [fi, fp] = split(c.from), [ti, tp] = split(c.to); if (map[fi] && map[ti]) S.cables.push({...c, from: map[fi] + ":" + fp, to: map[ti] + ":" + tp}); });
-  return map;
-}
-function addRack(id, at) {
-  const r = RACKS[id]; const rid = uid("rack-" + id);
-  S.racks.push({id: rid, ref: id, name: r.name, removed: [], added: []});
-  insertBlock(r.instances, r.cables.map(c => ({...c, fixed: true})), at, {id: rid});
-  stack(rid, at); return rid;
-}
-function stack(rid, at) { // Geräte eines Racks zweispaltig stapeln
-  const m = S.instances.filter(i => i.rack === rid); const ys = [at.y + 34, at.y + 34];
-  m.forEach((n, k) => { const c = ys[0] <= ys[1] ? 0 : 1; n.x = at.x + 18 + c * 254; n.y = ys[c]; ys[c] += height(n) + 16; });
-}
-function addKit(id, at) { const k = KITS[id]; const map = insertBlock(k.instances.map((it, n) => ({...it, x: 0, y: 0})), k.cables.map(c => ({...c, fixed: true})), at, null);
-  let y = at.y; Object.values(map).forEach(m => { const n = S.instances.find(i => i.id === m); n.x = at.x; n.y = y; n.kit = id; y += height(n) + 14; }); return map; }
-function addDevice(pid, at) { const id = uid(pid.split("/").pop().replace(/[^a-z0-9]/gi, "").slice(0, 10)); const p = prof(pid);
-  S.instances.push({id, profile: pid, name: p.model || pid, x: at.x, y: at.y}); return id; }
-const HM = {};
-function height(n) { if (HM[n.id]) return HM[n.id]; const ps = prof(n.profile).ports || []; const L = ps.filter(p => p.direction === "in").length, R = ps.length - L; return 70 + Math.max(L, R, 1) * 26; }
-function measure() { stage.querySelectorAll(".node").forEach(e => HM[e.dataset.id] = e.offsetHeight); }
-
+  return Object.values(map); }
+function stack(ids, at) { // zweispaltig: erst Spalten nach Höhe verteilen, dann Spalte 2 hinter die breiteste Kachel von Spalte 1
+  const ns = ids.map(inst).filter(Boolean), ys = [0, 0], col = [[], []];
+  ns.forEach(n => { const c = ys[0] <= ys[1] ? 0 : 1; col[c].push(n); ys[c] += (SZ[n.id]?.h || 200) + GAPN + 10; });
+  const w0 = Math.max(0, ...col[0].map(n => SZ[n.id]?.w || 260));
+  col.forEach((list, c) => { let y = at.y + 40; list.forEach(n => { n.x = snap(at.x + 20 + (c ? w0 + GAPN + 20 : 0)); n.y = snap(y); y += (SZ[n.id]?.h || 200) + GAPN + 10; }); }); }
+function column(ids, at) { let y = at.y; ids.map(inst).forEach(n => { n.x = snap(at.x); n.y = snap(y); y += (SZ[n.id]?.h || 200) + GAPN + 10; }); }
+function addRack(id, at) { const r = RACKS[id], rid = uid("rack-" + id);
+  S.racks.push({id: rid, ref: id, name: r.name, removed: [], collapsed: false});
+  const ids = insertBlock(r.instances, r.cables.map(c => ({...c, fixed: true})), {rack: rid}); render(); stack(ids, at); placeGroup(ids); return ids; }
+function addKit(id, at) { const k = KITS[id]; const ids = insertBlock(k.instances, k.cables.map(c => ({...c, fixed: true})), {kit: id}); render(); column(ids, at); placeGroup(ids); return ids; }
+function addDevice(pid, at) { const id = uid(pid.split("/").pop().replace(/[^a-z0-9]/gi, "").slice(0, 10)); S.instances.push({id, profile: pid, name: prof(pid).model || pid, x: at.x, y: at.y}); render(); placeGroup([id]); return id; }
 function loadProject(name) {
-  S = {name: "", instances: [], cables: [], racks: [], assign: {}}; hist = []; sel = null;
+  S = {name: "Neues Projekt", instances: [], cables: [], racks: [], assign: {}}; past = []; future = []; sel = null; syncUndo();
   const P = DATA.projects[name];
-  if (P) {
-    S.name = P.name; let x = 40;
-    const left = [], right = [], mid = [];
-    (P.instances || []).forEach(i => { const c = prof(i.profile).category; (/camera|computer|wireless/.test(c) ? left : /display|service|recorder|speaker/.test(c) ? right : mid).push(i); });
-    let y = 40; left.forEach(i => { S.instances.push({...i, x: 40, y}); y += height(i) + 18; });
-    x = 320; for (const r of P.racks || []) { const rid = uid("rack-" + r.ref); const R = RACKS[r.ref];
-      S.racks.push({id: rid, ref: r.ref, name: R.name, removed: [], added: []});
-      R.instances.forEach(it => S.instances.push({...it, rack: rid})); R.cables.forEach(c => S.cables.push({...c, fixed: true})); stack(rid, {x, y: 30}); x += 560; }
-    y = 40; mid.forEach(i => { S.instances.push({...i, x, y}); y += height(i) + 18; }); if (mid.length) x += 280;
-    y = 40; right.forEach(i => { S.instances.push({...i, x, y}); y += height(i) + 18; });
+  if (P) { S.name = P.name; const L = [], M = [], R = [];
+    (P.instances || []).forEach(i => { const c = prof(i.profile).category; (/camera|computer|wireless/.test(c) ? L : /display|service|recorder|speaker/.test(c) ? R : M).push(i.id); S.instances.push({...i, x: 0, y: 0}); });
+    const rk = []; for (const r of P.racks || []) { const rid = uid("rack-" + r.ref), T = RACKS[r.ref]; S.racks.push({id: rid, ref: r.ref, name: T.name, removed: [], collapsed: false});
+      T.instances.forEach(it => S.instances.push({...it, rack: rid, x: 0, y: 0})); T.cables.forEach(c => S.cables.push({...c, fixed: true})); rk.push(rid); }
     (P.cables || []).forEach(c => S.cables.push({...c}));
-    S._layout = {left, mid, right, racks: S.racks.map(r => r.id)};
-  } else S.name = "Neues Projekt";
-  render();
-  if (S._layout) { measure(); const L = S._layout; let y = 40; const col = (list, x) => { y = 40; list.forEach(i => { const n = S.instances.find(q => q.id === i.id); if (n) { n.x = x; n.y = y; y += height(n) + 18; } }); };
-    col(L.left, 40); let x = 320; L.racks.forEach(r => { stack(r, {x, y: 40}); x += 560; }); col(L.mid, x); if (L.mid.length) x += 280; col(L.right, x); delete S._layout; render(); }
-  showHints();
+    render(); // messen
+    let x = 40; column(L, {x, y: 40}); x += Math.max(260, ...L.map(i => SZ[i]?.w || 0)) + 80;
+    rk.forEach(rid => { const ids = S.instances.filter(n => n.rack === rid).map(n => n.id); stack(ids, {x, y: 30}); const w = Math.max(...ids.map(i => inst(i).x + (SZ[i]?.w || 0))); x = w + 100; });
+    column(M, {x, y: 40}); if (M.length) x += Math.max(...M.map(i => SZ[i]?.w || 0)) + 100; column(R, {x, y: 40});
+    S.racks.forEach(r => placeGroup(S.instances.filter(n => n.rack === r.id).map(n => n.id)));
+    S.instances.filter(n => !n.rack).forEach(n => placeGroup([n.id]));
+  }
+  render(); showHints(); fit();
 }
 
 // ---------- Darstellung ----------
-const stage = $("#stage"), wires = $("#wires");
-function rackBox(r) { const m = S.instances.filter(i => i.rack === r.id); if (!m.length) return null;
-  const xs = m.map(n => n.x), ys = m.map(n => n.y), xe = m.map(n => n.x + 230), ye = m.map(n => n.y + height(n));
-  return {x: Math.min(...xs) - 18, y: Math.min(...ys) - 28, w: Math.max(...xe) - Math.min(...xs) + 36, h: Math.max(...ye) - Math.min(...ys) + 46}; }
+const stage = $("#stage"), wires = $("#wires"), ws = $("#ws"), sizer = $("#sizer");
+function rackBox(r) { const m = S.instances.filter(i => i.rack === r.id).map(box); if (!m.length) return null;
+  const x = Math.min(...m.map(b => b.x)) - 20, y = Math.min(...m.map(b => b.y)) - 30; return {id: r.id, x, y, w: Math.max(...m.map(b => b.x + b.w)) - x + 20, h: Math.max(...m.map(b => b.y + b.h)) - y + 20}; }
+function groupBoxes() { return S.racks.filter(r => r.collapsed).map(r => ({id: r.id, ...r.pos, w: SZ["g:" + r.id]?.w || 240, h: SZ["g:" + r.id]?.h || 120})); }
+function crossing(r) { // Leitungen, die ein zugeklapptes Rack verlassen: deren Enden werden Buchsen der Gruppenkachel
+  const m = new Set(S.instances.filter(i => i.rack === r.id).map(i => i.id)), outs = [], ins = [];
+  S.cables.forEach(c => { const a = m.has(split(c.from)[0]), b = m.has(split(c.to)[0]); if (a && !b) outs.push(c.from); if (b && !a) ins.push(c.to); });
+  return {outs: [...new Set(outs)], ins: [...new Set(ins)], members: [...m]}; }
+const portRow = (ref, label, d, u) => `<div class="port" data-ref="${esc(ref)}" title="${esc(d ? d.connector + " · " + d.signal + (d.formats ? " · " + d.formats : "") : "")}"><i style="background:var(--sig-${kind(d)})"></i>${esc(label)}${u}</div>`;
 function render() {
   $("#projname").textContent = `${S.name} · ${S.instances.length} Geräte · ${S.cables.length} Kabel`;
+  stage.classList.remove("z-low", "z-mid"); // erst voll messen, dann Zoomstufe anwenden
   stage.querySelectorAll(".node,.rack").forEach(e => e.remove());
-  let W = 600, H = 400;
-  for (const r of S.racks) { const b = rackBox(r); if (!b) continue;
-    const d = document.createElement("div"); d.className = "rack"; Object.assign(d.style, {left: b.x + "px", top: b.y + "px", width: b.w + "px", height: b.h + "px"});
-    const mods = (r.removed.length ? ` · −${r.removed.length}` : "") + (r.added.length ? ` · +${r.added.length}` : "");
-    d.innerHTML = `<div class="rh" data-rack="${r.id}">Rack ${esc(r.name)}<small>Vorlage${esc(mods)}</small></div>`; stage.appendChild(d); }
-  for (const n of S.instances) {
-    const p = prof(n.profile), ps = p.ports || [];
+  for (const r of S.racks.filter(r => !r.collapsed)) { const d = document.createElement("div"); d.className = "rack"; d.dataset.rid = r.id;
+    d.innerHTML = `<div class="rh" data-rack="${r.id}">Rack ${esc(r.name)}<small>Vorlage${r.removed.length ? " · −" + r.removed.length : ""}</small><button type="button" class="fold" data-fold="${r.id}" aria-expanded="true">▾ zuklappen</button></div>`; stage.appendChild(d); }
+  for (const r of S.racks.filter(r => r.collapsed)) { const c = crossing(r), d = document.createElement("div");
+    d.className = "node group" + (sel === "g:" + r.id ? " sel" : ""); d.dataset.id = "g:" + r.id; Object.assign(d.style, {left: r.pos.x + "px", top: r.pos.y + "px"});
+    const lbl = ref => { const [i, p] = split(ref); return `${inst(i).name} · ${p}`; };
+    d.innerHTML = `<div class="nh" data-drag="g:${r.id}"><b>Rack ${esc(r.name)}</b><span class="model">${c.members.length} Geräte, zugeklappt</span>
+      <button type="button" class="fold" data-fold="${r.id}" aria-expanded="false" style="margin-top:6px">▸ aufklappen (${c.members.length})</button></div>
+      <div class="contents">${c.members.map(i => `<span>${esc(inst(i).name)}</span>`).join("")}</div>
+      <div class="ports"><div class="pcol l">${c.ins.map(ref => portRow(ref, lbl(ref), portDef(...split(ref)), "")).join("")}</div><div class="pcol r">${c.outs.map(ref => portRow(ref, lbl(ref), portDef(...split(ref)), "")).join("")}</div></div>`;
+    stage.appendChild(d); }
+  for (const n of visible()) { const p = prof(n.profile), ps = p.ports || [];
     const d = document.createElement("div"); d.className = "node" + (n.id === sel ? " sel" : "") + (n.added ? " added" : ""); d.dataset.id = n.id; d.tabIndex = 0;
     Object.assign(d.style, {left: n.x + "px", top: n.y + "px"});
-    const row = q => { const u = used(n.id, q.id).length; return `<div class="port" data-ref="${n.id}:${q.id}" title="${esc(q.connector + " · " + q.signal + (q.formats ? " · " + q.formats : ""))}"><i style="background:var(--sig-${kind(q)})"></i>${esc(q.id)}${q.count > 1 ? ` <span class="cnt">${u}/${q.count}</span>` : ""}</div>`; };
-    d.innerHTML = `<div class="nh" data-drag="${n.id}"><b>${esc(n.name)}</b><span>${esc((p.model || "").slice(0, 34))}${p.status === "draft" ? " · Entwurf" : ""}</span></div>
+    const row = q => { const u = used(n.id, q.id).length; return portRow(`${n.id}:${q.id}`, q.id, q, q.count > 1 ? ` <span class="cnt">${u}/${q.count}</span>` : ""); };
+    d.innerHTML = `<div class="nh" data-drag="${n.id}"><b>${esc(n.name)}</b><span class="model">${esc([p.manufacturer, p.model].filter(Boolean).join(" "))}${p.status === "draft" ? " · Entwurf" : ""}</span></div>
       <div class="ports"><div class="pcol l">${ps.filter(q => q.direction === "in").map(row).join("")}</div><div class="pcol r">${ps.filter(q => q.direction !== "in").map(row).join("")}</div></div>`;
-    stage.appendChild(d); W = Math.max(W, n.x + 300); H = Math.max(H, n.y + height(n) + 60);
-  }
-  stage.style.width = W + "px"; stage.style.height = H + "px"; wires.setAttribute("width", W); wires.setAttribute("height", H);
-  drawWires();
+    stage.appendChild(d); }
+  stage.querySelectorAll(".node").forEach(e => SZ[e.dataset.id] = {w: e.offsetWidth, h: e.offsetHeight});
+  const low = Z < .55, mid = Z >= .55 && Z < .85; stage.classList.toggle("z-low", low); stage.classList.toggle("z-mid", mid);
+  if (low || mid) stage.querySelectorAll(".node").forEach(e => { const z = SZ[e.dataset.id]; e.style.width = z.w + "px"; e.style.height = z.h + "px"; e.style.minWidth = "0"; e.style.maxWidth = "none"; });
+  placeRacks(); size(); drawWires();
 }
-function pinXY(ref) { const [i, p] = split(ref); const el = stage.querySelector(`.port[data-ref="${i}:${base(p)}"]`); if (!el) return null;
-  const r = el.getBoundingClientRect(), s = stage.getBoundingClientRect(), right = el.parentElement.classList.contains("r");
-  return {x: (right ? r.right : r.left) - s.left, y: r.top + r.height / 2 - s.top, right}; }
-function ortho(a, b, k) { const off = 18 + (k % 8) * 5, x1 = a.x + (a.right ? off : -off), x2 = b.x + (b.right ? off : -off);
-  const mx = (a.right && !b.right && x1 < x2) ? (x1 + x2) / 2 + ((k % 6) - 3) * 4 : null;
-  const pts = mx !== null ? [[a.x, a.y], [mx, a.y], [mx, b.y], [b.x, b.y]] : [[a.x, a.y], [x1, a.y], [x1, (a.y + b.y) / 2 + (k % 5) * 3], [x2, (a.y + b.y) / 2 + (k % 5) * 3], [x2, b.y], [b.x, b.y]];
-  let d = `M${pts[0][0]},${pts[0][1]}`; for (let i = 1; i < pts.length - 1; i++) { const [x0, y0] = pts[i - 1], [x, y] = pts[i], [x3, y3] = pts[i + 1];
-    const l1 = Math.hypot(x - x0, y - y0), l2 = Math.hypot(x3 - x, y3 - y), r = Math.min(6, l1 / 2, l2 / 2);
-    d += r < .5 ? ` L${x},${y}` : ` L${x - (x - x0) / l1 * r},${y - (y - y0) / l1 * r} Q${x},${y} ${x + (x3 - x) / l2 * r},${y + (y3 - y) / l2 * r}`; }
-  const q = pts[pts.length - 1]; return d + ` L${q[0]},${q[1]}`; }
-function drawWires() { wires.innerHTML = "";
-  S.cables.forEach((c, k) => { const a = pinXY(c.from), b = pinXY(c.to); if (!a || !b) return;
-    const p = document.createElementNS("http://www.w3.org/2000/svg", "path"); p.setAttribute("d", ortho(a, b, k));
-    p.setAttribute("stroke", `var(--sig-${kind(portDef(...split(c.from)))})`); p.setAttribute("class", (c.fixed ? "fixed" : "") + (c.adapter ? " warn" : ""));
-    p.dataset.k = k; const t = document.createElementNS("http://www.w3.org/2000/svg", "title"); t.textContent = `${c.from} → ${c.to}${c.medium ? " · " + c.medium : ""}${c.fixed ? " · fest im Rack" : ""}`; p.appendChild(t); wires.appendChild(p); }); }
+function placeRacks() { stage.querySelectorAll(".rack").forEach(d => { const b = rackBox({id: d.dataset.rid}); if (b) Object.assign(d.style, {left: b.x + "px", top: b.y + "px", width: b.w + "px", height: b.h + "px"}); }); }
+function extent() { const bs = [...visible().map(box), ...groupBoxes()]; return {W: Math.max(800, ...bs.map(b => b.x + b.w + 200)), H: Math.max(500, ...bs.map(b => b.y + b.h + 200))}; }
+function size() { const {W, H} = extent(); Object.assign(stage.style, {width: W + "px", height: H + "px", transform: `scale(${Z})`}); Object.assign(sizer.style, {width: W * Z + "px", height: H * Z + "px"}); wires.setAttribute("width", W); wires.setAttribute("height", H); $("#zval").textContent = Math.round(Z * 100) + " %"; }
 
-// ---------- Interaktion: verschieben, Kabel ziehen, Bibliothek ----------
+// ---------- Wegsucher: Leitungen weichen Kacheln aus, eigene Spuren, nur sichtbares Kreuzen ----------
+function anchor(ref) { // Andockpunkt am Kachelrand (Stage-Koordinaten, ohne Zoom)
+  const [i] = split(ref), n = inst(i); if (!n) return null;
+  const cr = collapsedRack(n) ? S.racks.find(r => r.id === n.rack) : null, holder = cr ? "g:" + cr.id : i;
+  const el = stage.querySelector(`.node[data-id="${CSS.escape(holder)}"]`); if (!el) return null;
+  const pe = el.querySelector(`.port[data-ref="${CSS.escape(cr ? ref : i + ":" + base(split(ref)[1]))}"]`);
+  const bx = cr ? cr.pos : n, w = el.offsetWidth;
+  if (!pe || pe.offsetParent === null) { const right = !!portDef(...split(ref)) && portDef(...split(ref)).direction !== "in"; return {x: bx.x + (right ? w : 0), y: bx.y + el.offsetHeight / 2, right}; }
+  const right = pe.parentElement.classList.contains("r"); let y = 0, e = pe; while (e && e !== el) { y += e.offsetTop; e = e.offsetParent; }
+  return {x: bx.x + (right ? w : 0), y: bx.y + y + pe.offsetHeight / 2, right};
+}
+function route(paths) {
+  const {W, H} = extent(), cw = Math.ceil(W / G) + 2, ch = Math.ceil(H / G) + 2, N = cw * ch;
+  const block = new Uint8Array(N), occH = new Uint8Array(N), occV = new Uint8Array(N);
+  for (const b of [...visible().map(box), ...groupBoxes()]) { const x0 = Math.floor((b.x - 6) / G), x1 = Math.ceil((b.x + b.w + 6) / G), y0 = Math.floor((b.y - 6) / G), y1 = Math.ceil((b.y + b.h + 6) / G);
+    for (let y = Math.max(0, y0); y <= Math.min(ch - 1, y1); y++) for (let x = Math.max(0, x0); x <= Math.min(cw - 1, x1); x++) block[y * cw + x] = 1; }
+  const DX = [1, -1, 0, 0], DY = [0, 0, 1, -1];
+  const out = [];
+  for (const {a, b} of paths) {
+    const sx = Math.round((a.x + (a.right ? 2 : -2) * G) / G), sy = Math.round(a.y / G), tx = Math.round((b.x + (b.right ? 2 : -2) * G) / G), ty = Math.round(b.y / G);
+    const start = sy * cw + sx, goal = ty * cw + tx; const g = new Float32Array(N * 4).fill(1e9), prev = new Int32Array(N * 4).fill(-1);
+    const heap = []; const push = (s, f) => { heap.push([f, s]); let i = heap.length - 1; while (i > 0) { const p = (i - 1) >> 1; if (heap[p][0] <= heap[i][0]) break; [heap[p], heap[i]] = [heap[i], heap[p]]; i = p; } };
+    const pop = () => { const top = heap[0], last = heap.pop(); if (heap.length) { heap[0] = last; let i = 0; for (;;) { const l = 2 * i + 1, r = l + 1; let m = i; if (l < heap.length && heap[l][0] < heap[m][0]) m = l; if (r < heap.length && heap[r][0] < heap[m][0]) m = r; if (m === i) break; [heap[m], heap[i]] = [heap[i], heap[m]]; i = m; } } return top; };
+    const d0 = a.right ? 0 : 1; g[start * 4 + d0] = 0; push(start * 4 + d0, 0); let found = -1, it = 0;
+    while (heap.length && it++ < 2000000) { const [, s] = pop(), c = s >> 2, d = s & 3; if (c === goal) { found = s; break; }
+      const cx = c % cw, cy = (c / cw) | 0;
+      for (let k = 0; k < 4; k++) { const nx = cx + DX[k], ny = cy + DY[k]; if (nx < 0 || ny < 0 || nx >= cw || ny >= ch) continue; const nc = ny * cw + nx;
+        if (block[nc] && nc !== goal) continue; const horiz = k < 2;
+        let cost = 1 + (k !== d ? 6 : 0) + (horiz ? (occH[nc] ? 40 : 0) + (occV[nc] ? 2 : 0) : (occV[nc] ? 40 : 0) + (occH[nc] ? 2 : 0));
+        const ns = nc * 4 + k, ng = g[s] + cost; if (ng < g[ns]) { g[ns] = ng; prev[ns] = s; push(ns, ng + Math.abs(nx - tx) + Math.abs(ny - ty)); } } }
+    let pts;
+    if (found < 0) { const top = 6, ox = a.x + (a.right ? 20 : -20), oy = b.x + (b.right ? 20 : -20); pts = [[a.x, a.y], [ox, a.y], [ox, top], [oy, top], [oy, b.y], [b.x, b.y]]; }
+    else { const cells = []; for (let s = found; s >= 0; s = prev[s]) cells.push(s >> 2); cells.reverse();
+      for (let i = 1; i < cells.length; i++) { const p = cells[i - 1], q = cells[i]; if (Math.abs(p - q) === 1) { occH[p] = occH[q] = 1; } else { occV[p] = occV[q] = 1; } }
+      pts = [[a.x, a.y], ...cells.map(c => [(c % cw) * G, ((c / cw) | 0) * G]), [b.x, b.y]];
+      pts = pts.filter((p, i) => i === 0 || i === pts.length - 1 || !((pts[i - 1][0] === p[0] && p[0] === pts[i + 1][0]) || (pts[i - 1][1] === p[1] && p[1] === pts[i + 1][1]))); }
+    out.push(pts);
+  }
+  return out;
+}
+function pathD(p) { let d = `M${p[0][0]},${p[0][1]}`; for (let i = 1; i < p.length - 1; i++) { const [x0, y0] = p[i - 1], [x, y] = p[i], [x2, y2] = p[i + 1];
+  const l1 = Math.hypot(x - x0, y - y0), l2 = Math.hypot(x2 - x, y2 - y), r = Math.min(6, l1 / 2, l2 / 2);
+  d += r < .5 ? ` L${x},${y}` : ` L${x - (x - x0) / l1 * r},${y - (y - y0) / l1 * r} Q${x},${y} ${x + (x2 - x) / l2 * r},${y + (y2 - y) / l2 * r}`; }
+  const q = p[p.length - 1]; return d + ` L${q[0]},${q[1]}`; }
+function drawWires() { wires.innerHTML = "";
+  const list = S.cables.map((c, k) => ({c, k, a: anchor(c.from), b: anchor(c.to)})).filter(e => e.a && e.b && !(collapsedRack(inst(split(e.c.from)[0])) && collapsedRack(inst(split(e.c.to)[0])) && inst(split(e.c.from)[0]).rack === inst(split(e.c.to)[0]).rack));
+  list.sort((p, q) => (Math.abs(p.a.x - p.b.x) + Math.abs(p.a.y - p.b.y)) - (Math.abs(q.a.x - q.b.x) + Math.abs(q.a.y - q.b.y)));
+  const paths = route(list);
+  list.forEach((e, k) => { const d = pathD(paths[k]), ns = "http://www.w3.org/2000/svg";
+    const halo = document.createElementNS(ns, "path"); halo.setAttribute("d", d); halo.setAttribute("class", "halo"); halo.dataset.k = e.k; wires.appendChild(halo);
+    const p = document.createElementNS(ns, "path"); p.setAttribute("d", d); p.setAttribute("stroke", `var(--sig-${kind(portDef(...split(e.c.from)))})`); p.setAttribute("class", (e.c.fixed ? "fixed" : "") + (selCable === e.k ? " csel" : "")); p.dataset.k = e.k; p.dataset.main = "1";
+    const t = document.createElementNS(ns, "title"); t.textContent = `${e.c.from} → ${e.c.to}${e.c.medium ? " · " + e.c.medium : ""}${e.c.fixed ? " · fest im Rack" : ""}`; p.appendChild(t); wires.appendChild(p); });
+  if (sel) highlight(sel); }
+
+// ---------- Zoom ----------
+function setZoom(z, cx, cy) { const old = Z; Z = Math.min(2, Math.max(.3, z)); const r = ws.getBoundingClientRect(); cx ??= r.width / 2; cy ??= r.height / 2;
+  const ux = (ws.scrollLeft + cx) / old, uy = (ws.scrollTop + cy) / old; render(); ws.scrollLeft = ux * Z - cx; ws.scrollTop = uy * Z - cy; }
+function fit() { const {W, H} = extent(), r = ws.getBoundingClientRect(); setZoom(Math.max(.6, Math.min(1, (r.width - 20) / W, (r.height - 20) / H))); ws.scrollLeft = 0; ws.scrollTop = 0; }
+$("#zin").onclick = () => setZoom(Z * 1.2); $("#zout").onclick = () => setZoom(Z / 1.2); $("#zfit").onclick = fit;
+ws.addEventListener("wheel", e => { if (!(e.ctrlKey || e.metaKey)) return; e.preventDefault(); const r = ws.getBoundingClientRect(); setZoom(Z * (e.deltaY < 0 ? 1.1 : 1 / 1.1), e.clientX - r.left, e.clientY - r.top); }, {passive: false});
+const toStage = ev => { const r = stage.getBoundingClientRect(); return {x: (ev.clientX - r.left) / Z, y: (ev.clientY - r.top) / Z}; };
+
+// ---------- Interaktion: verschieben, Kabel ziehen, zuklappen ----------
 let drag = null;
 stage.addEventListener("pointerdown", ev => {
+  if (ev.target.closest("[data-fold]")) return;
   const port = ev.target.closest(".port"), head = ev.target.closest("[data-drag]"), rh = ev.target.closest("[data-rack]");
-  const s = stage.getBoundingClientRect();
-  if (port) { const [i, p] = split(port.dataset.ref); const d = portDef(i, p);
-    if (d.direction === "in") { toast("Kabel vom Ausgang zum Eingang ziehen"); return; }
-    const free = nextFree(i, p); if (!free) { toast(`${p}: alle ${d.count} belegt`); return; }
-    drag = {type: "wire", from: {i, p: free}, start: pinXY(port.dataset.ref)}; markTargets(drag.from); ev.preventDefault(); return; }
-  if (rh) { const r = rh.dataset.rack; drag = {type: "rack", r, x: ev.clientX, y: ev.clientY, pos: S.instances.filter(n => n.rack === r).map(n => [n, n.x, n.y])}; save(); return; }
-  if (head) { const n = S.instances.find(i => i.id === head.dataset.drag); drag = {type: "node", n, x: ev.clientX, y: ev.clientY, nx: n.x, ny: n.y}; select(n.id); save(); }
+  if (port && !port.closest(".group")) { const [i, p] = split(port.dataset.ref), d = portDef(i, p);
+    if (d.direction === "in") return toast("Kabel vom Ausgang zum Eingang ziehen");
+    const free = nextFree(i, p); if (!free) return toast(`${p}: alle ${d.count} belegt`);
+    drag = {type: "wire", from: {i, p: free}, start: anchor(port.dataset.ref)}; markTargets(drag.from); ev.preventDefault(); return; }
+  const p0 = toStage(ev);
+  if (rh) { const r = rh.dataset.rack; drag = {type: "move", ids: S.instances.filter(n => n.rack === r).map(n => n.id), p0, snap0: JSON.stringify(S)}; drag.start = drag.ids.map(i => [inst(i).x, inst(i).y]); return; }
+  if (head) { const id = head.dataset.drag;
+    if (id.startsWith("g:")) { const r = S.racks.find(x => "g:" + x.id === id); drag = {type: "group", r, p0, x0: r.pos.x, y0: r.pos.y, snap0: JSON.stringify(S)}; select(id); return; }
+    drag = {type: "move", ids: [id], p0, start: [[inst(id).x, inst(id).y]], snap0: JSON.stringify(S)}; select(id); }
 });
-window.addEventListener("pointermove", ev => { if (!drag) return; const s = stage.getBoundingClientRect();
-  if (drag.type === "node") { drag.n.x = Math.max(0, drag.nx + ev.clientX - drag.x); drag.n.y = Math.max(0, drag.ny + ev.clientY - drag.y); const el = stage.querySelector(`.node[data-id="${drag.n.id}"]`); el.style.left = drag.n.x + "px"; el.style.top = drag.n.y + "px"; drawWires(); placeRacks(); }
-  if (drag.type === "rack") { drag.pos.forEach(([n, x, y]) => { n.x = Math.max(0, x + ev.clientX - drag.x); n.y = Math.max(0, y + ev.clientY - drag.y); const el = stage.querySelector(`.node[data-id="${n.id}"]`); el.style.left = n.x + "px"; el.style.top = n.y + "px"; }); drawWires(); placeRacks(); }
+window.addEventListener("pointermove", ev => { if (!drag) return; const p = toStage(ev);
+  if (drag.type === "move") { drag.ids.forEach((id, k) => { const n = inst(id); n.x = Math.max(0, drag.start[k][0] + p.x - drag.p0.x); n.y = Math.max(20, drag.start[k][1] + p.y - drag.p0.y); const el = stage.querySelector(`.node[data-id="${CSS.escape(id)}"]`); el.style.left = n.x + "px"; el.style.top = n.y + "px"; }); placeRacks(); drag.moved = true; }
+  if (drag.type === "group") { drag.r.pos.x = Math.max(0, drag.x0 + p.x - drag.p0.x); drag.r.pos.y = Math.max(20, drag.y0 + p.y - drag.p0.y); const el = stage.querySelector(`.node[data-id="g:${CSS.escape(drag.r.id)}"]`); el.style.left = drag.r.pos.x + "px"; el.style.top = drag.r.pos.y + "px"; drag.moved = true; }
   if (drag.type === "wire") { let tmp = wires.querySelector("path.drag"); if (!tmp) { tmp = document.createElementNS("http://www.w3.org/2000/svg", "path"); tmp.setAttribute("class", "drag"); wires.appendChild(tmp); }
-    tmp.setAttribute("d", ortho(drag.start, {x: ev.clientX - s.left, y: ev.clientY - s.top, right: false}, 0)); } });
-window.addEventListener("pointerup", ev => { if (!drag) return;
-  if (drag.type === "wire") { const port = document.elementFromPoint(ev.clientX, ev.clientY)?.closest(".port"); clearTargets();
-    if (port) { const [i, p] = split(port.dataset.ref); const r = check(drag.from, {i, p});
-      if (!r.ok) toast(r.why); else { const to = nextFree(i, p); if (!to) toast(`${p}: alle belegt`); else { save(); S.cables.push({from: `${drag.from.i}:${drag.from.p}`, to: `${i}:${to}`, medium: r.warn || "", adapter: !!r.warn}); toast(`Verbunden: ${drag.from.i}:${drag.from.p} → ${i}:${to}${r.warn ? " · " + r.warn : ""}`); render(); select(drag.from.i); showHints(); } } }
-    wires.querySelector("path.drag")?.remove(); }
-  if (drag.type === "node" && drag.n.rack) { const r = S.racks.find(x => x.id === drag.n.rack), b = rackBox({id: r.id}); }
-  drag = null; render(); });
-function placeRacks() { stage.querySelectorAll(".rack").forEach(d => { const id = d.querySelector("[data-rack]").dataset.rack, b = rackBox({id}); if (b) Object.assign(d.style, {left: b.x + "px", top: b.y + "px", width: b.w + "px", height: b.h + "px"}); }); }
-function markTargets(from) { stage.querySelectorAll(".port").forEach(el => { const [i, p] = split(el.dataset.ref); const d = portDef(i, p);
-  if (d.direction === "out" || i === from.i) { el.classList.add("no"); return; } const r = check(from, {i, p}); el.classList.add(r.ok ? "ok" : "no"); if (!r.ok) el.title = r.why; }); }
+    tmp.setAttribute("d", pathD([[drag.start.x, drag.start.y], [drag.start.x + 20, drag.start.y], [drag.start.x + 20, p.y], [p.x, p.y]])); } });
+window.addEventListener("pointerup", ev => { if (!drag) return; const d = drag; drag = null;
+  if (d.type === "wire") { const port = document.elementFromPoint(ev.clientX, ev.clientY)?.closest(".port"); clearTargets(); wires.querySelector("path.drag")?.remove();
+    if (port && !port.closest(".group")) { const [i, p] = split(port.dataset.ref), r = check(d.from, {i, p});
+      if (!r.ok) toast(r.why); else { const to = nextFree(i, p); if (!to) toast(`${p}: alle belegt`); else { commit(); S.cables.push({from: `${d.from.i}:${d.from.p}`, to: `${i}:${to}`, medium: r.warn || "", adapter: !!r.warn}); toast(`Verbunden: ${d.from.i}:${d.from.p} → ${i}:${to}${r.warn ? " · " + r.warn : ""}`); render(); select(d.from.i); showHints(); } } } return; }
+  if (d.moved) { past.push(d.snap0); future = []; syncUndo();
+    if (d.type === "move") placeGroup(d.ids); else { const g = d.r; g.pos.x = snap(g.pos.x); g.pos.y = snap(g.pos.y); }
+    render(); }
+});
+stage.addEventListener("click", ev => {
+  const wire = ev.target.closest("path[data-k]"); if (wire) { selectCable(+wire.dataset.k); return; }
+  const f = ev.target.closest("[data-fold]"); if (f) { const r = S.racks.find(x => x.id === f.dataset.fold); commit();
+    if (!r.collapsed) { const b = rackBox(r); r.collapsed = true; r.pos = {x: snap(b.x), y: snap(b.y + 10)}; render(); }
+    else { r.collapsed = false; const b = r.pos, ids = S.instances.filter(n => n.rack === r.id); const minx = Math.min(...ids.map(n => n.x)), miny = Math.min(...ids.map(n => n.y)); ids.forEach(n => { n.x += b.x - minx + 20; n.y += b.y - miny + 30; }); render(); placeGroup(ids.map(n => n.id)); render(); }
+    showHints(); return; }
+  const n = ev.target.closest(".node"); if (n && !ev.target.closest(".port")) select(n.dataset.id); else if (!n) { sel = null; render(); showHints(); } });
+function markTargets(from) { stage.querySelectorAll(".port").forEach(el => { if (el.closest(".group")) { el.classList.add("no"); return; } const [i, p] = split(el.dataset.ref), d = portDef(i, p);
+  if (!d || d.direction === "out" || i === from.i) { el.classList.add("no"); return; } const r = check(from, {i, p}); el.classList.add(r.ok ? "ok" : "no"); if (!r.ok) el.title = r.why; }); }
 function clearTargets() { stage.querySelectorAll(".port").forEach(el => el.classList.remove("ok", "no")); }
+document.addEventListener("keydown", e => { if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z") { e.preventDefault(); e.shiftKey ? redo() : undo(); }
+  if ((e.key === "Delete" || e.key === "Backspace") && selCable !== null && !/input|select|textarea/i.test(e.target.tagName)) { e.preventDefault(); unplug(selCable); }
+  if (e.key === "Escape" && selCable !== null) { selCable = null; drawWires(); showHints(); } });
+function selectCable(k) { sel = null; selCable = k; stage.querySelectorAll(".node.sel").forEach(e => e.classList.remove("sel")); drawWires(); const c = S.cables[k], nm = r => `${inst(split(r)[0])?.name || split(r)[0]} · ${split(r)[1]}`;
+  $("#insp").innerHTML = `<h2>Kabel</h2><div class="sec"><dl><dt>Von</dt><dd>${esc(nm(c.from))}</dd><dt>Nach</dt><dd>${esc(nm(c.to))}</dd>${c.medium ? `<dt>Art</dt><dd>${esc(c.medium)}</dd>` : ""}${c.fixed ? `<dt>Rack</dt><dd>feste Rack-Leitung</dd>` : ""}</dl>
+    <p style="margin:12px 0 0"><button type="button" class="btn take" id="unplug">Kabel lösen</button></p>${c.fixed ? `<p style="font-size:12px;color:var(--sp-fg-muted)">Feste Rack-Leitung: Lösen gilt als Abwandlung dieses Projekts, die Vorlage bleibt gleich.</p>` : ""}
+    <p style="font-size:12px;color:var(--sp-fg-muted)">Auch mit Entf oder Rückschritt; Esc hebt die Auswahl auf.</p><p><button type="button" class="btn" id="back">Zurück zu den Hinweisen</button></p></div>`;
+  $("#unplug").onclick = () => unplug(k); $("#back").onclick = () => { selCable = null; drawWires(); showHints(); }; }
+function unplug(k) { const c = S.cables[k]; if (!c) return; commit(); if (c.fixed) { const r = S.racks.find(r => r.id === inst(split(c.from)[0])?.rack); if (r) r.removed.push(`Leitung ${split(c.from)[1]}→${split(c.to)[1]}`); }
+  S.cables.splice(k, 1); selCable = null; render(); showHints(); toast(`Kabel gelöst: ${c.from} → ${c.to}`); }
+$("#undo").onclick = undo; $("#redo").onclick = redo;
 
-// Bibliothek: ziehen und loslassen
+// ---------- Bibliothek ----------
 function buildLib(filter = "") {
   const f = filter.toLowerCase(), m = s => !f || s.toLowerCase().includes(f);
-  const racks = Object.entries(RACKS).filter(([k, r]) => m(r.name)).map(([k, r]) => `<div class="lib-item" draggable="true" data-add="rack:${k}" tabindex="0"><b>${esc(r.name)}</b><span>Rack · ${r.instances.length} Geräte fest</span></div>`).join("");
-  const kits = Object.entries(KITS).filter(([k, x]) => m(x.name)).map(([k, x]) => `<div class="lib-item kit" draggable="true" data-add="kit:${k}" tabindex="0"><b>${esc(x.name)}</b><span>Set · Übergabe ${esc(x.ports.map(p => p.connector).join(", "))}</span></div>`).join("");
+  const racks = Object.entries(RACKS).filter(([, r]) => m(r.name)).map(([k, r]) => `<div class="lib-item" draggable="true" data-add="rack:${k}" tabindex="0"><b>${esc(r.name)}</b><span>Rack · ${r.instances.length} Geräte fest</span></div>`).join("");
+  const kits = Object.entries(KITS).filter(([, x]) => m(x.name)).map(([k, x]) => `<div class="lib-item kit" draggable="true" data-add="kit:${k}" tabindex="0"><b>${esc(x.name)}</b><span>Set · Übergabe ${esc(x.ports.map(p => p.connector).join(", "))}</span></div>`).join("");
   const devs = Object.values(PROF).filter(p => p.kind !== "module" && m((p.manufacturer || "") + " " + p.model)).sort((a, b) => a.model.localeCompare(b.model)).map(p => `<div class="lib-item" draggable="true" data-add="dev:${p.id}" tabindex="0"><b>${esc(p.model)}</b><span>${esc(p.manufacturer || "")} · ${esc(p.category || "")}</span></div>`).join("");
   $("#lib").innerHTML = `<h2>Bibliothek</h2><input class="lib-search" id="q" placeholder="Suchen" value="${esc(filter)}" aria-label="Bibliothek durchsuchen"><h2>Racks</h2>${racks}<h2>Sets</h2>${kits}<h2>Geräte</h2>${devs}`;
-  const q = $("#q"); q.addEventListener("input", () => { buildLib(q.value); $("#q").focus(); $("#q").setSelectionRange(q.value.length, q.value.length); });
+  const q = $("#q"); q.addEventListener("input", () => { const v = q.value; buildLib(v); const n = $("#q"); n.focus(); n.setSelectionRange(v.length, v.length); });
   $("#lib").querySelectorAll("[data-add]").forEach(el => el.addEventListener("dragstart", e => e.dataTransfer.setData("text/plain", el.dataset.add)));
 }
-const ws = $("#ws");
 ws.addEventListener("dragover", e => { e.preventDefault(); ws.classList.add("drop"); });
 ws.addEventListener("dragleave", () => ws.classList.remove("drop"));
 ws.addEventListener("drop", e => { e.preventDefault(); ws.classList.remove("drop"); const v = e.dataTransfer.getData("text/plain"); if (!v) return;
-  const s = stage.getBoundingClientRect(), at = {x: Math.max(10, e.clientX - s.left), y: Math.max(30, e.clientY - s.top)}; save();
-  const [t, id] = [v.split(":")[0], v.slice(v.indexOf(":") + 1)];
+  const at = toStage(e); at.x = snap(Math.max(10, at.x)); at.y = snap(Math.max(30, at.y)); commit();
+  const t = v.split(":")[0], id = v.slice(v.indexOf(":") + 1);
   if (t === "rack") { addRack(id, at); toast(`Rack ${RACKS[id].name} eingefügt – komplett mit fester Verkabelung`); }
   if (t === "kit") { addKit(id, at); toast(`Set eingefügt – Übergabe ${KITS[id].ports.map(p => p.connector).join(", ")} an eine passende Buchse ziehen`); }
-  if (t === "dev") { const nid = addDevice(id, at); select(nid); }
-  render(); measure(); S.racks.forEach(r => { const m = S.instances.filter(i => i.rack === r.id); if (m.length && m.every(i => i._new)) {} }); showHints(); });
+  if (t === "dev") select(addDevice(id, at));
+  render(); showHints(); });
 
-// ---------- Inspektor ----------
-function select(id) { sel = id; stage.querySelectorAll(".node").forEach(e => e.classList.toggle("sel", e.dataset.id === id)); showInspector(); highlight(id); }
-function highlight(id) { wires.querySelectorAll("path").forEach(p => { const c = S.cables[+p.dataset.k]; p.classList.toggle("hot", !!c && (split(c.from)[0] === id || split(c.to)[0] === id)); }); }
-stage.addEventListener("click", ev => { const n = ev.target.closest(".node"); if (n && !ev.target.closest(".port")) select(n.dataset.id); else if (!n) { sel = null; render(); showHints(); } });
+// ---------- Inspektor und Hinweise ----------
+function select(id) { sel = id; selCable = null; stage.querySelectorAll(".node").forEach(e => e.classList.toggle("sel", e.dataset.id === id)); showInspector(); highlight(id); }
+function highlight(id) { const r = id?.startsWith("g:") ? S.racks.find(x => "g:" + x.id === id) : null, ids = r ? new Set(S.instances.filter(n => n.rack === r.id).map(n => n.id)) : new Set([id]);
+  wires.querySelectorAll("path[data-main]").forEach(p => { const c = S.cables[+p.dataset.k]; p.classList.toggle("hot", !!c && (ids.has(split(c.from)[0]) || ids.has(split(c.to)[0]))); }); }
 function showInspector() {
-  const n = S.instances.find(i => i.id === sel); if (!n) return showHints();
+  if (sel?.startsWith("g:")) { const r = S.racks.find(x => "g:" + x.id === sel), c = crossing(r);
+    $("#insp").innerHTML = `<h2>Rack</h2><div class="sec"><b style="font-size:17px">${esc(r.name)}</b><p>${c.members.length} Geräte, zugeklappt. ${c.ins.length + c.outs.length} Leitungen nach außen.</p><div class="cablelist">${c.members.map(i => `<div>${esc(inst(i).name)}</div>`).join("")}</div><p><button type="button" class="btn" data-fold="${r.id}" id="unf">▸ Aufklappen</button></p><p><button type="button" class="btn" id="back">Zurück zu den Hinweisen</button></p></div>`;
+    $("#unf").onclick = () => stage.querySelector(`[data-fold="${CSS.escape(r.id)}"]`)?.click(); $("#back").onclick = () => { sel = null; render(); showHints(); }; return; }
+  const n = inst(sel); if (!n) return showHints();
   const p = prof(n.profile), rack = S.racks.find(r => r.id === n.rack);
   const cabs = S.cables.map((c, k) => [c, k]).filter(([c]) => split(c.from)[0] === n.id || split(c.to)[0] === n.id);
   const mixOuts = (p.logic || []).some(l => /mixer|matrix/.test(l.type)) ? (p.ports || []).filter(q => q.direction !== "in" && /audio|sdi|hdmi/i.test(q.signal)) : [];
-  const busOpts = /wing/i.test(n.profile) ? ["frei", "MAIN1 PA", "MAIN2 STREAM", "MAIN3", "MAIN4", "BUS1 MON1", "MTX1"] : /atem/i.test(n.profile) ? ["frei", "ME1 Programm", "ME1 Vorschau", "ME2 Programm", "Multiview", "Clean Feed 1", "In 1", "In 3", "In 5", "In 11", "In 18"] : ["frei", "Programm", "Durchgeschleift"];
-  const assignRows = cabs.filter(([c]) => split(c.from)[0] === n.id && mixOuts.some(q => q.id === base(split(c.from)[1]))).map(([c]) => { const key = c.from;
-    return `<label style="display:grid;gap:4px;margin-bottom:8px"><span class="mono" style="font-family:var(--mono);font-size:12px">${esc(split(key)[1])} → ${esc(c.to)}</span><select data-assign="${esc(key)}">${busOpts.map(o => `<option ${S.assign[key] === o ? "selected" : ""}>${esc(o)}</option>`).join("")}</select></label>`; }).join("");
+  const opts = /wing/i.test(n.profile) ? ["frei", "MAIN1 PA", "MAIN2 STREAM", "MAIN3", "MAIN4", "BUS1 MON1", "MTX1"] : /atem/i.test(n.profile) ? ["frei", "ME1 Programm", "ME1 Vorschau", "ME2 Programm", "Multiview", "Clean Feed 1", "In 1", "In 3", "In 5", "In 11", "In 18"] : ["frei", "Programm", "Durchgeschleift"];
+  const rows = cabs.filter(([c]) => split(c.from)[0] === n.id && mixOuts.some(q => q.id === base(split(c.from)[1]))).map(([c]) =>
+    `<label style="display:grid;gap:4px;margin-bottom:8px"><span style="font-family:var(--mono);font-size:12px">${esc(split(c.from)[1])} → ${esc(c.to)}</span><select data-assign="${esc(c.from)}">${opts.map(o => `<option ${S.assign[c.from] === o ? "selected" : ""}>${esc(o)}</option>`).join("")}</select></label>`).join("");
   $("#insp").innerHTML = `<h2>Gerät</h2><div class="sec"><b style="font-size:17px">${esc(n.name)}</b><dl style="margin-top:8px">
       <dt>Modell</dt><dd>${esc((p.manufacturer || "") + " " + (p.model || ""))}</dd><dt>Profil</dt><dd>${esc(n.profile)}${p.status === "draft" ? " · Entwurf" : ""}</dd>
       ${rack ? `<dt>Rack</dt><dd>${esc(rack.name)} (fest)</dd>` : ""}${n.address ? `<dt>Adresse</dt><dd>${esc(n.address)}</dd>` : ""}</dl>
       ${rack ? `<p style="margin:10px 0 0"><button type="button" class="btn" id="detach">Aus Rack herauslösen</button></p>` : ""}
       <p style="margin:8px 0 0"><button type="button" class="btn" id="del">Gerät entfernen</button></p></div>
-    ${assignRows ? `<h2>Belegung der Ausgänge</h2><div class="sec">${assignRows}</div>` : ""}
+    ${rows ? `<h2>Belegung der Ausgänge</h2><div class="sec">${rows}</div>` : ""}
     <h2>Kabel (${cabs.length})</h2><div class="sec cablelist">${cabs.map(([c, k]) => `<div><span>${esc(c.from)} → ${esc(c.to)}${c.fixed ? " · fest" : ""}</span>${c.fixed ? "" : `<button type="button" data-unplug="${k}">Lösen</button>`}</div>`).join("") || "<span>keine</span>"}</div>
     <h2>Buchsen laut Hersteller</h2><div class="sec cablelist">${(p.ports || []).map(q => `<div>${esc(q.id)} · ${q.count > 1 ? q.count + "× " : ""}${esc(q.direction)} · ${esc(q.connector)} · ${esc(q.signal)}</div>`).join("")}</div>
     <p class="sec"><button type="button" class="btn" id="back">Zurück zu den Hinweisen</button></p>`;
   $("#back").onclick = () => { sel = null; render(); showHints(); };
-  $("#del").onclick = () => { save(); S.instances = S.instances.filter(i => i.id !== n.id); S.cables = S.cables.filter(c => split(c.from)[0] !== n.id && split(c.to)[0] !== n.id); if (rack) rack.removed.push(n.name); sel = null; render(); showHints(); toast(`${n.name} entfernt`); };
-  if (rack) $("#detach").onclick = () => { save(); rack.removed.push(n.name); delete n.rack; S.cables = S.cables.filter(c => !(c.fixed && (split(c.from)[0] === n.id || split(c.to)[0] === n.id))); n.x += 40; render(); select(n.id); showHints(); toast(`${n.name} aus ${rack.name} herausgelöst – feste Kabel getrennt, Vorlage bleibt gleich`); };
-  $("#insp").querySelectorAll("[data-assign]").forEach(s => s.onchange = () => { save(); S.assign[s.dataset.assign] = s.value; toast(`${s.dataset.assign} ← ${s.value}`); showHints(true); });
-  $("#insp").querySelectorAll("[data-unplug]").forEach(b => b.onclick = () => { save(); S.cables.splice(+b.dataset.unplug, 1); render(); select(n.id); });
+  $("#del").onclick = () => { commit(); S.instances = S.instances.filter(i => i.id !== n.id); S.cables = S.cables.filter(c => split(c.from)[0] !== n.id && split(c.to)[0] !== n.id); if (rack) rack.removed.push(n.name); sel = null; render(); showHints(); toast(`${n.name} entfernt`); };
+  if (rack) $("#detach").onclick = () => { commit(); rack.removed.push(n.name); delete n.rack; S.cables = S.cables.filter(c => !(c.fixed && (split(c.from)[0] === n.id || split(c.to)[0] === n.id))); n.x += 60; render(); placeGroup([n.id]); render(); select(n.id); showHints(); toast(`${n.name} aus ${rack.name} herausgelöst – feste Kabel getrennt, Vorlage bleibt gleich`); };
+  $("#insp").querySelectorAll("[data-assign]").forEach(s => s.onchange = () => { commit(); S.assign[s.dataset.assign] = s.value; toast(`${s.dataset.assign} ← ${s.value}`); });
+  $("#insp").querySelectorAll("[data-unplug]").forEach(b => b.onclick = () => { commit(); S.cables.splice(+b.dataset.unplug, 1); render(); select(n.id); showHints(); });
 }
-function findings() { const out = [], nm = id => S.instances.find(i => i.id === id)?.name || id;
+function findings() { const out = [], nm = id => inst(id)?.name || id;
   if (S.racks.length > 1) { const sets = S.racks.map(r => new Set(S.instances.filter(i => i.rack === r.id).map(i => i.id)));
-    const linked = S.cables.some(c => { const a = split(c.from)[0], b = split(c.to)[0]; return sets.some((s, k) => s.has(a) && sets.some((t, j) => j !== k && t.has(b))); });
-    if (!linked) out.push({l: "err", t: "Racks nicht verbunden", p: "Zwischen den Racks fehlt der Uplink (z. B. PoE-Switch → TL-SG1024). Ohne ihn kein DHCP, Internet und keine Steuerung."}); }
+    if (!S.cables.some(c => { const a = split(c.from)[0], b = split(c.to)[0]; return sets.some((s, k) => s.has(a) && sets.some((t, j) => j !== k && t.has(b))); }))
+      out.push({l: "err", t: "Racks nicht verbunden", p: "Zwischen den Racks fehlt der Uplink (z. B. PoE-Switch → TL-SG1024). Ohne ihn kein DHCP, Internet und keine Steuerung."}); }
   S.racks.forEach(r => { if (r.removed.length) out.push({l: "warn", t: `${r.name}: ${r.removed.join(", ")} herausgelöst`, p: "Abwandlung nur in diesem Projekt; die Rack-Vorlage bleibt unverändert."}); });
   S.cables.filter(c => c.adapter).forEach(c => out.push({l: "warn", t: "Adapter nötig", p: `${nm(split(c.from)[0])} → ${nm(split(c.to)[0])}: ${c.medium}`}));
-  const outs = S.cables.filter(c => /wing/i.test(S.instances.find(i => i.id === split(c.from)[0])?.profile || "") && /xlr_out/.test(c.from) && !c.fixed);
-  outs.filter(c => !S.assign[c.from] || S.assign[c.from] === "frei").forEach(c => out.push({l: "warn", t: `${nm(split(c.from)[0])} ${split(c.from)[1]}: Belegung offen`, p: `Geht zu ${nm(split(c.to)[0])}. Im Inspektor festlegen, was das Pult auf diesen Ausgang legt.`}));
+  S.cables.filter(c => /wing/i.test(inst(split(c.from)[0])?.profile || "") && /xlr_out/.test(c.from) && !c.fixed && (!S.assign[c.from] || S.assign[c.from] === "frei"))
+    .forEach(c => out.push({l: "warn", t: `${nm(split(c.from)[0])} ${split(c.from)[1]}: Belegung offen`, p: `Geht zu ${nm(split(c.to)[0])}. Im Inspektor festlegen, was das Pult auf diesen Ausgang legt.`}));
   const free = S.instances.filter(i => !S.cables.some(c => split(c.from)[0] === i.id || split(c.to)[0] === i.id));
   if (free.length) out.push({l: "warn", t: `${free.length} Geräte ohne Kabel`, p: free.map(i => i.name).join(", ")});
   if (!out.length) out.push({l: "ok", t: "Keine offenen Punkte", p: "Alle Racks verbunden, keine Adapter, alle Ausgänge belegt."});
@@ -332,18 +431,21 @@ function findings() { const out = [], nm = id => S.instances.find(i => i.id === 
 function showHints() { if (sel) return showInspector();
   $("#insp").innerHTML = `<h2>Hinweise</h2><div class="sec">${findings().map(h => `<div class="hint"><i class="shape ${h.l}" aria-hidden="true"></i><b>${{ok: "OK", warn: "Prüfen", err: "Fehlt"}[h.l]}: ${esc(h.t)}</b><p>${esc(h.p)}</p></div>`).join("")}</div>
   <h2>So geht's</h2><div class="sec" style="font-size:13px;color:var(--sp-fg-muted);display:grid;gap:6px">
-    <span>Rack, Set oder Gerät aus der Bibliothek in den Arbeitsbereich ziehen.</span><span>Von einem Ausgang (rechts) zu einem Eingang (links) ziehen: passende Buchsen leuchten blau, unpassende sind ausgegraut und nennen den Grund.</span><span>Gerät anklicken: Belegung der Ausgänge, Kabel lösen, aus dem Rack herauslösen.</span></div>`; }
+    <span>Rack, Set oder Gerät aus der Bibliothek ziehen. Kacheln rasten im Raster ein und rücken auf freien Platz.</span>
+    <span>Von einem Ausgang (rechts) zu einem Eingang (links) ziehen: passende Buchsen leuchten blau, unpassende sind grau und nennen den Grund.</span>
+    <span>Rack mit „zuklappen“ zu einer Kachel zusammenfassen. Cmd+Mausrad zoomt; weit weg nur Namen, nah alle Buchsen.</span>
+    <span>Cmd+Z macht jeden Schritt rückgängig, Shift+Cmd+Z wiederholt ihn.</span></div>`; }
 
-// ---------- Export / Import / Undo ----------
-$("#exp").onclick = () => { const out = {format: "avrig/0.2", name: S.name, racks: S.racks.map(r => ({ref: r.ref, overrides: {remove: r.removed}})), instances: S.instances.map(({x, y, ...i}) => ({...i, pos: [Math.round(x), Math.round(y)]})), cables: S.cables, assign: S.assign,
+// ---------- Export / Import ----------
+$("#exp").onclick = () => { const out = {format: "avrig/0.2", name: S.name, racks: S.racks.map(r => ({ref: r.ref, overrides: {remove: r.removed}, collapsed: r.collapsed, pos: r.pos})), instances: S.instances.map(({x, y, ...i}) => ({...i, pos: [Math.round(x), Math.round(y)]})), cables: S.cables, assign: S.assign,
   embedded: Object.fromEntries([...new Set(S.instances.map(i => i.profile))].map(id => [id, prof(id)]))};
-  const blob = new Blob([JSON.stringify(out, null, 1)], {type: "application/json"}); const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = (S.name || "projekt").replace(/[^\w-]+/g, "-") + ".avrig.json";
+  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([JSON.stringify(out, null, 1)], {type: "application/json"})); a.download = (S.name || "projekt").replace(/[^\w-]+/g, "-") + ".avrig.json";
   document.body.appendChild(a); a.click(); a.remove(); toast("Projekt exportiert – mit allen Geräteprofilen eingebettet"); };
-$("#imp").onchange = async e => { const f = e.target.files[0]; if (!f) return; try { const d = JSON.parse(await f.text()); Object.assign(PROF, d.embedded || {});
-  S = {name: d.name || f.name, racks: (d.racks || []).map((r, k) => ({id: "rack-" + r.ref, ref: r.ref, name: RACKS[r.ref]?.name || r.ref, removed: r.overrides?.remove || [], added: []})), instances: d.instances.map(i => ({...i, x: i.pos?.[0] ?? 40, y: i.pos?.[1] ?? 40})), cables: d.cables || [], assign: d.assign || {}}; hist = []; render(); showHints(); toast("Projekt importiert"); } catch { toast("Datei ist kein Rig-Projekt"); } };
-$("#undo").onclick = () => { const h = hist.pop(); if (!h) return toast("Nichts zum Rückgängigmachen"); S = JSON.parse(h); render(); showHints(); };
+$("#imp").onchange = async e => { const f = e.target.files[0]; if (!f) return; try { const d = JSON.parse(await f.text()); Object.assign(PROF, d.embedded || {}); commit();
+  S = {name: d.name || f.name, racks: (d.racks || []).map(r => ({id: "rack-" + r.ref, ref: r.ref, name: RACKS[r.ref]?.name || r.ref, removed: r.overrides?.remove || [], collapsed: !!r.collapsed, pos: r.pos})), instances: d.instances.map(i => ({...i, x: i.pos?.[0] ?? 40, y: i.pos?.[1] ?? 40})), cables: d.cables || [], assign: d.assign || {}};
+  render(); showHints(); toast("Projekt importiert"); } catch { toast("Datei ist kein Rig-Projekt"); } };
 document.querySelectorAll("[data-load]").forEach(b => b.onclick = () => { document.querySelectorAll("[data-load]").forEach(x => x.setAttribute("aria-pressed", String(x === b))); loadProject(b.dataset.load); });
 window.addEventListener("resize", () => drawWires());
-buildLib(); document.querySelector('[data-load="schlank"]').setAttribute("aria-pressed", "true"); loadProject("schlank");
-document.fonts?.ready.then(() => drawWires());
+buildLib(); document.querySelector('[data-load="schlank"]').setAttribute("aria-pressed", "true");
+(document.fonts?.ready || Promise.resolve()).then(() => loadProject("schlank"));
 </script>
