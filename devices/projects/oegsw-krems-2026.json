@@ -198,8 +198,8 @@
    "id": "patch",
    "profile": "generic/patchfeld-videoregie",
    "name": "Patchfeld Videoregie (Rack-Front)",
-   "col": 0,
-   "row": 6
+   "col": 2,
+   "row": -1
   },
   {
    "id": "mvconv",
