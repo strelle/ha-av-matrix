@@ -1,0 +1,178 @@
+{
+  "id": "bitfocus/companion",
+  "manufacturer": "Bitfocus",
+  "model": "Companion 5",
+  "category": "control",
+  "rack_units": null,
+  "power": "Software (läuft auf Windows, macOS, Linux; CompanionPi auf Raspberry Pi 4/5)",
+  "ports": [
+    {
+      "id": "admin_http",
+      "label": "Admin-UI + HTTP-API",
+      "count": 1,
+      "direction": "in",
+      "connector": "TCP 8000",
+      "signal": "Ethernet",
+      "formats": "HTTP",
+      "notes": "Standard 8000, änderbar (--admin-port / adminPort). HTTP-API: /api/location/<page>/<row>/<column>/press|down|up|rotate-left|rotate-right|step|style, /api/custom-variable/..., /api/connections/..."
+    },
+    {
+      "id": "satellite_tcp",
+      "label": "Satellite TCP",
+      "count": 1,
+      "direction": "in",
+      "connector": "TCP 16622",
+      "signal": "Ethernet",
+      "formats": "Satellite Surface API",
+      "notes": "Remote-Surfaces (Stream Decks an anderem Rechner)"
+    },
+    {
+      "id": "satellite_ws",
+      "label": "Satellite WebSocket",
+      "count": 1,
+      "direction": "in",
+      "connector": "TCP 16623",
+      "signal": "Ethernet",
+      "formats": "WebSocket",
+      "notes": ""
+    },
+    {
+      "id": "osc",
+      "label": "OSC",
+      "count": 1,
+      "direction": "in",
+      "connector": "UDP 12321",
+      "signal": "Ethernet",
+      "formats": "OSC",
+      "notes": "Port konfigurierbar"
+    },
+    {
+      "id": "tcp_udp",
+      "label": "TCP/UDP Remote",
+      "count": 1,
+      "direction": "in",
+      "connector": "TCP/UDP (konfigurierbar)",
+      "signal": "Ethernet",
+      "formats": "Textbefehle",
+      "notes": "Ports müssen in den Settings eingerichtet werden"
+    },
+    {
+      "id": "rosstalk",
+      "label": "RossTalk",
+      "count": 1,
+      "direction": "in",
+      "connector": "TCP 7788",
+      "signal": "Ethernet",
+      "formats": "",
+      "notes": "optional"
+    },
+    {
+      "id": "emberplus",
+      "label": "Ember+",
+      "count": 1,
+      "direction": "in",
+      "connector": "TCP 9092",
+      "signal": "Ethernet",
+      "formats": "",
+      "notes": "optional"
+    },
+    {
+      "id": "usb_surface",
+      "label": "USB-Surfaces",
+      "count": 1,
+      "direction": "bidi",
+      "connector": "USB (Host)",
+      "signal": "USB",
+      "formats": "",
+      "notes": "Lokal angeschlossene Stream Decks u. a."
+    },
+    {
+      "id": "modules_out",
+      "label": "Geräte-Module (ausgehend)",
+      "count": 1,
+      "direction": "out",
+      "connector": "Netzwerk",
+      "signal": "Ethernet",
+      "formats": "je Modul (z. B. TCP/UDP/HTTP/OSC)",
+      "notes": "Module verbinden sich zu gesteuerten Geräten; manche öffnen eigene Server"
+    }
+  ],
+  "logic": [
+    {
+      "type": "matrix",
+      "from": [
+        "usb_surface",
+        "satellite_tcp",
+        "satellite_ws",
+        "admin_http",
+        "osc",
+        "tcp_udp"
+      ],
+      "to": [
+        "modules_out"
+      ],
+      "notes": "Steuerbrücke: Tasten/Encoder-Ereignisse von Surfaces oder Remote-Protokollen lösen Aktionen in Modulen aus; Feedback/Variablen zurück auf die Tasten"
+    }
+  ],
+  "control": [
+    {
+      "protocol": "HTTP REST 8000",
+      "notes": "/api/location/..., Custom-Variablen, Connections"
+    },
+    {
+      "protocol": "Satellite 16622 TCP / 16623 WS",
+      "notes": "Companion Satellite ab Companion 3.4.0"
+    },
+    {
+      "protocol": "OSC 12321",
+      "notes": ""
+    },
+    {
+      "protocol": "TCP/UDP",
+      "notes": "konfigurierbare Ports"
+    },
+    {
+      "protocol": "RossTalk 7788, Ember+ 9092, Art-Net, WebSocket",
+      "notes": "optional aktivierbar"
+    }
+  ],
+  "sources": [
+    {
+      "url": "https://bitfocus.io/companion",
+      "what": "Produktseite: Open Source, Stream-Deck-Steuerung, Win/Mac/Linux, Trigger via OSC/TCP/UDP/HTTP/WebSocket/ArtNet"
+    },
+    {
+      "url": "https://github.com/bitfocus/companion/blob/main/docs/user-guide/1_getting-started/Installation.md",
+      "what": "Port-Tabelle 8000 Admin UI+web API, 16622 Satellite TCP, 16623 Satellite WS"
+    },
+    {
+      "url": "https://github.com/bitfocus/companion/blob/main/docs/user-guide/1_getting-started/config-reference.generated.md",
+      "what": "admin port default 8000, --admin-port"
+    },
+    {
+      "url": "https://github.com/bitfocus/companion/blob/main/docs/user-guide/5_remote-control/http-remote-control.md",
+      "what": "HTTP-API-Pfade, gleicher IP/Port wie Companion"
+    },
+    {
+      "url": "https://github.com/bitfocus/companion/blob/main/docs/user-guide/5_remote-control/osc-control.md",
+      "what": "OSC Port 12321"
+    },
+    {
+      "url": "https://github.com/bitfocus/companion/blob/main/docs/user-guide/3_config/settings.md",
+      "what": "Protokolle; RossTalk 7788, Ember+ 9092; TCP/UDP-Ports konfigurierbar"
+    },
+    {
+      "url": "https://github.com/bitfocus/companion-satellite",
+      "what": "Satellite TCP 16622, Companion ≥ 3.4.0"
+    },
+    {
+      "url": "https://github.com/bitfocus/companion/releases",
+      "what": "aktuelle Version v5.1.0 (2026-10-11)"
+    }
+  ],
+  "unverified": [
+    "Ob HTTP-API in Companion 5 standardmäßig aktiviert ist (Settings-Schalter 'HTTP API')",
+    "Default-Ports für TCP/UDP-Remote nicht in Doku genannt",
+    "Konkrete Module für AV Matrix/MixEffect nicht recherchiert"
+  ]
+}

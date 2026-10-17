@@ -1,0 +1,60 @@
+{
+ "format": "avrig/0.2",
+ "name": "Schlankes Setup (ATEM Mini Pro ISO)",
+ "date": "2026-10-17",
+ "notes": "Vorlage für kleine Einsätze: WING-Rack komplett, statt Videoregie ein ATEM Mini Pro ISO, Kamera am FOH als Totale, Ton per XLR direkt in die Kamera. Kein ST 2110.",
+ "racks": [{"ref": "wingrack", "overrides": {}}],
+ "instances": [
+  {"id": "camfoh", "profile": "blackmagic/studio-camera-4k-gen1", "name": "Kamera FOH (Totale)", "col": 0, "row": 0},
+  {"id": "spk", "profile": "generic/laptop", "name": "Speaker-Laptop (Bühne)", "col": 0, "row": 1},
+  {"id": "regie", "profile": "generic/laptop", "name": "Regielaptop FOH", "col": 0, "row": 2},
+  {"id": "sdihdmi", "profile": "generic/micro-converter-sdi-hdmi", "name": "SDI→HDMI-Wandler Kamera", "col": 1, "row": 0},
+  {"id": "mini", "profile": "blackmagic/atem-mini-pro-iso", "name": "ATEM Mini Pro ISO", "col": 2, "row": 0},
+  {"id": "ssd", "profile": "generic/usb-ssd", "name": "USB-SSD (ISO-Aufnahme)", "col": 3, "row": 0},
+  {"id": "beamer", "profile": "generic/display", "name": "Beamer Saal", "col": 3, "row": 1},
+  {"id": "house", "profile": "generic/house-network", "name": "Hausanschluss (Location)", "col": 3, "row": 2},
+  {"id": "cloud", "profile": "generic/rtmp-service", "name": "Streaming-Plattform (RTMP)", "col": 3, "row": 3}
+ ],
+ "cables": [
+  {"from": "camfoh:sdi_out", "to": "sdihdmi:sdi_in", "medium": "SDI"},
+  {"from": "sdihdmi:hdmi_out", "to": "mini:hdmi_in.1", "medium": "HDMI"},
+  {"from": "spk:hdmi_out", "to": "mini:hdmi_in.2", "medium": "HDMI"},
+  {"from": "regie:hdmi_out", "to": "mini:hdmi_in.3", "medium": "HDMI"},
+  {"from": "regie:usbc", "to": "wing:usb_b", "medium": "USB"},
+  {"from": "wing:xlr_out.1", "to": "camfoh:audio_in_xlr.1", "medium": "XLR (Ton in die Kamera)"},
+  {"from": "wing:xlr_out.2", "to": "camfoh:audio_in_xlr.2", "medium": "XLR"},
+  {"from": "mini:usb_c", "to": "ssd:usb", "medium": "USB-C"},
+  {"from": "mini:hdmi_out", "to": "beamer:hdmi_in", "medium": "HDMI"},
+  {"from": "mini:ethernet", "to": "poe:port", "medium": "Cat6"},
+  {"from": "house:lan", "to": "ux:wan", "medium": "Cat6 (Location-Port)"},
+  {"from": "ux:wan", "to": "cloud:rtmp_in", "medium": "Internet"}
+ ],
+ "flows": [
+  {"from": "ulxd:dante_primary", "to": "wing:aoip.1", "via": "poe", "kind": "Dante", "label": "Strelle1–4 → MOD 1–4"},
+  {"from": "mini:ethernet", "to": "cloud:rtmp_in", "via": "ux", "kind": "RTMP", "label": "Stream direkt aus dem ATEM Mini"}
+ ],
+ "routes": [
+  {"device": "camfoh", "from": "audio_in_xlr.1", "to": "sdi_out", "label": "Ton eingebettet"},
+  {"device": "camfoh", "from": "audio_in_xlr.2", "to": "sdi_out"},
+  {"device": "sdihdmi", "from": "sdi_in", "to": "hdmi_out"},
+  {"device": "mini", "from": "hdmi_in.1", "to": "pgm", "label": "Kamera FOH"},
+  {"device": "mini", "from": "hdmi_in.2", "to": "pgm", "label": "Speaker-Laptop"},
+  {"device": "mini", "from": "hdmi_in.3", "to": "pgm", "label": "Regielaptop"},
+  {"device": "mini", "from": "pgm", "to": "hdmi_out", "label": "Programm"},
+  {"device": "mini", "from": "pgm", "to": "ethernet", "label": "Stream RTMP"},
+  {"device": "mini", "from": "hdmi_in.1", "to": "usb_c", "label": "ISO-Aufnahme alle Eingänge + Programm"},
+  {"device": "mini", "from": "pgm", "to": "usb_c"},
+  {"device": "wing", "from": "aoip.1", "to": "main2", "label": "MIC1–HEAD2"},
+  {"device": "wing", "from": "usb_b", "to": "main2", "label": "USB 1/2 FOH"},
+  {"device": "wing", "from": "main2", "to": "xlr_out.1", "label": "MAIN2 STREAM"},
+  {"device": "wing", "from": "main2", "to": "xlr_out.2"}
+ ],
+ "generic": {
+  "generic/laptop": {"model": "Laptop", "category": "computer", "ports": [{"id": "usbc", "direction": "out", "connector": "USB-C", "signal": "DisplayPort+Audio"}, {"id": "hdmi_out", "direction": "out", "connector": "HDMI-A", "signal": "HDMI"}]},
+  "generic/micro-converter-sdi-hdmi": {"manufacturer": "Blackmagic Design", "model": "Micro Converter SDI to HDMI (Variante offen)", "category": "converter", "ports": [{"id": "sdi_in", "direction": "in", "connector": "BNC", "signal": "SDI"}, {"id": "hdmi_out", "direction": "out", "connector": "HDMI-A", "signal": "HDMI"}]},
+  "generic/usb-ssd": {"model": "USB-SSD", "category": "recorder", "ports": [{"id": "usb", "direction": "in", "connector": "USB-C", "signal": "USB"}]},
+  "generic/display": {"model": "Beamer", "category": "display", "ports": [{"id": "hdmi_in", "direction": "in", "connector": "HDMI-A", "signal": "HDMI"}]},
+  "generic/house-network": {"model": "Hausnetz Location", "category": "service", "ports": [{"id": "lan", "direction": "bidi", "connector": "RJ45", "signal": "Internet"}]},
+  "generic/rtmp-service": {"model": "RTMP", "category": "service", "ports": [{"id": "rtmp_in", "direction": "in", "connector": "Internet", "signal": "RTMP"}]}
+ }
+}

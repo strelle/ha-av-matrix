@@ -1,0 +1,38 @@
+{
+  "id": "shure/ulxd4q",
+  "manufacturer": "Shure",
+  "model": "ULXD4Q",
+  "category": "wireless",
+  "rack_units": 1,
+  "power": "100-240 V AC, 50-60 Hz, 0,32 A max., internes Netzteil, IEC",
+  "ports": [
+    {"id": "ant_in", "label": "RF Antenna Input A/B", "count": 2, "direction": "in", "connector": "BNC", "signal": "RF", "formats": "470-932 MHz (regionsabhängig), 50 Ohm", "notes": "Diversity A und B; Bias 12-13 V DC, max. 150 mA je Antenne, schaltbar"},
+    {"id": "rf_cascade", "label": "RF Cascade Out A/B", "count": 2, "direction": "out", "connector": "BNC", "signal": "RF", "formats": "50 Ohm, unsymmetrisch, passiv, 0 dB Einfügedämpfung", "notes": "Gibt Antennensignal A/B an genau einen weiteren Empfänger im selben Band weiter"},
+    {"id": "xlr_out", "label": "Audio Out Ch 1-4", "count": 4, "direction": "out", "connector": "XLR3M", "signal": "analog-audio", "formats": "symmetrisch, 100 Ohm; LINE +18 dBV / MIC -12 dBV Full Scale", "notes": "Je Kanal ein Mic/Line-Schalter (30 dB Pad); Phantomspeisungsschutz"},
+    {"id": "dante_primary", "label": "Ethernet/Dante Primary", "count": 1, "direction": "bidi", "connector": "RJ45", "signal": "Dante", "formats": "10/100 Mbit/s, 1 Gbit/s; 24 bit/48 kHz", "notes": "Shure Control (WWB) + Dante Audio/Control; LEDs: Link grün, Speed amber"},
+    {"id": "dante_secondary", "label": "Ethernet/Dante Secondary", "count": 1, "direction": "bidi", "connector": "RJ45", "signal": "Dante", "formats": "10/100 Mbit/s, 1 Gbit/s", "notes": "Funktion je nach Netzwerkmodus: Switched (wie Primary), Redundant Audio (Dante-Backup), Split (nur Dante Audio, Control auf Primary)"},
+    {"id": "power_in", "label": "AC Power Input", "count": 1, "direction": "in", "connector": "IEC", "signal": "power", "formats": "100-240 V AC", "notes": ""}
+  ],
+  "logic": [
+    {"type": "decoder", "from": ["ant_in"], "to": ["xlr_out", "dante_primary", "dante_secondary"], "notes": "4 digitale Funkempfänger (Diversity A/B) -> je Kanal XLR-Ausgang und Dante-Ausgang; Gain -18..+42 dB je Kanal; Latenz <2,9 ms"},
+    {"type": "splitter", "from": ["ant_in"], "to": ["rf_cascade"], "notes": "Passive RF-Weitergabe Antenne A/B an 1 weiteren Empfänger"},
+    {"type": "mixer", "from": ["ant_in"], "to": ["xlr_out", "dante_primary", "dante_secondary"], "notes": "Audio Summing (DEVICE UTILITIES > AUDIO SUMMING): Kanäle werden als 4-Kanal-Mischer summiert, Summe liegt auf allen gewählten Ausgängen (XLR und Dante)"},
+    {"type": "switch", "from": ["ant_in"], "to": ["xlr_out", "dante_primary"], "notes": "Frequency Diversity: zwei Sender mit gleicher Quelle auf 2 Empfängerkanäle, bei Störung wird der gute Kanal auf beide Ausgänge geschaltet"}
+  ],
+  "control": [
+    {"protocol": "Shure Wireless Workbench (Shure Control)", "notes": "über Primary (und je nach Modus Secondary)"},
+    {"protocol": "Shure Command Strings TCP 2202", "notes": "AMX/Crestron, ULX-D-Empfänger ist Client laut Guide"},
+    {"protocol": "Dante (Dante Controller, Dante Domain Manager, Device Lock)", "notes": "Netzwerkmodi SWITCHED / REDUNDANT AUDIO / SPLIT, Neustart nötig"}
+  ],
+  "sources": [
+    {"url": "https://pubs.shure.com/view/guide/ULXD-DQ/en-US.pdf", "what": "ULX-D Dual and Quad User Guide: S. 8-9 Back Panel, S. 39-40 Audio Summing/Frequency Diversity, S. 43 RF Cascade, S. 46-51 Dante-Netzwerkmodi, S. 51 Port 2202, S. 62-64 Specifications"},
+    {"url": "https://content-files.shure.com/Pubs/sbc450/ulx-d-specsheet.pdf", "what": "ULX-D Spec Sheet S. 5: ULXD4Q Component Specifications (44x482x274 mm, 3,45 kg, BNC, XLR)"},
+    {"url": "https://www.shure.com/en-MEA/products/wireless-systems/ulx-d_digital_wireless/ulxd4q", "what": "Produktseite: 4 Empfänger, Dante, High Density"}
+  ],
+  "unverified": [
+    "Kein AES3-Ausgang am ULXD4Q belegt (Back Panel listet nur IEC, 2x Antenne, 2x Cascade, 4x XLR+Mic/Line, 2x RJ45) – AES3 gibt es nur am Einzelempfänger ULXD4",
+    "Anzahl Dante-Transmit-Kanäle (vermutlich 4, einer je Funkkanal) und ob Dante-Receive-Kanäle existieren, nicht explizit in Zahlen belegt",
+    "Verfügbare Summing-Kombinationen (Tabelle im Guide als Grafik) nicht im Text extrahierbar",
+    "Tuningbereich je Bandvariante: Produktseite nennt bis 166 MHz, Spec Sheet 2019 bis 64 MHz"
+  ]
+}

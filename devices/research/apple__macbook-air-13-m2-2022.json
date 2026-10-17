@@ -1,0 +1,112 @@
+{
+  "id": "apple/macbook-air-13-m2-2022",
+  "manufacturer": "Apple",
+  "model": "MacBook Air 13\" (M2, 2022) – Mac14,2",
+  "category": "computer",
+  "rack_units": null,
+  "power": "MagSafe 3 oder USB-C (Thunderbolt-Ports laden); Netzteil 30 W (8-Core-GPU) bzw. 35 W Dual / 70 W optional",
+  "ports": [
+    {
+      "id": "tb",
+      "label": "Thunderbolt / USB 4",
+      "count": 2,
+      "direction": "bidi",
+      "connector": "USB-C",
+      "signal": "USB",
+      "formats": "Thunderbolt 3 / USB 4 bis 40 Gbit/s; USB 3.1 Gen 2 bis 10 Gbit/s; DisplayPort; Laden",
+      "notes": "Hier: ein Port mit USB-Ethernet-Adapter ASIX AX88179A (1G) ins 2110-/NDI-Netz. Ein externes Display bis 6K60"
+    },
+    {
+      "id": "magsafe",
+      "label": "MagSafe 3",
+      "count": 1,
+      "direction": "in",
+      "connector": "MagSafe 3",
+      "signal": "power",
+      "formats": "",
+      "notes": "Ladeanschluss, USB-C-auf-MagSafe-3-Kabel im Lieferumfang"
+    },
+    {
+      "id": "headphone",
+      "label": "Kopfhörer",
+      "count": 1,
+      "direction": "out",
+      "connector": "TRS-3.5",
+      "signal": "analog-audio",
+      "formats": "",
+      "notes": "Unterstützt hochohmige Kopfhörer"
+    },
+    {
+      "id": "wifi",
+      "label": "WLAN/Bluetooth",
+      "count": 1,
+      "direction": "bidi",
+      "connector": "intern",
+      "signal": "Ethernet",
+      "formats": "Wi-Fi 6 (802.11ax), Bluetooth 5.3",
+      "notes": "Drahtlos"
+    },
+    {
+      "id": "eth_usb",
+      "label": "USB-Ethernet-Adapter ASIX AX88179A",
+      "count": 1,
+      "direction": "bidi",
+      "connector": "RJ45",
+      "signal": "Ethernet",
+      "formats": "10/100/1000 Mbit/s über USB 3.2 Gen1 (Typ-C-PHY im Chip)",
+      "notes": "Zubehör; macOS treiberlos via CDC-NCM; Jumbo Frames bis 9K, 802.1Q VLAN, 802.1p, EEE"
+    }
+  ],
+  "logic": [
+    {
+      "type": "encoder",
+      "from": [
+        "tb"
+      ],
+      "to": [
+        "eth_usb"
+      ],
+      "notes": "Software-Rolle: NDI-Sender (Trailer-Loop) ins Netz über eth_usb bzw. WLAN"
+    },
+    {
+      "type": "switch",
+      "from": [
+        "eth_usb"
+      ],
+      "to": [
+        "eth_usb"
+      ],
+      "notes": "Software-Rolle: MixEffect-App (Bildmischer-Steuerung) und Strelle AV Matrix (Steuerung, launchd-Dienst Port 8088) – keine Herstellerangaben"
+    }
+  ],
+  "control": [
+    {
+      "protocol": "NDI (Sender)",
+      "notes": "Software-Rolle, Port/Version nicht recherchiert"
+    },
+    {
+      "protocol": "HTTP 8088 (Strelle AV Matrix)",
+      "notes": "Projektangabe"
+    },
+    {
+      "protocol": "SSH",
+      "notes": "macOS-Fernanmeldung (Projektnutzung)"
+    }
+  ],
+  "sources": [
+    {
+      "url": "https://support.apple.com/en-us/111867",
+      "what": "Apple Tech Specs MacBook Air (M2, 2022): 2x Thunderbolt/USB 4, MagSafe 3, 3,5-mm-Klinke, 1 externes Display bis 6K60, Wi-Fi 6, BT 5.3, Netzteile"
+    },
+    {
+      "url": "https://www.asix.com.tw/en/product/USBEthernet/Super-Speed_USB_Ethernet/AX88179A",
+      "what": "ASIX AX88179A Produktseite: USB 3.2 Gen1 mit Typ-C-PHY, 10/100/1000, EEE, Jumbo 9K, VLAN, CDC-NCM treiberlos unter macOS"
+    }
+  ],
+  "unverified": [
+    "Modellkennung Mac14,2 nicht auf der abgerufenen Apple-Seite verifiziert",
+    "Konkretes Adaptermodell/Hersteller des AX88179A-Adapters und Steckerform (USB-C vs USB-A mit Adapter)",
+    "NDI-Sender-Software, MixEffect-App und AV Matrix: Rollen aus Auftrag/Projekt, keine Herstellerquelle",
+    "Ob NDI über USB-Adapter oder WLAN läuft"
+  ]
+}

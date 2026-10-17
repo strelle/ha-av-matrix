@@ -1,0 +1,146 @@
+{
+ "id": "blackmagic/smartview-4k",
+ "manufacturer": "Blackmagic Design",
+ "model": "SmartView 4K G3",
+ "category": "monitor",
+ "rack_units": 6,
+ "power": "1 x intern 100-240 V AC (IEC C14) + 1 x 5,5-mm-Hohlstecker +12 V DC; 24 W",
+ "ports": [
+  {
+   "id": "sdi_in",
+   "label": "12G-SDI In 1-2",
+   "count": 2,
+   "direction": "in",
+   "connector": "BNC",
+   "signal": "SDI-12G",
+   "formats": "270Mb/1.5G/3G/6G/12G; SD, HD, 2K, 2160p bis 60, 4K DCI bis 60; Auto-Erkennung",
+   "notes": "Umschaltung per INPUT-Taste oder Software"
+  },
+  {
+   "id": "sdi_loop",
+   "label": "SDI Loop Out",
+   "count": 1,
+   "direction": "out",
+   "connector": "BNC",
+   "signal": "SDI-12G",
+   "notes": "reclocked; folgt automatisch der Eingangsauswahl; 3G Level A/B wählbar"
+  },
+  {
+   "id": "sfp",
+   "label": "SFP (optisch)",
+   "count": 1,
+   "direction": "in",
+   "connector": "SFP",
+   "signal": "ST2110",
+   "notes": "Käfig für optionales SFP-Modul: 2110 IP (Ethernet optisch) oder optisches SDI"
+  },
+  {
+   "id": "ip_10g",
+   "label": "10G Ethernet",
+   "count": 1,
+   "direction": "in",
+   "connector": "RJ45",
+   "signal": "ST2110",
+   "formats": "10/100/1000/10GBASE-T; ST 2110-20/-21/-30/-40, IP10, bis 2160p60",
+   "notes": "2110-Empfang, Konfiguration, Fernsteuerung, Updates"
+  },
+  {
+   "id": "tally",
+   "label": "Tally",
+   "count": 1,
+   "direction": "in",
+   "connector": "DE-9",
+   "signal": "GPI",
+   "notes": "Kontaktschluss, rot/grün/blau-Rahmen; übersteuert Soft-Tally"
+  },
+  {
+   "id": "usb_c",
+   "label": "USB-C",
+   "count": 1,
+   "direction": "bidi",
+   "connector": "USB-C",
+   "signal": "USB",
+   "notes": "Seitlich; SmartView Setup, LUTs, Updates"
+  },
+  {
+   "id": "power_ac",
+   "label": "AC Power",
+   "count": 1,
+   "direction": "in",
+   "connector": "IEC",
+   "signal": "power",
+   "formats": "100-240 V AC"
+  },
+  {
+   "id": "power_dc",
+   "label": "12V DC In",
+   "count": 1,
+   "direction": "in",
+   "connector": "DC",
+   "signal": "power",
+   "formats": "+12 V DC, 5,5-mm-Hohlstecker, min. 24 W"
+  }
+ ],
+ "logic": [
+  {
+   "type": "switch",
+   "from": [
+    "sdi_in",
+    "ip_10g",
+    "sfp"
+   ],
+   "to": [
+    "sdi_loop"
+   ],
+   "notes": "INPUT wählt zwischen SDI 1, SDI 2, abonniertem 2110-Stream und SFP; Display zeigt Auswahl; Loop Out folgt der Auswahl"
+  },
+  {
+   "type": "decoder",
+   "from": [
+    "ip_10g",
+    "sfp"
+   ],
+   "to": [],
+   "notes": "2110-Receiver (NMOS IS-05 oder SmartView Setup), IP10-Decoder"
+  }
+ ],
+ "control": [
+  {
+   "protocol": "Blackmagic SmartView Ethernet Protocol v1.4, TCP 9992",
+   "notes": "textbasiert wie Videohub; Blöcke MONITOR A: Brightness, Contrast, Saturation, Identify, Border (Soft-Tally), WidescreenSD"
+  },
+  {
+   "protocol": "NMOS IS-04 v1.3.2 / IS-05 v1.1.2",
+   "notes": "BCP-002-01, BCP-004-01"
+  },
+  {
+   "protocol": "PTP IEEE 1588-2008 / ST 2059-1/-2"
+  },
+  {
+   "protocol": "Blackmagic SmartView Setup (USB oder Ethernet)",
+   "notes": "Administration auf 'via USB' beschränkbar"
+  },
+  {
+   "protocol": "Tally über ATEM (Kamera-SDI mit Tally) oder DE-9-GPI"
+  }
+ ],
+ "sources": [
+  {
+   "url": "https://www.blackmagicdesign.com/products/smartview4k/techspecs",
+   "what": "techspecs SmartView 4K G3 (abgerufen 2026-10-17)"
+  },
+  {
+   "url": "https://documents.blackmagicdesign.com/UserManuals/SmartViewManual.pdf",
+   "what": "manual (Juli 2024) S. 5-7 Anschlüsse/Loop/USB, S. 10-11 Eingänge, S. 14-16 SFP/Netzwerk/Tally, S. 33 Tally-Port, S. 38-41 Ethernet Protocol TCP 9992"
+  }
+ ],
+ "unverified": [
+  "Welche Generation vorliegt: die Herstellerseite führt nur noch SmartView 4K G3; ältere SmartView-4K-Versionen (ohne 2110, ggf. andere Eingangszahl) nicht recherchiert",
+  "Ob SmartView 4K G3 das Ethernet-Protokoll TCP 9992 unterstützt: Handbuch dokumentiert v1.4 allgemein für 'SmartView or SmartScope', Beispiel ist SmartView Duo",
+  "Audio-Ausgänge: keine in den Tech Specs",
+  "Bezeichnung der SDI-Eingänge im Protokoll/Panel (A/B vs. 1/2): Handbuch spricht von 'input 1 or 2'"
+ ],
+ "format": "avdp/0.1",
+ "status": "draft",
+ "slots": []
+}

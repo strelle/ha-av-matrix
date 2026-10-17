@@ -1,0 +1,66 @@
+{
+  "id": "elgato/stream-deck-plus",
+  "manufacturer": "Elgato",
+  "model": "Stream Deck +",
+  "category": "control",
+  "rack_units": null,
+  "power": "USB-Bus-Power über USB-C (Wert für Stream Deck + nicht belegt)",
+  "ports": [
+    {
+      "id": "usb",
+      "label": "USB-C",
+      "count": 1,
+      "direction": "bidi",
+      "connector": "USB-C",
+      "signal": "USB",
+      "formats": "USB 2.0 (Typ C); USB-C-3.0-Port am Host empfohlen",
+      "notes": "Einzige Buchse; Strom und Daten; USB-C-auf-USB-C-Kabel 1,5 m im Lieferumfang. Zubehör-Docks (USB Hub, Network Dock, XLR Dock) separat erhältlich"
+    }
+  ],
+  "logic": [
+    {
+      "type": "passthrough",
+      "from": [
+        "usb"
+      ],
+      "to": [
+        "usb"
+      ],
+      "notes": "Bedienoberfläche ohne Signalweg: 8 LCD-Tasten, 4 Drehregler (360°, mit Drückfunktion), LCD-Touch-Leiste 108x14 mm (800x100 px). Tastendrücke/Drehungen/Touch gehen als USB-Ereignisse an den Host; Host sendet Tastenbilder zurück."
+    }
+  ],
+  "control": [
+    {
+      "protocol": "USB HID (Elgato Stream Deck)",
+      "notes": "Hersteller-Software Stream Deck (Windows 11+, macOS 13+)"
+    },
+    {
+      "protocol": "Bitfocus Companion (lokale USB-Surface oder via Companion Satellite TCP 16622 / WS 16623)",
+      "notes": "Hier: Stream Deck + steckt per USB am Companion-Host (Raspberry Pi) und wird als Surface eingebunden"
+    }
+  ],
+  "sources": [
+    {
+      "url": "https://www.elgato.com/us/en/p/stream-deck-plus-black",
+      "what": "Produktseite/Tech Specs: USB-2.0-Interface, USB-C-3.0-Port empfohlen, Kabel 1,5 m, 8 LCD-Tasten, 4 Encoder, Touch 108x14 mm, 140x138x110 mm, 465 g, Win 11/macOS 13, Zubehör"
+    },
+    {
+      "url": "https://help.elgato.com/hc/en-us/articles/10567379685901-Elgato-Stream-Deck-Technical-Specifications",
+      "what": "Help Center Technical Specifications (über Suchergebnis-Auszug, Seite direkt 403): USB 2.0 Type-C, Touch 800x100"
+    },
+    {
+      "url": "https://bitfocus.io/companion",
+      "what": "Companion steuert Stream Deck als Bedienfläche"
+    },
+    {
+      "url": "https://github.com/bitfocus/companion/blob/main/docs/user-guide/7_surfaces/satellite.md",
+      "what": "Satellite-Ports 16622/16623"
+    }
+  ],
+  "unverified": [
+    "Leistungsaufnahme des Stream Deck + (nur für Stream Deck + XL belegt: 900 mA @ 5 V)",
+    "Tastenauflösung der LCD-Tasten (Help-Center-Seite nicht direkt abrufbar)",
+    "Explizite Nennung von Stream Deck + (Encoder/Touch-Leiste) in der Companion-5-Surface-Liste nicht in Herstellerdoku geprüft",
+    "Help-Center-Werte nur aus Suchergebnis-Auszug, Seite selbst lieferte 403"
+  ]
+}

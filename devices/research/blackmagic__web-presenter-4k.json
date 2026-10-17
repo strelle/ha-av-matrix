@@ -1,0 +1,52 @@
+{
+  "id": "blackmagic/web-presenter-4k",
+  "manufacturer": "Blackmagic Design",
+  "model": "Blackmagic Web Presenter 4K",
+  "category": "streamer",
+  "rack_units": 1,
+  "power": "intern AC über IEC + zusätzlicher 12 V DC-Eingang (Redundanz/Akku)",
+  "ports": [
+    {"id": "sdi_in", "label": "12G-SDI In", "count": 1, "direction": "in", "connector": "BNC", "signal": "SDI-12G",
+     "formats": "automatisch HD bis Ultra HD 2160p60; Audio embedded", "notes": "Einzige Video-/Audioquelle"},
+    {"id": "sdi_loop", "label": "SDI Loop Out", "count": 1, "direction": "out", "connector": "BNC", "signal": "SDI-12G",
+     "formats": "16 Kanäle Embedded Audio", "notes": "nur beim Nachfolger Streaming Encoder 4K belegt, siehe unverified"},
+    {"id": "sdi_mon", "label": "SDI Monitor Out", "count": 1, "direction": "out", "connector": "BNC", "signal": "SDI-3G",
+     "formats": "1080p50/59.94/60 (lt. Streaming Encoder 4K)", "notes": "Monitor-Ausgabe mit Statusanzeige (Input, Audio, On-Air, Datenrate)"},
+    {"id": "hdmi_mon", "label": "HDMI Monitor Out", "count": 1, "direction": "out", "connector": "HDMI-A", "signal": "HDMI",
+     "formats": "1080p50/59.94/60 (lt. Streaming Encoder 4K)", "notes": "wie SDI Monitor Out; Audioquelle wählbar"},
+    {"id": "ethernet", "label": "Ethernet (Live Stream)", "count": 1, "direction": "bidi", "connector": "RJ45", "signal": "Ethernet",
+     "formats": "Gigabit", "notes": "Streaming, Steuerung (Port 9977, REST), Updates"},
+    {"id": "usbc_rear", "label": "USB-C (Rear, Webcam Out)", "count": 1, "direction": "bidi", "connector": "USB-C", "signal": "USB",
+     "notes": "Webcam-Ausgang (UVC Video + Mikrofon), Smartphone-Tethering, Setup/Updates"},
+    {"id": "usbc_front", "label": "USB-C (Front)", "count": 1, "direction": "bidi", "connector": "USB-C", "signal": "USB",
+     "notes": "Setup/Updates, Smartphone-Tethering"},
+    {"id": "power_ac", "label": "AC Power", "count": 1, "direction": "in", "connector": "IEC", "signal": "power"},
+    {"id": "power_dc", "label": "12V DC In", "count": 1, "direction": "in", "connector": "XLR4", "signal": "power", "formats": "12 V DC"}
+  ],
+  "logic": [
+    {"type": "encoder", "from": ["sdi_in"], "to": ["ethernet", "usbc_front", "usbc_rear"], "notes": "Live-Stream RTMP (H.264) oder SRT (H.264/H.265) bis 2160p60 über Ethernet oder Smartphone-Tethering (Priorität einstellbar)"},
+    {"type": "encoder", "from": ["sdi_in"], "to": ["usbc_rear"], "notes": "Webcam-Ausgang (Video + Audio) für Zoom/Skype/OBS"},
+    {"type": "passthrough", "from": ["sdi_in"], "to": ["sdi_loop"], "notes": "Loop-Out (siehe unverified)"},
+    {"type": "splitter", "from": ["sdi_in"], "to": ["sdi_mon", "hdmi_mon"], "notes": "Monitor-Ausgänge mit Status-Overlay (8 Panels)"}
+  ],
+  "control": [
+    {"protocol": "Blackmagic Web Presenter Ethernet Protocol v1.2, TCP 9977", "notes": "textbasiert, Block-Struktur wie Videohub"},
+    {"protocol": "Web Presenter Control REST API, HTTP /control/api/v1/", "notes": "Doku abrufbar unter /control/documentation.html"},
+    {"protocol": "Blackmagic Streaming XML", "notes": "eigene Streaming-Dienste"},
+    {"protocol": "Front-Panel", "notes": "On Air, Off, Menu, Call, Lock, Set, Drehknopf, LCD"}
+  ],
+  "sources": [
+    {"url": "https://documents.blackmagicdesign.com/UserManuals/BlackmagicWebPresenterManual.pdf", "what": "manual (Mai 2024, Web Presenter HD/4K) S. 5-6 Anschlüsse, S. 10-14 Monitor Out, S. 21 Webcam/Tethering, S. 31 Ethernet Protocol (TCP 9977), S. 43 REST API"},
+    {"url": "https://documents.blackmagicdesign.com/DeveloperManuals/WebPresenterEthernetProtocol.pdf", "what": "Developer-Doku Ethernet Protocol"},
+    {"url": "https://documents.blackmagicdesign.com/DeveloperManuals/RESTAPIBlackmagicWebPresenter.pdf", "what": "Developer-Doku REST API"},
+    {"url": "https://www.blackmagicdesign.com/products/blackmagicstreamingprocessors/techspecs", "what": "techspecs Blackmagic Streaming Encoder 4K (alte URL /products/blackmagicwebpresenter leitet hierher um; abgerufen 2026-10-17)"},
+    {"url": "https://documents.blackmagicdesign.com/UserManuals/BlackmagicStreamingManual.pdf", "what": "manual Streaming Processors S. 5-7 (Rückseite: SDI IN, SDI LOOP OUT, MONITOR OUT SDI/HDMI, WEBCAM OUT, LIVE STREAM, 12V DC)"}
+  ],
+  "unverified": [
+    "Keine eigene Tech-Specs-Seite für Web Presenter 4K mehr online; alte URL leitet auf Streaming Processors um. SDI Loop Out, Monitor-Formate und 4-pol. XLR für 12 V DC stammen aus Spezifikation/Handbuch des Streaming Encoder 4K - ob baugleich, nicht vom Hersteller bestätigt",
+    "Kein separater analoger Audioeingang belegt (Handbuch: Audio embedded im SDI)",
+    "Welcher USB-C-Port den Webcam-Ausgang führt (Streaming-Handbuch: 'webcam out' auf der Rückseite)",
+    "Leistungsaufnahme (Streaming Encoder 4K: 25 W)",
+    "Rack-Maß 1/3 Breite, 1 HE nur für Streaming Encoder 4K belegt"
+  ]
+}

@@ -1,0 +1,108 @@
+{
+ "id": "behringer/wing-live",
+ "manufacturer": "Behringer",
+ "model": "WING-LIVE (Expansion Card, Dual-SD-Multitrack-Recorder; Art.-Nr. nicht belegt)",
+ "category": "recorder",
+ "slot": "expansion",
+ "fits": [
+  "behringer/wing-rack",
+  "behringer/wing",
+  "behringer/wing-compact"
+ ],
+ "rack_units": 0,
+ "power": "über WING-Expansion-Slot; optional 3-V-CR123-Batterie als Pufferung (Aufnahme bei Stromausfall sauber beenden/speichern)",
+ "ports": [
+  {
+   "id": "sd1",
+   "label": "SD Card 1",
+   "count": 1,
+   "direction": "bidi",
+   "connector": "SD",
+   "signal": "storage",
+   "formats": "SD/SDHC, FAT32 mit 32-kB-Cluster; bis 32 GB am Pult formatierbar; Multitrack-WAV 8/16/32 Spuren, 48 kHz/32 bit",
+   "notes": "Session je Karte bis 32 Spuren"
+  },
+  {
+   "id": "sd2",
+   "label": "SD Card 2",
+   "count": 1,
+   "direction": "bidi",
+   "connector": "SD",
+   "signal": "storage",
+   "formats": "wie SD Card 1",
+   "notes": "Mit LINK CARDS gekoppelt: 64 Spuren gesamt; alternativ Karte 1 Wiedergabe, Karte 2 Aufnahme"
+  },
+  {
+   "id": "slot_bus",
+   "label": "WING Expansion-Slot-Anschluss",
+   "count": 1,
+   "direction": "bidi",
+   "connector": "card-edge",
+   "signal": "expansion",
+   "formats": "64x64 Kanäle @ 48 kHz",
+   "notes": "Am WING: Output-Gruppe 'WLIVE REC' (bis 64), Source-Gruppe 'WLIVE PLAY' (bis 64)"
+  }
+ ],
+ "logic": [
+  {
+   "type": "recorder",
+   "from": [
+    "slot_bus"
+   ],
+   "to": [
+    "sd1",
+    "sd2"
+   ],
+   "notes": "Aufnahme bis 64 Kanäle (32 je Karte), Routing ROUTING>OUTPUTS > WLIVE REC"
+  },
+  {
+   "type": "recorder",
+   "from": [
+    "sd1",
+    "sd2"
+   ],
+   "to": [
+    "slot_bus"
+   ],
+   "notes": "Wiedergabe bis 64 Kanäle über ROUTING>SOURCES > WLIVE PLAY; virtueller Soundcheck; AUTO INPUT SELECT schaltet MAIN/ALT je nach Stop/Play/Record"
+  }
+ ],
+ "control": [
+  {
+   "protocol": "WING (Konsole/Remote)",
+   "notes": "Transport über WING-LIVE-Screen bzw. MULTI TRANSP; Marker, Loop, A->B"
+  },
+  {
+   "protocol": "LiveSessions (Behringer-App)",
+   "notes": "Session in Einzel-WAVs splitten bzw. Einzel-WAVs zu Session wandeln"
+  }
+ ],
+ "sources": [
+  {
+   "url": "https://cdn-media.empowertribe.com/25951c6f808c0a79abc407c07d5639d1/User-Manual_WING-series_2025-10-20.pdf",
+   "what": "User Manual 2025-10-20: S. 6 Source-Gruppe 'External expansion card (WING-LIVE by default) (64 channels)'; S. 12 Kap. 3.5 'All WING models include the WING-LIVE card ... 64 channels of 48 kHz / 32-bit ... SD or SDHC'; S. 83-86 Kap. 8/8.1 WING-LIVE (32 Spuren je Karte, LINK CARDS, FAT32/32 kB, Batterie CR123); S. 165 Expansion card interface 64x64"
+  },
+  {
+   "url": "https://www.behringer.com/en/wing/wing-rack",
+   "what": "Produktseite WING RACK: Expansion Slot 'e.g. Dante, WSG, MADI', WING LIVE vorinstalliert, interne AoIP-Module AoIP-Dante/AoIP-WSG"
+  },
+  {
+   "url": "https://www.behringer.com/en/wing/wing-black",
+   "what": "Produktseite WING: gleiche Aussagen zu Expansion Slot und internen AoIP-Modulen"
+  },
+  {
+   "url": "https://www.behringer.com/en/wing/wing-compact",
+   "what": "Produktseite WING COMPACT: gleiche Aussagen zu Expansion Slot und internen AoIP-Modulen"
+  }
+ ],
+ "unverified": [
+  "Artikelnummer der WING-LIVE-Karte: keine eigene Produktseite auf behringer.com gefunden",
+  "96 kHz: nicht unterstützt – WING arbeitet laut Spezifikation mit 48 kHz (Clock Rate 44,1/48 kHz); Kanalzahl bei 96 kHz entfällt",
+  "Aufnahme bei 44,1 kHz: Manual nennt für WING-LIVE nur 48 kHz/32 bit; ob bei Clock 44,1 kHz ebenfalls aufgezeichnet wird, nicht belegt",
+  "Einzelne Karte schließt sich mit jeder anderen Expansion-Card (WING-DANTE, WING-MADI) aus – Slot nur einfach vorhanden (Produktseite: 'change the WING LIVE card for a WING DANTE card')",
+  "Maximal unterstützte SD-Kartengröße über 32 GB (am PC formatiert) nicht belegt"
+ ],
+ "format": "avdp/0.1",
+ "status": "draft",
+ "kind": "module"
+}

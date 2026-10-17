@@ -1,0 +1,443 @@
+{
+ "format": "avrack/0.1",
+ "id": "strelle/videoregie",
+ "name": "Videoregie",
+ "version": "2026-10-17",
+ "ports": [
+  "Patchfeld: SDI In 5/6, SDI Out 5/6/9, HDMI Out 5 (MV1 mit Ton) und 10 (Aux 10), LC I/O 1/2 (Fiber), ADAT Out, XLR In L/R",
+  "tpl:port (Uplink WING-Rack)"
+ ],
+ "notes": "Zugehörigkeit von Pi, Magewell und Presentation Converter offen",
+ "instances": [
+  {
+   "id": "atem",
+   "profile": "blackmagic/atem-2me-constellation-hd",
+   "name": "ATEM 2 M/E Constellation HD",
+   "address": "192.168.1.6",
+   "col": 2,
+   "row": 0
+  },
+  {
+   "id": "ipc",
+   "profile": "blackmagic/2110-ip-converter-4x12g-pwr",
+   "name": "2110 IP Converter 4x12G PWR",
+   "col": 1,
+   "row": 2
+  },
+  {
+   "id": "sw360",
+   "profile": "blackmagic/ethernet-switch-360p",
+   "name": "Ethernet Switch 360P",
+   "col": 1,
+   "row": 1
+  },
+  {
+   "id": "hd",
+   "profile": "blackmagic/hyperdeck-studio-hd-plus",
+   "name": "HyperDeck Studio HD Plus",
+   "address": "192.168.1.11",
+   "col": 3,
+   "row": 3
+  },
+  {
+   "id": "wp",
+   "profile": "blackmagic/web-presenter-4k",
+   "name": "Web Presenter 4K",
+   "address": "192.168.1.12",
+   "col": 3,
+   "row": 1
+  },
+  {
+   "id": "sv",
+   "profile": "blackmagic/smartview-4k",
+   "name": "SmartView 4K (Multiview)",
+   "address": "192.168.1.13",
+   "col": 3,
+   "row": 4
+  },
+  {
+   "id": "tpl",
+   "profile": "generic/tp-link-tl-sg1024",
+   "name": "TP-Link TL-SG1024 Videoregie",
+   "col": 1,
+   "row": 7
+  },
+  {
+   "id": "patch",
+   "profile": "generic/patchfeld-videoregie",
+   "name": "Patchfeld Videoregie (Rack-Front)",
+   "col": 2,
+   "row": -1
+  },
+  {
+   "id": "hdconv",
+   "profile": "generic/micro-converter-bidi",
+   "name": "BiDirectional Converter 1 (HDMI↔SDI)",
+   "col": 1,
+   "row": 3
+  },
+  {
+   "id": "mvconv",
+   "profile": "generic/micro-converter-sdi-hdmi",
+   "name": "SDI→HDMI Converter 1 (MV1)",
+   "col": 2,
+   "row": 4
+  },
+  {
+   "id": "mini",
+   "profile": "generic/2110-mini-bidirect-12g",
+   "name": "2110 IP Mini BiDirect 12G (heute nicht gesteckt)",
+   "col": 1,
+   "row": 8
+  },
+  {
+   "id": "fibr1",
+   "profile": "generic/fiber-converter-bidi-12g",
+   "name": "Fiber-Wandler 1 (Rack)",
+   "col": 2,
+   "row": -0.9
+  },
+  {
+   "id": "fibr2",
+   "profile": "generic/fiber-converter-bidi-12g",
+   "name": "Fiber-Wandler 2 (Rack)",
+   "col": 2,
+   "row": -0.8
+  }
+ ],
+ "cables": [
+  {
+   "from": "ipc:ip_10g.1",
+   "to": "sw360:eth_10g.2",
+   "medium": "Cat6A 10G"
+  },
+  {
+   "from": "ipc:sdi_out.1",
+   "to": "atem:sdi_in.11",
+   "medium": "SDI"
+  },
+  {
+   "from": "atem:sdi_out.10",
+   "to": "ipc:sdi_in.1",
+   "medium": "SDI"
+  },
+  {
+   "from": "hdconv:sdi_out",
+   "to": "atem:sdi_in.3",
+   "medium": "SDI"
+  },
+  {
+   "from": "atem:sdi_out.11",
+   "to": "wp:sdi_in",
+   "medium": "SDI"
+  },
+  {
+   "from": "atem:sdi_out.12",
+   "to": "hd:sdi_in",
+   "medium": "SDI"
+  },
+  {
+   "from": "atem:ethernet",
+   "to": "tpl:port",
+   "medium": "Cat6"
+  },
+  {
+   "from": "wp:ethernet",
+   "to": "tpl:port",
+   "medium": "Cat6"
+  },
+  {
+   "from": "hd:ethernet",
+   "to": "tpl:port",
+   "medium": "Cat6"
+  },
+  {
+   "from": "ipc:eth_1g",
+   "to": "tpl:port",
+   "medium": "Cat6"
+  },
+  {
+   "from": "patch:sdi_in5_rear",
+   "to": "atem:sdi_in.5",
+   "medium": "SDI",
+   "fixed": true
+  },
+  {
+   "from": "patch:xlr_in_l_rear",
+   "to": "atem:audio_in.1",
+   "medium": "XLR→TRS",
+   "fixed": true
+  },
+  {
+   "from": "patch:xlr_in_r_rear",
+   "to": "atem:audio_in.2",
+   "medium": "XLR→TRS",
+   "fixed": true
+  },
+  {
+   "from": "atem:sdi_out.3",
+   "to": "hdconv:sdi_in",
+   "medium": "SDI (Rückweg, HDMI Out frei)",
+   "fixed": true
+  },
+  {
+   "from": "atem:multiview_out.1",
+   "to": "mvconv:sdi_in",
+   "medium": "SDI",
+   "fixed": true
+  },
+  {
+   "from": "mvconv:sdi_out",
+   "to": "sv:sdi_in.1",
+   "medium": "SDI",
+   "fixed": true
+  },
+  {
+   "from": "wp:sdi_mon",
+   "to": "sv:sdi_in.2",
+   "medium": "SDI (Stream-Kontrolle)",
+   "fixed": true
+  },
+  {
+   "from": "sv:sdi_loop",
+   "to": "atem:sdi_in.17",
+   "medium": "SDI",
+   "fixed": true
+  },
+  {
+   "from": "hd:sdi_out.1",
+   "to": "atem:sdi_in.19",
+   "medium": "SDI (Fill)",
+   "fixed": true
+  },
+  {
+   "from": "hd:sdi_out.2",
+   "to": "atem:sdi_in.20",
+   "medium": "SDI (Key)",
+   "fixed": true
+  },
+  {
+   "from": "fibr1:sdi_out",
+   "to": "atem:sdi_in.1",
+   "medium": "SDI",
+   "fixed": true
+  },
+  {
+   "from": "atem:sdi_out.1",
+   "to": "fibr1:sdi_in",
+   "medium": "SDI (Rückweg)",
+   "fixed": true
+  },
+  {
+   "from": "fibr1:lc_io",
+   "to": "patch:lc_io.1",
+   "medium": "LC intern",
+   "fixed": true
+  },
+  {
+   "from": "fibr2:sdi_out",
+   "to": "atem:sdi_in.2",
+   "medium": "SDI",
+   "fixed": true
+  },
+  {
+   "from": "atem:sdi_out.2",
+   "to": "fibr2:sdi_in",
+   "medium": "SDI (Rückweg)",
+   "fixed": true
+  },
+  {
+   "from": "fibr2:lc_io",
+   "to": "patch:lc_io.2",
+   "medium": "LC intern",
+   "fixed": true
+  }
+ ],
+ "generic": {
+  "generic/fiber-converter-bidi-12g": {
+   "manufacturer": "Blackmagic Design",
+   "model": "BiDirectional Fiber 12G (laut Default-Plan, Modell prüfen)",
+   "category": "converter",
+   "ports": [
+    {
+     "id": "sdi_in",
+     "direction": "in",
+     "connector": "BNC",
+     "signal": "SDI-12G"
+    },
+    {
+     "id": "sdi_out",
+     "direction": "out",
+     "connector": "BNC",
+     "signal": "SDI-12G"
+    },
+    {
+     "id": "lc_io",
+     "direction": "bidi",
+     "connector": "LC",
+     "signal": "SDI-optical"
+    }
+   ],
+   "unverified": [
+    "genaues Modell (Micro Converter BiDirectional SDI/Fiber? Teranex Mini?) nicht belegt"
+   ]
+  },
+  "generic/2110-mini-bidirect-12g": {
+   "manufacturer": "Blackmagic Design",
+   "model": "2110 IP Mini BiDirect 12G",
+   "category": "converter",
+   "ports": [
+    {
+     "id": "sdi_in",
+     "direction": "in",
+     "connector": "BNC",
+     "signal": "SDI-12G"
+    },
+    {
+     "id": "sdi_out",
+     "direction": "out",
+     "connector": "BNC",
+     "signal": "SDI-12G"
+    },
+    {
+     "id": "ip_10g",
+     "direction": "bidi",
+     "connector": "RJ45",
+     "signal": "ST2110",
+     "notes": "PoE-versorgt; nur an echten 10G-Ports Bild"
+    }
+   ],
+   "unverified": [
+    "Profil noch nicht recherchiert; Ports aus NMOS-Meldung 14.10.2026"
+   ]
+  },
+  "generic/tp-link-tl-sg1024": {
+   "manufacturer": "TP-Link",
+   "model": "TL-SG1024",
+   "category": "router",
+   "ports": [
+    {
+     "id": "port",
+     "count": 24,
+     "direction": "bidi",
+     "connector": "RJ45",
+     "signal": "Ethernet 1G"
+    }
+   ],
+   "unverified": [
+    "unmanaged, kein IGMP-Snooping; Quelle nachtragen"
+   ]
+  },
+  "generic/patchfeld-videoregie": {
+   "model": "Patchfeld Rack-Front (laut Visio-Plan)",
+   "category": "patchbay",
+   "ports": [
+    {
+     "id": "sdi_in5_front",
+     "direction": "in",
+     "connector": "BNC",
+     "signal": "SDI"
+    },
+    {
+     "id": "sdi_in5_rear",
+     "direction": "out",
+     "connector": "BNC",
+     "signal": "SDI"
+    },
+    {
+     "id": "xlr_in_l_front",
+     "direction": "in",
+     "connector": "XLR3F",
+     "signal": "analog-audio"
+    },
+    {
+     "id": "xlr_in_l_rear",
+     "direction": "out",
+     "connector": "XLR3M",
+     "signal": "analog-audio"
+    },
+    {
+     "id": "xlr_in_r_front",
+     "direction": "in",
+     "connector": "XLR3F",
+     "signal": "analog-audio"
+    },
+    {
+     "id": "xlr_in_r_rear",
+     "direction": "out",
+     "connector": "XLR3M",
+     "signal": "analog-audio"
+    },
+    {
+     "id": "lc_io",
+     "count": 2,
+     "direction": "bidi",
+     "connector": "LC",
+     "signal": "SDI-optical"
+    }
+   ],
+   "notes": "weitere Buchsen: SDI In 6, SDI Out 5/6/9, HDMI Out 5/10, LC I/O 1/2, ADAT Out"
+  },
+  "generic/micro-converter-sdi-hdmi": {
+   "manufacturer": "Blackmagic Design",
+   "model": "Micro Converter SDI to HDMI (Variante offen)",
+   "category": "converter",
+   "ports": [
+    {
+     "id": "sdi_in",
+     "direction": "in",
+     "connector": "BNC",
+     "signal": "SDI"
+    },
+    {
+     "id": "sdi_out",
+     "direction": "out",
+     "connector": "BNC",
+     "signal": "SDI",
+     "notes": "Loop"
+    },
+    {
+     "id": "hdmi_out",
+     "direction": "out",
+     "connector": "HDMI-A",
+     "signal": "HDMI",
+     "notes": "→ Audio Extractor → Patchfeld HDMI Out 5 + ADAT"
+    }
+   ]
+  },
+  "generic/micro-converter-bidi": {
+   "manufacturer": "Blackmagic Design",
+   "model": "Micro Converter BiDirectional SDI/HDMI (Variante offen)",
+   "category": "converter",
+   "ports": [
+    {
+     "id": "hdmi_in",
+     "direction": "in",
+     "connector": "HDMI-A",
+     "signal": "HDMI"
+    },
+    {
+     "id": "sdi_out",
+     "direction": "out",
+     "connector": "BNC",
+     "signal": "SDI"
+    },
+    {
+     "id": "sdi_in",
+     "direction": "in",
+     "connector": "BNC",
+     "signal": "SDI"
+    },
+    {
+     "id": "hdmi_out",
+     "direction": "out",
+     "connector": "HDMI-A",
+     "signal": "HDMI"
+    }
+   ],
+   "unverified": [
+    "Modellvariante (3G/12G) aus Plan nicht ersichtlich"
+   ]
+  }
+ }
+}

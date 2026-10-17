@@ -1,0 +1,114 @@
+{
+ "format": "avrack/0.1",
+ "id": "strelle/wingrack",
+ "name": "WING-Rack",
+ "version": "2026-10-17",
+ "ports": [
+  "poe:port (Uplink Videoregie)",
+  "ux:wan (Hausanschluss)"
+ ],
+ "notes": "",
+ "instances": [
+  {
+   "id": "wing",
+   "profile": "behringer/wing-rack",
+   "name": "WING Rack",
+   "address": "192.168.1.215",
+   "modules": {
+    "internal": "behringer/aoip-dante",
+    "expansion": "behringer/wing-live"
+   },
+   "col": 2,
+   "row": 1
+  },
+  {
+   "id": "ulxd",
+   "profile": "shure/ulxd4q",
+   "name": "Shure ULXD4Q",
+   "address": "192.168.1.243",
+   "col": 0,
+   "row": 4
+  },
+  {
+   "id": "ux",
+   "profile": "generic/unifi-express",
+   "name": "UniFi Express (Router, DHCP)",
+   "address": "192.168.1.1",
+   "col": 1,
+   "row": 5
+  },
+  {
+   "id": "poe",
+   "profile": "generic/poe-switch-unmanaged",
+   "name": "PoE-Switch WING-Rack (unmanaged)",
+   "col": 1,
+   "row": 6
+  }
+ ],
+ "cables": [
+  {
+   "from": "ulxd:dante_primary",
+   "to": "poe:port",
+   "medium": "Cat6",
+   "fixed": true
+  },
+  {
+   "from": "wing:eth",
+   "to": "poe:port",
+   "medium": "Cat6",
+   "fixed": true
+  },
+  {
+   "from": "ux:lan",
+   "to": "poe:port",
+   "medium": "Cat6",
+   "fixed": true
+  }
+ ],
+ "generic": {
+  "generic/poe-switch-unmanaged": {
+   "model": "PoE-Switch unmanaged (Modell offen)",
+   "category": "router",
+   "ports": [
+    {
+     "id": "port",
+     "count": 8,
+     "direction": "bidi",
+     "connector": "RJ45",
+     "signal": "Ethernet/PoE"
+    }
+   ],
+   "unverified": [
+    "unmanaged: kein IGMP-Snooping – Dante-Multicast geht an alle Ports"
+   ]
+  },
+  "generic/unifi-express": {
+   "manufacturer": "Ubiquiti",
+   "model": "UniFi Express (UX)",
+   "category": "router",
+   "ports": [
+    {
+     "id": "wan",
+     "direction": "bidi",
+     "connector": "RJ45",
+     "signal": "Ethernet 1G"
+    },
+    {
+     "id": "lan",
+     "direction": "bidi",
+     "connector": "RJ45",
+     "signal": "Ethernet 1G"
+    },
+    {
+     "id": "wifi",
+     "direction": "bidi",
+     "connector": "intern",
+     "signal": "Wi-Fi 6"
+    }
+   ],
+   "unverified": [
+    "Portzahl aus Herstellerkenntnis, Quelle nachtragen"
+   ]
+  }
+ }
+}

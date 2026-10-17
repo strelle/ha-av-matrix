@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>NDI-Einblendungen</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Mono:wght@400;600&family=Atkinson+Hyperlegible+Next:wght@400;600;700&display=swap">
+<style>
+/* Strelle Pult-UI: Vorschau oben, darunter Einblendung wählen und senden. Rot = auf Sendung, Blau = Auswahl/Aktion. */
+:root { --bg:#e9edf2; --s1:#ffffff; --s2:#f3f5f8; --s3:#e1e6ed; --line:#c9d0da; --edge:#6f7884; --fg:#0d1117; --mut:#3d444f;
+  --sel:oklch(0.5361 0.1495 253.41); --onsel:#fff; --focus:oklch(0.47 0.15 253); --live:#d42b24; --ok:#1a8a4a;
+  --ui:"Atkinson Hyperlegible Next",system-ui,-apple-system,sans-serif; --mono:"Atkinson Hyperlegible Mono",ui-monospace,Menlo,monospace; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#0a0a0a; --s1:#121212; --s2:#1a1b1e; --s3:#24262b; --line:#2c2f35; --edge:#6b7380; --fg:#efedea; --mut:#a3a19c; --focus:oklch(0.72 0.12 250); --live:#ff4b42; --ok:#3ddc84; color-scheme:dark } }
+:root[data-theme="dark"] { --bg:#0a0a0a; --s1:#121212; --s2:#1a1b1e; --s3:#24262b; --line:#2c2f35; --edge:#6b7380; --fg:#efedea; --mut:#a3a19c; --focus:oklch(0.72 0.12 250); --live:#ff4b42; --ok:#3ddc84; color-scheme:dark }
+body { margin:0; background:var(--bg); color:var(--fg); font:15px var(--ui); }
+main { max-width: 760px; margin: 0 auto; padding-block: 18px 40px; padding-left:max(16px,env(safe-area-inset-left,0px)); padding-right:max(16px,env(safe-area-inset-right,0px)); display:grid; gap:14px; }
+h1 { font-size:22px; margin:0; } .mut { color:var(--mut); font-size:13px; }
+.prev { position:relative; background:#000; border-radius:12px; overflow:hidden; aspect-ratio:16/9; max-width:100%; border:1px solid var(--line); }
+.prev img { width:100%; height:100%; object-fit:contain; display:block; }
+.tally { position:absolute; top:10px; left:10px; font:700 13px var(--ui); padding:4px 10px; border-radius:999px; background:var(--s3); color:var(--fg); }
+.tally.on { background:var(--live); color:#fff; }
+.seg { display:inline-flex; border:1px solid var(--edge); border-radius:12px; overflow:hidden; }
+.seg button { font:600 15px var(--ui); min-height:48px; padding:0 18px; border:0; background:var(--s3); color:var(--fg); cursor:pointer; }
+.seg button[aria-pressed="true"] { background:var(--sel); color:var(--onsel); }
+.card { background:var(--s2); border:1px solid var(--line); border-radius:18px; padding:14px; display:grid; gap:10px; }
+label { display:grid; gap:4px; font-size:13px; color:var(--mut); }
+select, input:not([type=checkbox]) { font:16px var(--ui); min-height:44px; border-radius:12px; border:1px solid var(--edge); background:var(--s1); color:var(--fg); padding:0 10px; }
+input[type=time] { font-family:var(--mono); }
+.row { display:grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap:10px; }
+.go { font:700 16px var(--ui); min-height:52px; border-radius:999px; border:0; background:var(--sel); color:var(--onsel); cursor:pointer; padding:0 22px; justify-self:start; }
+.off { font:600 15px var(--ui); min-height:48px; border-radius:12px; border:1px solid var(--edge); background:var(--s3); color:var(--fg); cursor:pointer; padding:0 18px; }
+button:focus-visible, input:focus-visible { outline:3px solid var(--focus); outline-offset:2px; }
+.status { font-family:var(--mono); font-size:13px; }
+[hidden] { display:none !important; }
+.chk { display:flex; align-items:center; gap:10px; font-size:15px; color:var(--fg); min-height:44px; } .chk input { width:24px; height:24px; }
+</style></head><body><main>
+  <div><h1>NDI-Einblendungen</h1><div class="mut" id="src">Overlay auf dem NDI-Trailer</div></div>
+  <div class="prev"><img id="pv" alt="Vorschau des NDI-Bilds"><span class="tally" id="tally">AUS</span></div>
+  <div class="status" id="st">…</div>
+  <div class="seg" role="group" aria-label="Art der Einblendung">
+    <button type="button" data-t="countdown">Countdown</button><button type="button" data-t="text">Text</button>
+  </div>
+  <form class="card" id="f-countdown">
+    <div class="row"><label>Titel<input id="c-label" value="Pause"></label><label>Countdown bis<input type="time" id="c-until" value="14:00" required></label></div>
+    <div class="row"><label>Danach anzeigen<input id="c-after" value="Es geht gleich weiter"></label><label>Ausblenden um<input type="time" id="c-hide" value="14:30"></label></div>
+    <button class="go" type="submit">Countdown senden</button>
+  </form>
+  <form class="card" id="f-text" hidden>
+    <label>Titel<input id="t-title" value="Willkommen"></label>
+    <label>Untertitel (optional)<input id="t-sub" value=""></label>
+    <label>Ausblenden um (optional)<input type="time" id="t-hide"></label>
+    <button class="go" type="submit">Text senden</button>
+  </form>
+  <button class="off" type="button" id="off">Einblendung ausblenden</button>
+  <form class="card" id="f-wifi">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><strong>WLAN-Code (oben rechts)</strong><span class="tally" id="w-tally" style="position:static">AUS</span></div>
+    <div class="row"><label>Überschrift<input id="w-label" value="Gäste-WLAN"></label><label>WLAN-Name (SSID)<input id="w-ssid" autocomplete="off" autocapitalize="off" spellcheck="false"></label></div>
+    <div class="row"><label>Passwort (leer = offenes WLAN)<input id="w-pw" placeholder="—" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+      <label>Verschlüsselung<select id="w-sec"><option value="nopass">offen (kein Passwort)</option><option value="WPA">WPA/WPA2/WPA3</option><option value="WEP">WEP</option></select></label></div>
+    <div class="row"><label>Sonderfeld Bezeichnung (z. B. Passwort der Anmeldeseite)<input id="w-notelabel" value="Passwort"></label><label>Sonderfeld Inhalt (optional)<input id="w-note" autocomplete="off" autocapitalize="off" spellcheck="false"></label></div>
+    <div class="row"><label class="chk"><input type="checkbox" id="w-showpw" checked> Passwort als Text zeigen</label><label class="chk"><input type="checkbox" id="w-hidden"> Verstecktes WLAN</label><label>Ausblenden um (optional)<input type="time" id="w-hide"></label></div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap"><button class="go" type="submit">WLAN-Code einblenden</button><button class="off" type="button" id="w-off">WLAN-Code ausblenden</button></div>
+  </form>
+</main>
+<script>
+const $ = s => document.querySelector(s);
+const post = async body => { const r = await fetch("/api/overlay", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)}); const d = await r.json(); if (!r.ok) throw new Error(d.error || r.status); tick(); };
+document.querySelectorAll("[data-t]").forEach(b => b.onclick = () => { document.querySelectorAll("[data-t]").forEach(x => x.setAttribute("aria-pressed", String(x === b))); $("#f-countdown").hidden = b.dataset.t !== "countdown"; $("#f-text").hidden = b.dataset.t !== "text"; });
+$("#f-countdown").onsubmit = e => { e.preventDefault(); post({type: "countdown", label: $("#c-label").value, until: $("#c-until").value, after_text: $("#c-after").value, hide_at: $("#c-hide").value || null}).catch(err => $("#st").textContent = "Fehler: " + err.message); };
+$("#f-text").onsubmit = e => { e.preventDefault(); post({type: "text", title: $("#t-title").value, subtitle: $("#t-sub").value, hide_at: $("#t-hide").value || null}).catch(err => $("#st").textContent = "Fehler: " + err.message); };
+$("#off").onclick = () => post({main: {type: "off"}});
+const wifi = on => ({wifi: {on, label: $("#w-label").value, ssid: $("#w-ssid").value, password: $("#w-pw").value, security: $("#w-sec").value, show_password: $("#w-showpw").checked, hidden: $("#w-hidden").checked, note_label: $("#w-notelabel").value, note: $("#w-note").value, hide_at: $("#w-hide").value || null}});
+$("#f-wifi").onsubmit = e => { e.preventDefault(); post(wifi(true)).catch(err => $("#st").textContent = "Fehler: " + err.message); };
+$("#w-off").onclick = () => post(wifi(false)).catch(err => $("#st").textContent = "Fehler: " + err.message);
+let wifiLoaded = false;
+const syncPw = () => { const open = $("#w-sec").value === "nopass"; $("#w-pw").disabled = open; if (open) $("#w-pw").value = ""; $("#w-showpw").closest("label").hidden = open; };
+$("#w-sec").onchange = syncPw;
+$("#w-pw").oninput = () => { if ($("#w-pw").value && $("#w-sec").value === "nopass") { $("#w-sec").value = "WPA"; syncPw(); } };
+syncPw();
+async function tick() {
+  try { const d = await (await fetch("/api/state")).json(); const s = d.showing.main, w = d.overlay.wifi || {}, m = d.overlay.main || {type: "off"};
+    $("#w-tally").textContent = d.showing.wifi ? "AUF SENDUNG" : "AUS"; $("#w-tally").classList.toggle("on", !!d.showing.wifi);
+    if (!wifiLoaded && d.overlay.wifi) { wifiLoaded = true; $("#w-label").value = w.label || ""; $("#w-ssid").value = w.ssid || ""; $("#w-pw").value = w.password || ""; $("#w-sec").value = w.security || "nopass"; syncPw(); $("#w-showpw").checked = w.show_password !== false; $("#w-hidden").checked = !!w.hidden; $("#w-note").value = w.note || ""; $("#w-notelabel").value = w.note_label ?? "Passwort"; $("#w-hide").value = w.hide_at || ""; }
+    $("#tally").textContent = (s || d.showing.wifi) ? "AUF SENDUNG" : "AUS"; $("#tally").classList.toggle("on", !!(s || d.showing.wifi));
+    $("#st").textContent = `${d.now} · ${s ? (s[0] === "count" ? `${s[1]} ${s[2]}` : s[1]) : "keine Einblendung"}${m.hide_at ? " · aus um " + m.hide_at : ""}${d.showing.wifi ? " · WLAN-Code an" : ""}`;
+    const t = m.type; if (t !== "off") document.querySelector(`[data-t="${t}"]`)?.setAttribute("aria-pressed", "true");
+  } catch { $("#st").textContent = "Player nicht erreichbar"; }
+  $("#pv").src = "/api/preview.jpg?t=" + Date.now();
+}
+document.querySelector('[data-t="countdown"]').setAttribute("aria-pressed", "true");
+tick(); setInterval(tick, 2000);
+</script></body></html>

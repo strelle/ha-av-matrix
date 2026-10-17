@@ -97,6 +97,9 @@ class Spec:
     tags: dict[str, list[str]] = field(default_factory=dict)
     #: weitere Adressen, die der Node (in der Registry) VOR seiner erreichbaren nennt, z. B. ein Mediennetz
     extra_endpoints: list[tuple[str, int]] = field(default_factory=list)
+    #: Adresse, die der Node in ``self``, ``controls`` und ``manifest_href`` nennt, obwohl er nur auf ``host``
+    #: antwortet – wie ein Gerät, dessen Steuerport die NMOS-Knoten seiner Medienports durchreicht (4x12G)
+    advertise_host: str | None = None
 
 
 class MockNode:
@@ -324,6 +327,18 @@ class MockNode:
     def connection_url(self) -> str:
         return f"http://{self.host}:{self.connection_port}"
 
+    @property
+    def public_host(self) -> str:
+        return self.spec.advertise_host or self.host
+
+    @property
+    def public_url(self) -> str:
+        return f"http://{self.public_host}:{self.port}"
+
+    @property
+    def public_connection_url(self) -> str:
+        return f"http://{self.public_host}:{self.connection_port}"
+
     # ----------------------------------------------------------------- Server
     async def start(self) -> None:
         split = "split_ports" in self.spec.quirks
@@ -342,7 +357,7 @@ class MockNode:
             self.connection_port = self.port
         for sid, sender in self.senders.items():
             if "no_manifest" not in self.spec.quirks:
-                sender["manifest_href"] = f"{self.connection_url}/x-nmos/connection/v1.1/single/senders/{sid}/transportfile"
+                sender["manifest_href"] = f"{self.public_connection_url}/x-nmos/connection/v1.1/single/senders/{sid}/transportfile"
 
     async def stop(self) -> None:
         for runner in self._runners:
@@ -369,11 +384,11 @@ class MockNode:
         spec = self.spec
         return {
             "id": self.node_id, "version": self.version, "label": spec.label, "description": spec.description,
-            "tags": spec.tags, "href": f"{self.url}/", "hostname": spec.hostname or None,
+            "tags": spec.tags, "href": f"{self.public_url}/", "hostname": spec.hostname or None,
             "api": {
                 "versions": NODE_VERSIONS,
                 # ein Gerät mit mehreren Schnittstellen nennt alle Adressen – nicht jede ist von überall erreichbar
-                "endpoints": [{"host": h, "port": p, "protocol": "http"} for h, p in [*spec.extra_endpoints, (self.host, self.port)]],
+                "endpoints": [{"host": h, "port": p, "protocol": "http"} for h, p in [*spec.extra_endpoints, (self.public_host, self.port)]],
             },
             "caps": {}, "services": [],
             "clocks": [{"name": "clk0", "ref_type": "ptp", "traceable": False, "version": "IEEE1588-2008", "gmid": spec.gmid, "locked": spec.ptp_locked}],
@@ -383,7 +398,7 @@ class MockNode:
     def _device(self) -> dict[str, Any]:
         controls = [
             {
-                "href": f"{self.connection_url}/x-nmos/connection/{v}/",
+                "href": f"{self.public_connection_url}/x-nmos/connection/{v}/",
                 "type": f"urn:x-nmos:control:sr-ctrl/{v}",
                 "authorization": False,
             }

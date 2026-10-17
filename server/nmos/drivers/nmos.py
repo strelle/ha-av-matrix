@@ -138,6 +138,10 @@ class NmosNode:
     txt: dict[str, str] = field(default_factory=dict)
     #: further addresses the same node answers on (second interface, registry lists another one than mDNS)
     alt: set[tuple[str, int]] = field(default_factory=set)
+    #: hosts the node itself lists in IS-04 ``self.api.endpoints``. If ``host`` is not among them, we reach the
+    #: node over an address it does not advertise (a control port that forwards to the media ports, as on the
+    #: Blackmagic 4x12G): then its control and manifest URLs are rewritten to ``host`` (see ``_reach``).
+    advertised: set[str] = field(default_factory=set)
     data: nmos.NodeModel | None = None
     sources: dict[str, nmos.Group] = field(default_factory=dict)
     dests: dict[str, nmos.Group] = field(default_factory=dict)
@@ -595,6 +599,7 @@ class NmosNetwork(Driver):
         except nmos.NmosError as err:
             raise CannotConnect(f"{node.host}: {err}") from err
         node.data = data
+        node.advertised = {host for host, _port, _proto in _node_endpoints(me)}
         node.label, node.hostname = data.label, _hostname(me)
         node.manufacturer, node.model, node.device_type = nmos.classify_device(data)
         node.sources = {g.name: g for g in nmos.build_groups(data, "sender")}
@@ -680,7 +685,7 @@ class NmosNetwork(Driver):
     @staticmethod
     def _connection_base(node: NmosNode, device_id: str) -> str | None:
         device = node.data.devices.get(device_id) if node.data else None
-        return _pin_host(device.connection_href, node.host) if device and device.connection_href else None
+        return _reach(device.connection_href, node) if device and device.connection_href else None
 
     async def _probe_web(self, node: NmosNode) -> None:
         """Does the device serve a web page on port 80? One read-only GET; JSON (the NMOS API itself) does not count."""
@@ -1201,7 +1206,7 @@ class NmosNetwork(Driver):
 
     async def _sdp(self, node: NmosNode, sender: nmos.Sender) -> str | None:
         """The sender's transport file (SDP): IS-04 ``manifest_href``, else the IS-05 ``/transportfile``."""
-        urls = [_pin_host(sender.manifest_href, node.host)] if sender.manifest_href else []
+        urls = [_reach(sender.manifest_href, node)] if sender.manifest_href else []
         base = self._connection_base(node, sender.device_id)
         if base:
             urls.append(f"{base}/single/senders/{sender.id}/transportfile")
@@ -1259,6 +1264,21 @@ def _pin_host(url: str, host: str) -> str:
     if not sep or name.replace(".", "").isdigit() or name.startswith("["):
         return url
     return f"{scheme}://{host}{colon}{port}{slash}{path}"
+
+
+def _reach(url: str, node: NmosNode) -> str:
+    """A URL the node gave us, made reachable: names become ``node.host`` (``_pin_host``); and when we talk to
+    the node over an address it does not advertise itself (its control port), a URL pointing at one of its
+    advertised media addresses is redirected to ``node.host`` too – the port stays as given."""
+    url = _pin_host(url, node.host)
+    if not node.advertised or node.host in node.advertised:
+        return url
+    scheme, sep, rest = url.partition("://")
+    netloc, slash, path = rest.partition("/")
+    name, colon, port = netloc.rpartition(":") if ":" in netloc else (netloc, "", "")
+    if not sep or name not in node.advertised:
+        return url
+    return f"{scheme}://{node.host}{colon}{port}{slash}{path}"
 
 
 def _hostname(me: dict[str, Any]) -> str:

@@ -1409,7 +1409,8 @@ class Hub:
             "live": live,
             "host": host,
             "address": address,
-            "last_seen": _iso(last_seen),
+            # nur offline aussagekräftig; live würde der Zeitstempel bei jeder Abfrage den ganzen Stand neu schicken (Panel flackert)
+            "last_seen": None if live else _iso(last_seen),
             "first_seen": _iso(first_seen),
         }
 

@@ -1,0 +1,20 @@
+{
+ "format": "avkit/0.1",
+ "id": "strelle/kit-kamera-fiber-studio-camera-4k",
+ "name": "Kamera-Set Fiber (Studio Camera 4K Gen 1)",
+ "notes": "Optionales Schnittplatz-Zubehör. Wird am Patchfeld der Videoregie auf LC I/O 1 oder 2 gesteckt.",
+ "instances": [
+  {"id": "cam", "profile": "blackmagic/studio-camera-4k-gen1", "name": "Studio Camera 4K"},
+  {"id": "fib", "profile": "generic/fiber-converter-bidi-12g", "name": "Fiber-Wandler Kamera"}
+ ],
+ "cables": [
+  {"from": "cam:sdi_out", "to": "fib:sdi_in", "medium": "SDI", "fixed": true},
+  {"from": "fib:sdi_out", "to": "cam:sdi_in_pgm", "medium": "SDI (Programm-Rückweg: Sucher, Tally, Talkback)", "fixed": true}
+ ],
+ "routes": [
+  {"device": "fib", "from": "sdi_in", "to": "lc_io"},
+  {"device": "fib", "from": "lc_io", "to": "sdi_out"}
+ ],
+ "ports": [{"ref": "fib:lc_io", "connector": "LC", "signal": "SDI-optical", "label": "Fiber zur Regie"}],
+ "accepts": ["patch:lc_io.1", "patch:lc_io.2"]
+}

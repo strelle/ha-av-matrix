@@ -1,0 +1,235 @@
+{
+ "format": "avdp/0.1",
+ "status": "draft",
+ "id": "blackmagic/studio-camera-4k-gen1",
+ "manufacturer": "Blackmagic Design",
+ "model": "Blackmagic Studio Camera 4K (1. Generation, mit internem Akku; 10\"-Sucher)",
+ "category": "camera",
+ "rack_units": null,
+ "power": "12–24 V Stromeingang (Gehäusebeschriftung „12V“) für Netzteil (im Lieferumfang) und Laden des internen Akkus; interner Akku bis ca. 3 h Betrieb; unterbrechungsfreie Umschaltung zwischen Akku und externer Versorgung (Handbuch S. 5, 9, 15). Akku nicht vom Anwender tauschbar.",
+ "ports": [
+  {
+   "id": "sdi_out",
+   "label": "SDI Out",
+   "count": 1,
+   "direction": "out",
+   "connector": "BNC",
+   "signal": "SDI-12G",
+   "formats": "10-bit 4:2:2; 720p50/59.94/60, 1080i50/59.94/60, 1080p23.98/24/25/29.97/30/50/59.94/60, 2160p23.98/24/25/29.97/30/50/59.94/60; Audio: Ch 1-2 Programmton (XLR oder internes Stereomikro), Ch 15-16 Talkback",
+   "notes": "Laut Handbuch S. 14 „Studio Camera 4K supports 12G-SDI“. Ausgang zu Switcher, Router, Recorder. Formatliste S. 20-21. Steckertyp BNC nur aus Zeichnung/Branchenüblichkeit, nicht wörtlich belegt"
+  },
+  {
+   "id": "sdi_in_pgm",
+   "label": "SDI In (Program Return)",
+   "count": 1,
+   "direction": "in",
+   "connector": "BNC",
+   "signal": "SDI-12G",
+   "formats": "Program-Rückweg vom Switcher; trägt eingebettete Camera-Control-Pakete, Tally (Blackmagic Embedded Tally Control Protocol) und Talkback-Audio Ch 15-16",
+   "notes": "PGM-Taste schaltet Sucher zwischen Kamerabild und Program-Rückweg. Am ATEM jeden nicht herunterkonvertierten SDI-Ausgang verwenden (nicht Multiview/Down-Converted). Auch Rückspielweg z. B. von HyperDeck. Bei gleichzeitig belegtem Optical In gilt der zuerst verbundene Eingang (S. 6, 14, 30, 35). Unterstützte SDI-Rate des Eingangs nicht explizit angegeben"
+  },
+  {
+   "id": "optical_out",
+   "label": "Optical Out",
+   "count": 1,
+   "direction": "out",
+   "connector": "LC (SFP)",
+   "signal": "SDI-6G-optical",
+   "formats": "6G-SDI über Glasfaser (Studio Camera 4K); bis 28 Meilen",
+   "notes": "Nur mit optional nachrüstbarem SFP-Optikmodul (vom Anwender einsetzbar). Gegenstelle: ATEM Studio Converter oder ATEM Talkback Converter 4K. Kein SMPTE-Hybrid-Kamerafaser-Anschluss (311M), sondern Standard-LC wie in der Netzwerktechnik (S. 6, 9, 14, 36)"
+  },
+  {
+   "id": "optical_in",
+   "label": "Optical In (Program Return)",
+   "count": 1,
+   "direction": "in",
+   "connector": "LC (SFP)",
+   "signal": "SDI-6G-optical",
+   "formats": "6G-SDI über Glasfaser; Program-Rückweg inkl. Camera Control, Tally, Talkback",
+   "notes": "Nur mit SFP-Modul. Alternative zu SDI In; Camera Control auch über Glasfaser (S. 14, 29, 35-36)"
+  },
+  {
+   "id": "ref_in",
+   "label": "REF (Reference Input)",
+   "count": 1,
+   "direction": "in",
+   "connector": "BNC",
+   "signal": "reference",
+   "formats": "Blackburst oder Tri-Level",
+   "notes": "Genlock; Referenzquelle im Menü wählbar: Program-SDI-Eingang oder externer Ref; Reference Timing zeilen-/pixelweise einstellbar (S. 9, 14, 25). Steckertyp BNC nicht wörtlich belegt"
+  },
+  {
+   "id": "audio_in_xlr",
+   "label": "Audio In Ch 1/2",
+   "count": 2,
+   "direction": "in",
+   "connector": "XLR3F",
+   "signal": "analog-audio",
+   "formats": "symmetrisch, Mic low / Mic high / Line; Phantomspeisung schaltbar (bei Line automatisch aus)",
+   "notes": "Eingebettet in SDI-Kanäle 1 und 2; überschreibt internes Stereomikrofon; Option „Ch 2 uses Ch 1 input“ (S. 8, 13, 21-22). Handbuch S. 8 schreibt widersprüchlich „1/4” balanced XLR“; Buchsengeschlecht (F) nicht belegt"
+  },
+  {
+   "id": "headphones",
+   "label": "Headphones (Aviation)",
+   "count": 1,
+   "direction": "out",
+   "connector": "TRS-6.3",
+   "signal": "analog-audio",
+   "formats": "Program- und Regie-/Talkback-Ton; Talkback aus SDI-Kanälen 15/16 des eingehenden Signals",
+   "notes": "Für Aviation-Headsets („fixed wing“-Stecker), 0.25\" TRS. Headset Level und Program Mix (Kamera-/Program-Ton vs. Talkback) im Menü (S. 8, 13, 25)"
+  },
+  {
+   "id": "headset_mic_in",
+   "label": "Headphones Microphone Input",
+   "count": 1,
+   "direction": "in",
+   "connector": "TRS-0.206\" (Aviation-Mikrofonstecker)",
+   "signal": "analog-audio",
+   "formats": "Talkback-Mikrofon; eingebettet in SDI-Ausgang Kanäle 15/16",
+   "notes": "Push-to-Talk-Taste (PTT) halten bzw. doppelt drücken für Freisprechen; Headset Mic Level im Menü (S. 8, 9, 13, 25)"
+  },
+  {
+   "id": "lanc",
+   "label": "LANC Remote",
+   "count": 1,
+   "direction": "in",
+   "connector": "TRS-2.5",
+   "signal": "LANC",
+   "formats": "Standard-LANC",
+   "notes": "Fernsteuerung Iris, Fokus, Zoom bei kompatiblen aktiven MFT-Objektiven (Liste unterstützter Power-Zoom-Objektive S. 13)"
+  },
+  {
+   "id": "usb",
+   "label": "USB",
+   "count": 1,
+   "direction": "bidi",
+   "connector": "USB Mini-B",
+   "signal": "USB",
+   "formats": "USB 2.0",
+   "notes": "Nur Firmware-Updates via Blackmagic Camera Setup; Unterseite (S. 10, 34)"
+  },
+  {
+   "id": "power_in",
+   "label": "Power 12V",
+   "count": 1,
+   "direction": "in",
+   "connector": "DC",
+   "signal": "power",
+   "formats": "12–24 V",
+   "notes": "Netzteil im Lieferumfang; lädt internen Akku. Genaue Bauform (Hohlstecker/Verriegelung) nicht belegt. Laut Handbuch kein 4-pol-XLR-Power, kein AC-Eingang erwähnt"
+  },
+  {
+   "id": "tally_lamps",
+   "label": "Tally-Lampen vorne/hinten",
+   "count": 2,
+   "direction": "out",
+   "connector": "intern (LED)",
+   "signal": "tally",
+   "formats": "Program-Tally (rot) aus Tally-Daten des SDI/Optical-Rückwegs; Helligkeit vorne off/low/medium/high, hinten low/medium/high",
+   "notes": "Kein separater Tally-Anschluss; Kamera-Nummer 1-99 muss ATEM-Eingang entsprechen. Fremd-Switcher: Tally per Blackmagic 3G-SDI Shield for Arduino ins Program-Return einbetten (S. 8-9, 24-25, 31)"
+  },
+  {
+   "id": "lcd",
+   "label": "10\" LCD-Sucher",
+   "count": 1,
+   "direction": "out",
+   "connector": "intern",
+   "signal": "display",
+   "formats": "Kamerabild oder Program-Rückweg (PGM-Taste); Overlays, Fokus-Peaking",
+   "notes": "Klappbare Sonnenblende im Lieferumfang (S. 9, 34)"
+  },
+  {
+   "id": "int_mic",
+   "label": "Internes Stereomikrofon",
+   "count": 1,
+   "direction": "in",
+   "connector": "intern",
+   "signal": "analog-audio",
+   "formats": "auf Kanäle 1/2, wenn kein externer Ton anliegt",
+   "notes": "Umschaltung Audio Input: intern / XLR (S. 21-22)"
+  },
+  {
+   "id": "lens_mount",
+   "label": "Objektivanschluss MFT",
+   "count": 1,
+   "direction": "bidi",
+   "connector": "MFT (Micro Four Thirds), aktiv",
+   "signal": "lens-control",
+   "formats": "",
+   "notes": "Notiz, kein Signalport: aktives MFT-Bajonett; Iris/Fokus/Zoom über ATEM Camera Control bzw. LANC bei kompatiblen Objektiven (S. 3, 13, 35)"
+  }
+ ],
+ "logic": [
+  {
+   "type": "encoder",
+   "from": ["lens_mount"],
+   "to": ["sdi_out", "optical_out"],
+   "notes": "Sensor → Bildverarbeitung (inkl. DaVinci-Resolve-Primärfarbkorrektur, fernsteuerbar) → 10-bit 4:2:2 auf SDI Out und (mit SFP) Optical Out (S. 14, 29, 41-43)"
+  },
+  {
+   "type": "mixer",
+   "from": ["audio_in_xlr", "int_mic"],
+   "to": ["sdi_out", "optical_out"],
+   "notes": "XLR-Ch 1/2 (oder internes Mikro) eingebettet in SDI-Kanäle 1/2 (S. 13, 21-22)"
+  },
+  {
+   "type": "passthrough",
+   "from": ["headset_mic_in"],
+   "to": ["sdi_out", "optical_out"],
+   "notes": "Talkback-Mikro in SDI-Kanäle 15/16 des Ausgangs, PTT-gesteuert (S. 13)"
+  },
+  {
+   "type": "switch",
+   "from": ["sdi_in_pgm", "optical_in"],
+   "to": ["lcd", "headphones", "tally_lamps"],
+   "notes": "Rückweg-Auswahl: zuerst verbundener Eingang gewinnt. Program-Bild → Sucher (PGM-Taste umschaltbar mit Kamerabild); Talkback aus Ch 15/16 + Program-/Kameraton (Program Mix) → Kopfhörer; Tally-Daten → Tally-Lampen; Camera-Control-Pakete → Kamerasteuerung (S. 9, 13-14, 25, 35)"
+  },
+  {
+   "type": "switch",
+   "from": ["lens_mount", "sdi_in_pgm", "optical_in"],
+   "to": ["lcd"],
+   "notes": "Sucher zeigt Kamerabild oder Program-Rückweg (PGM-Taste)"
+  }
+ ],
+ "control": [
+  {
+   "protocol": "Blackmagic SDI Camera Control Protocol (v1.3, im SDI-Rückweg eingebettet)",
+   "notes": "ATEM Camera Control: ATEM sendet Pakete auf allen nicht herunterkonvertierten SDI-Ausgängen; Kamera wertet Pakete mit eigener Kameranummer aus. Iris, Gain, Fokus, Zoom (kompatible Objektive), Weißabgleich, Shutter, DaVinci-Primärfarbkorrektur. Auch via Blackmagic 3G-SDI Shield for Arduino. Unidirektional (S. 7, 35-43, 48-56)"
+  },
+  {
+   "protocol": "Blackmagic Embedded Tally Control Protocol (im SDI-Rückweg)",
+   "notes": "Program-/Preview-Tally je Gerät; Kamera zeigt Program-Tally (S. 57-58)"
+  },
+  {
+   "protocol": "Talkback eingebettet SDI-Audio Ch 15/16",
+   "notes": "Bidirektional: Rückweg → Kopfhörer, Headset-Mikro → SDI Out (S. 13)"
+  },
+  {
+   "protocol": "PTZ/VISCA über SDI",
+   "notes": "Handbuch-Kapitel „PTZ Control over SDI“ (S. 43-46); Relevanz für Studio Camera (ohne Expansion-Port) nicht belegt"
+  },
+  {
+   "protocol": "LANC",
+   "notes": "Lokal: Iris/Fokus/Zoom (S. 13)"
+  }
+ ],
+ "sources": [
+  {
+   "url": "https://documents.blackmagicdesign.com/UserManuals/BlackmagicStudioCameraManual.pdf",
+   "what": "Installation and Operation Manual „Blackmagic Studio Cameras“, September 2018 (abgerufen 2026-10-17): S. 3 Einleitung (MFT, SFP-Optik, Talkback/Tally); S. 5 internes Akku Studio Camera HD/4K vs. Studio Camera 2/4K 2; S. 6-7 Anschluss an ATEM; S. 8-10 Bedienelemente/Anschlüsse; S. 13-15 Anschlussbeschreibungen (12G-SDI Out, 6G-SDI Optik, Ref, Power, Akku 3 h); S. 20-21 Videoformate; S. 21-22 Audio; S. 24-25 Studio-Settings (Kameranummer, Ref, Headset); S. 29-30 Ausgänge; S. 31 Tally via 3G-SDI Shield; S. 34 USB/Zubehör; S. 35-43 ATEM Camera Control; S. 48-58 Camera Control & Tally Protocol"
+  },
+  {
+   "url": "https://www.blackmagicdesign.com/products/blackmagicstudiocamera/techspecs",
+   "what": "aktuelle Tech Specs (nur Nachfolger 4K Plus/Pro G2, 6K Pro) – keine Archivseite der 1. Generation verfügbar; nicht für Angaben dieses Profils verwendet"
+  }
+ ],
+ "unverified": [
+  "Abgrenzung 1. Generation vs. „Studio Camera 4K 2“: Das Handbuch behandelt beide gemeinsam; Unterscheidungsmerkmal laut S. 5/15 nur interner Akku (Gen 1). Ob 12G-SDI-Ausgang und 2160p50/59.94/60 bereits bei der Gen-1-Auslieferung 2014 oder erst per Firmware/Gen 2 verfügbar waren, ist nicht durch eine datierte Blackmagic-Quelle belegt (eine nicht von Blackmagic gehostete Kopie des Handbuchs vom September 2015 enthält bereits dieselben Angaben).",
+  "Keine Archiv-Tech-Specs-Seite der Gen 1 auf blackmagicdesign.com gefunden; Pressemitteilung NAB 2014 nur JS-gerendert, nicht auslesbar.",
+  "Steckertypen BNC für SDI/Ref und Bauform des DC-Eingangs nicht wörtlich im Handbuch genannt.",
+  "SDI-Rate des SDI-Program-Eingangs nicht explizit angegeben.",
+  "Kein Ethernet, kein HDMI, kein 4-pol-XLR-Power, kein AC-Eingang, kein separater Tally-Anschluss – nur aus Fehlen im Handbuch geschlossen.",
+  "Sensordaten (Größe, Dynamikumfang), Leistungsaufnahme, Gewicht/Abmessungen nicht belegt.",
+  "Spezifikation/Typ des optionalen SFP-Moduls (Single-/Multimode, Wellenlänge) nicht belegt."
+ ]
+}

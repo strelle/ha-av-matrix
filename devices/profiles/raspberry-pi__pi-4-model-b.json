@@ -1,0 +1,186 @@
+{
+ "id": "raspberry-pi/pi-4-model-b",
+ "manufacturer": "Raspberry Pi",
+ "model": "Raspberry Pi 4 Model B",
+ "category": "computer",
+ "rack_units": null,
+ "power": "5 V DC über USB-C (min. 3 A; 2,5 A reicht, wenn USB-Peripherie < 500 mA) oder über GPIO-Header; PoE nur mit PoE-HAT",
+ "ports": [
+  {
+   "id": "eth0",
+   "label": "Gigabit Ethernet",
+   "count": 1,
+   "direction": "bidi",
+   "connector": "RJ45",
+   "signal": "Ethernet",
+   "formats": "1000BASE-T",
+   "notes": "Rolle: Steuer-/Office-Netz für Companion-Web-UI (8000) und AV Matrix. PoE-fähig nur mit separatem PoE-HAT"
+  },
+  {
+   "id": "usb3",
+   "label": "USB 3.0",
+   "count": 2,
+   "direction": "bidi",
+   "connector": "USB-A",
+   "signal": "USB",
+   "formats": "USB 3.0",
+   "notes": "Hier: einer davon mit USB-Ethernet-Adapter Realtek RTL8153 (eth1, 1G RJ45) ins ST-2110-Netz"
+  },
+  {
+   "id": "usb2",
+   "label": "USB 2.0",
+   "count": 2,
+   "direction": "bidi",
+   "connector": "USB-A",
+   "signal": "USB",
+   "formats": "USB 2.0",
+   "notes": "Hier: Stream Deck + (USB 2.0-Gerät) kann hier angeschlossen werden"
+  },
+  {
+   "id": "hdmi_out",
+   "label": "micro-HDMI",
+   "count": 2,
+   "direction": "out",
+   "connector": "HDMI-D",
+   "signal": "HDMI",
+   "formats": "bis 4Kp60",
+   "notes": "Nur Konsole/Monitor, keine AV-Rolle"
+  },
+  {
+   "id": "av_out",
+   "label": "Audio/Composite",
+   "count": 1,
+   "direction": "out",
+   "connector": "TRS-3.5",
+   "signal": "analog-audio",
+   "formats": "Stereo-Audio + Composite-Video (4-polig)",
+   "notes": ""
+  },
+  {
+   "id": "power_in",
+   "label": "USB-C Power",
+   "count": 1,
+   "direction": "in",
+   "connector": "USB-C",
+   "signal": "power",
+   "formats": "5 V DC, min. 3 A",
+   "notes": "Nur Stromversorgung"
+  },
+  {
+   "id": "gpio",
+   "label": "GPIO 40-pin",
+   "count": 1,
+   "direction": "bidi",
+   "connector": "Pin-Header 2x20",
+   "signal": "GPIO",
+   "formats": "",
+   "notes": "Auch 5-V-Einspeisung möglich"
+  },
+  {
+   "id": "dsi",
+   "label": "MIPI DSI",
+   "count": 1,
+   "direction": "out",
+   "connector": "FPC",
+   "signal": "MIPI-DSI",
+   "formats": "2-lane",
+   "notes": ""
+  },
+  {
+   "id": "csi",
+   "label": "MIPI CSI",
+   "count": 1,
+   "direction": "in",
+   "connector": "FPC",
+   "signal": "MIPI-CSI",
+   "formats": "2-lane",
+   "notes": ""
+  },
+  {
+   "id": "wifi",
+   "label": "WLAN/Bluetooth",
+   "count": 1,
+   "direction": "bidi",
+   "connector": "intern (Antenne)",
+   "signal": "Ethernet",
+   "formats": "802.11ac 2,4/5 GHz; Bluetooth 5.0, BLE",
+   "notes": "Drahtlos, keine Buchse"
+  },
+  {
+   "id": "eth1_usb",
+   "label": "USB-Ethernet-Adapter Realtek RTL8153",
+   "count": 1,
+   "direction": "bidi",
+   "connector": "RJ45",
+   "signal": "Ethernet",
+   "formats": "10/100/1000 Mbit/s über USB 3.0",
+   "notes": "Zubehör (nicht Teil des Pi), steckt in usb3; zweiter Netzport ins 2110-Netz (nur Steuerung/NMOS, kein Medienstrom)"
+  }
+ ],
+ "logic": [
+  {
+   "type": "switch",
+   "from": [
+    "usb2",
+    "usb3"
+   ],
+   "to": [
+    "eth0",
+    "eth1_usb"
+   ],
+   "notes": "Software-Rolle: Bitfocus Companion 5 wandelt Stream-Deck-Ereignisse in Netzwerk-Steuerbefehle; Strelle AV Matrix steuert 2110-Geräte (NMOS IS-04/05) über eth1"
+  },
+  {
+   "type": "passthrough",
+   "from": [
+    "eth0"
+   ],
+   "to": [
+    "eth1_usb"
+   ],
+   "notes": "Zwei getrennte Netze, kein Routing vorgesehen (Konfigurationsannahme, nicht Herstellerangabe)"
+  }
+ ],
+ "control": [
+  {
+   "protocol": "HTTP 8000 (Companion Admin-UI + HTTP-API)",
+   "notes": "siehe bitfocus__companion.json"
+  },
+  {
+   "protocol": "HTTP 8088 (Strelle AV Matrix)",
+   "notes": "Projektinterne Angabe, keine Herstellerquelle"
+  },
+  {
+   "protocol": "SSH",
+   "notes": "Raspberry Pi OS / CompanionPi-Image, SSH erst nach Benutzeranlage"
+  }
+ ],
+ "sources": [
+  {
+   "url": "https://www.raspberrypi.com/products/raspberry-pi-4-model-b/",
+   "what": "Produktseite Specifications: BCM2711, Gigabit Ethernet, 2x USB 3.0, 2x USB 2.0, 2x micro-HDMI bis 4Kp60, DSI/CSI, 4-pol. Audio/Composite, 40-pin GPIO, 5 V/3 A USB-C, PoE mit HAT, 802.11ac, BT 5.0, 0–50 °C"
+  },
+  {
+   "url": "https://github.com/bitfocus/companion/blob/main/docs/user-guide/1_getting-started/companion-pi/choosing-a-pi.md",
+   "what": "Companion offiziell unterstützt auf Raspberry Pi 4 und 5"
+  },
+  {
+   "url": "https://github.com/bitfocus/companion/blob/main/docs/user-guide/1_getting-started/companion-pi/securing-your-pi.md",
+   "what": "CompanionPi: SSH erst nach Benutzeranlage"
+  },
+  {
+   "url": "https://cdn.hackaday.io/files/1899708127676480/RTL8153%20USB3%20Gbit%20LAN.pdf",
+   "what": "RTL8153-Datenblatt Rev. 1.1 (Realtek, Drittkopie): integrierter 10/100/1000-Controller mit USB-3.0-Bus"
+  }
+ ],
+ "unverified": [
+  "RTL8153: keine abrufbare Realtek-Produktseite (realtek.com: 'Produkt nicht gefunden'); Datenblatt nur als Drittkopie",
+  "Konkretes Adaptermodell/Hersteller des RTL8153-Adapters und dessen Stecker (USB-A vs USB-C) unbekannt",
+  "Linux-Treiber r8152 im Raspberry Pi OS: nicht aus Herstellerquelle belegt",
+  "RAM-Größe des eingesetzten Pi unbekannt (1–8 GB)",
+  "AV-Matrix-Port 8088 und Netztrennung sind Projektangaben, keine Herstellerdaten"
+ ],
+ "format": "avdp/0.1",
+ "status": "draft",
+ "slots": []
+}

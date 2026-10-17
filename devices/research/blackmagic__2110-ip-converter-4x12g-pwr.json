@@ -1,0 +1,53 @@
+{
+  "id": "blackmagic/2110-ip-converter-4x12g-pwr",
+  "manufacturer": "Blackmagic Design",
+  "model": "Blackmagic 2110 IP Converter 4x12G PWR",
+  "category": "converter",
+  "rack_units": 1,
+  "power": "2 x intern 100-240 V AC 50/60 Hz, 2 x IEC C14 (redundant); 410 W max. inkl. 4 x 90 W PoE",
+  "ports": [
+    {"id": "sdi_in", "label": "12G-SDI In 1-4", "count": 4, "direction": "in", "connector": "BNC", "signal": "SDI-12G",
+     "formats": "270Mb/1.5G/3G/6G/12G; SD, HD bis 1080p60, 2160p bis 60, 4K DCI bis 60; 16 Kanäle Embedded Audio",
+     "notes": "Kanal n: SDI In n -> 2110-Sender auf 10G-Port n. Belegter SDI In übersteuert für seinen Kanal den PGM In"},
+    {"id": "sdi_out", "label": "12G-SDI Out 1-4", "count": 4, "direction": "out", "connector": "BNC", "signal": "SDI-12G",
+     "formats": "wie SDI In; 3G Level A/B wählbar",
+     "notes": "Kanal n: abonnierter 2110-Empfänger (Receiver n) -> SDI Out n"},
+    {"id": "pgm_in", "label": "PGM In", "count": 1, "direction": "in", "connector": "BNC", "signal": "SDI-12G",
+     "formats": "wie SDI In", "notes": "Program-Return-Quelle für alle 4 Ethernet-Kanäle (inkl. Tally, Talkback, Kamerasteuerung); PTP-Takt wird davon abgeleitet, sofern kein PTP am 1G-Port"},
+    {"id": "pgm_loop", "label": "PGM Loop", "count": 1, "direction": "out", "connector": "BNC", "signal": "SDI-12G",
+     "notes": "Loop-Out von PGM In, 16 Kanäle Embedded Audio"},
+    {"id": "ip_10g", "label": "10G 2110 IP with Power 1-4", "count": 4, "direction": "bidi", "connector": "RJ45", "signal": "ST2110",
+     "formats": "10/100/1000/10GBASE-T; ST 2110-20/-21/-30/-40, Blackmagic IP10 für 12G-Raten; 16 Kanäle Audio",
+     "notes": "PoE++ nur als Ausgang (Speisung angeschlossener Geräte, 90 W je Port lt. Tech Specs); Punkt-zu-Punkt oder an IGMP-Switch"},
+    {"id": "eth_1g", "label": "1G Ethernet", "count": 1, "direction": "bidi", "connector": "RJ45", "signal": "Ethernet",
+     "formats": "10/100/1000BASE-T", "notes": "Konfiguration, Firmware; kann an PTP-Grandmaster angeschlossen werden"},
+    {"id": "usb_c", "label": "USB-C", "count": 1, "direction": "bidi", "connector": "USB-C", "signal": "USB",
+     "formats": "USB-C 3.0", "notes": "Front; Konfiguration und Updates"},
+    {"id": "headphones", "label": "Headphones", "count": 1, "direction": "out", "connector": "TRS-6.3", "signal": "analog-audio",
+     "notes": "Front, plus eingebauter Monitor-Lautsprecher"},
+    {"id": "power", "label": "AC Power 1-2", "count": 2, "direction": "in", "connector": "IEC", "signal": "power", "formats": "100-240 V AC", "notes": "redundant"}
+  ],
+  "logic": [
+    {"type": "encoder", "from": ["sdi_in"], "to": ["ip_10g"], "notes": "4 unabhängige Kanäle; SDI In n -> 2110-Sender auf Port n (Button OUT n zeigt den Sender)"},
+    {"type": "decoder", "from": ["ip_10g"], "to": ["sdi_out"], "notes": "4 unabhängige Kanäle; 2110-Receiver n (per Menü oder NMOS IS-05 abonniert, Essenzen Video/Audio/Anc einzeln) -> SDI Out n (Button IN n)"},
+    {"type": "splitter", "from": ["pgm_in"], "to": ["ip_10g", "pgm_loop"], "notes": "PGM In wirkt wie Verteilverstärker: Program Return an alle 4 Ethernet-Kanäle, solange am jeweiligen SDI In nichts steckt; dazu PGM Loop"},
+    {"type": "passthrough", "from": ["power"], "to": ["ip_10g"], "notes": "PoE++-Speisung der Gegenstellen (z. B. Presentation Converter, IP Mini)"}
+  ],
+  "control": [
+    {"protocol": "NMOS IS-04 v1.3.2 (Registry oder Peer-to-Peer mDNS/DNS-SD)", "notes": "BCP-002-01, BCP-004-01"},
+    {"protocol": "NMOS IS-05 v1.1.2", "notes": "Routing von Video/Audio/Anc-Essenzen"},
+    {"protocol": "PTP IEEE 1588-2008 / ST 2059-1/-2", "notes": "Follower; Takt vom 1G-Port oder vom PGM-SDI"},
+    {"protocol": "Blackmagic Converters Setup (USB oder Ethernet)", "notes": "Ethernet-Administration muss erst per USB freigegeben werden"},
+    {"protocol": "Front-Panel", "notes": "12 Tasten, 2,2\" LCD, Drehknopf; CALL blinkt Tally aller Kameras"}
+  ],
+  "sources": [
+    {"url": "https://www.blackmagicdesign.com/products/blackmagic2110ipconverter/techspecs", "what": "techspecs, Abschnitt Blackmagic 2110 IP Converter 4x12G PWR (abgerufen 2026-10-17)"},
+    {"url": "https://documents.blackmagicdesign.com/UserManuals/Blackmagic2110IPConvertersManual.pdf", "what": "manual (Stand September 2026, lokal /Applications/Blackmagic Converters/Manuals) S. 16-18 Getting Started, S. 87 PGM-Override, S. 96-100 Front/Rear Panel, Menü"}
+  ],
+  "unverified": [
+    "PoE-Leistung je Port: Tech Specs '4 x 90 W', Handbuch S. 96 'up to 100 watts'",
+    "Ob der Program Return als eigener 2110-Sender je Port oder über denselben Sender wie SDI In n läuft (Handbuch: SDI In übersteuert PGM In)",
+    "Welche Signale genau über den Ethernet-Kanal als Tally/Talkback/CCU zurückgehen (nur Prosa im Handbuch)",
+    "Videohub-Protokoll o. ä. Ethernet-Steuerprotokoll neben NMOS nicht dokumentiert"
+  ]
+}

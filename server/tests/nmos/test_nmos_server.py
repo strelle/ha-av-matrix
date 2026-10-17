@@ -57,10 +57,25 @@ async def settle(hub: Hub) -> None:
         await asyncio.sleep(0)
 
 
+class _NoBrowser:
+    """Ersatz für die mDNS-Suche in „ST 2110 prüfen“: findet nichts, damit keine echten Geräte aus dem Netz in die Tests geraten."""
+
+    def __init__(self, *_args, **_kwargs) -> None:
+        self.nodes: dict = {}
+        self.registries: dict = {}
+
+    async def async_start(self) -> None:
+        pass
+
+    async def async_stop(self) -> None:
+        pass
+
+
 @pytest.fixture
 async def env(tmp_path, monkeypatch):
     monkeypatch.setattr("avmatrix.hub.FOLLOWUP_DELAYS", ())
     monkeypatch.setattr("avmatrix.drivers.nmos.VERIFY_DELAYS", (0.0,))
+    monkeypatch.setattr("avmatrix.nmos_check.NmosBrowser", _NoBrowser)
     net = SimNetwork(blackmagic.studio(), mdns=None)
     await net.start()
     config = JsonFile(tmp_path / "config.json")
@@ -226,6 +241,7 @@ async def switched(tmp_path, monkeypatch):
     """Die fünf Geräte am Switch, mit Registry – gefunden nur über die von Hand eingetragene Registry."""
     monkeypatch.setattr("avmatrix.hub.FOLLOWUP_DELAYS", ())
     monkeypatch.setattr("avmatrix.drivers.nmos.VERIFY_DELAYS", (0.0,))
+    monkeypatch.setattr("avmatrix.nmos_check.NmosBrowser", _NoBrowser)
     net = SimNetwork(blackmagic.studio_with_switch(), mdns=None, registry=True)
     await net.start()
     config = JsonFile(tmp_path / "config.json")
