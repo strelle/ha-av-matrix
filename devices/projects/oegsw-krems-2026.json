@@ -221,6 +221,13 @@
    "name": "Comfortscreen Bühne (Boden)",
    "col": 3,
    "row": 7
+  },
+  {
+   "id": "comfconv",
+   "profile": "generic/micro-converter-bidi",
+   "name": "BiDirectional Converter Comfort (SDI→HDMI)",
+   "col": 2,
+   "row": 5
   }
  ],
  "cables": [
@@ -465,8 +472,13 @@
   },
   {
    "from": "pres:sdi_out",
-   "to": "comfort:sdi_in",
+   "to": "comfconv:sdi_in",
    "medium": "SDI"
+  },
+  {
+   "from": "comfconv:hdmi_out",
+   "to": "comfort:hdmi_in",
+   "medium": "HDMI"
   }
  ],
  "flows": [
@@ -751,6 +763,11 @@
    "from": "ip_10g",
    "to": "sdi_out",
    "label": "2110-Rückweg (ATEM Aux 10) → Comfortscreen"
+  },
+  {
+   "device": "comfconv",
+   "from": "sdi_in",
+   "to": "hdmi_out"
   }
  ],
  "generic": {
@@ -1035,14 +1052,14 @@
    ]
   },
   "generic/comfort-monitor-sdi": {
-   "model": "Bühnenmonitor SDI (Modell offen)",
+   "model": "Comfortscreen (Modell offen)",
    "category": "display",
    "ports": [
     {
-     "id": "sdi_in",
+     "id": "hdmi_in",
      "direction": "in",
-     "connector": "BNC",
-     "signal": "SDI"
+     "connector": "HDMI-A",
+     "signal": "HDMI"
     }
    ]
   }
