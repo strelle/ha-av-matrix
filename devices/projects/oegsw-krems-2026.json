@@ -2,12 +2,12 @@
  "format": "avrig/0.1",
  "name": "Schnittplatz ÖGSW Krems",
  "date": "2026-10-17",
- "notes": "Stand Showtag 2. Kabel und Patch aus Bestandsaufnahme und Live-Abfrage; mit 'assumed' markierte Verbindungen sind nicht am Gerät geprüft.",
+ "notes": "Stand Showtag 2. Kabel und Patch aus Bestandsaufnahme und Live-Abfrage; mit 'assumed' markierte Verbindungen sind nicht am Gerät geprüft. Patch laut Default-Plan 07.10.2026 (Synology home/Veranstlatungstechnik/Blackmagic/00_DEFAULT_Schnittplatz_2026-10-07).",
  "instances": [
   {
    "id": "cam1",
-   "profile": "generic/camera-sdi",
-   "name": "Kamera 1",
+   "profile": "blackmagic/studio-camera-4k-gen1",
+   "name": "Kamera 1 · Studio Camera 4K (Gen 1)",
    "col": 0,
    "row": 0
   },
@@ -72,8 +72,8 @@
   },
   {
    "id": "hdconv",
-   "profile": "generic/hdmi-to-sdi",
-   "name": "HDMI→SDI-Wandler",
+   "profile": "generic/micro-converter-bidi",
+   "name": "BiDirectional Converter 1 (HDMI↔SDI)",
    "col": 1,
    "row": 3
   },
@@ -193,14 +193,23 @@
    "name": "TP-Link TL-SG1024 Videoregie",
    "col": 1,
    "row": 7
+  },
+  {
+   "id": "patch",
+   "profile": "generic/patchfeld-videoregie",
+   "name": "Patchfeld Videoregie (Rack-Front)",
+   "col": 0,
+   "row": 6
+  },
+  {
+   "id": "mvconv",
+   "profile": "generic/micro-converter-sdi-hdmi",
+   "name": "SDI→HDMI Converter 1 (MV1)",
+   "col": 2,
+   "row": 4
   }
  ],
  "cables": [
-  {
-   "from": "cam1:sdi_out",
-   "to": "atem:sdi_in.5",
-   "medium": "SDI"
-  },
   {
    "from": "spk:usbc",
    "to": "pres:usbc_front",
@@ -234,14 +243,12 @@
   {
    "from": "regie:hdmi_out",
    "to": "hdconv:hdmi_in",
-   "medium": "HDMI",
-   "assumed": true
+   "medium": "HDMI"
   },
   {
    "from": "hdconv:sdi_out",
    "to": "atem:sdi_in.3",
-   "medium": "SDI",
-   "assumed": true
+   "medium": "SDI"
   },
   {
    "from": "regie:usbc",
@@ -256,30 +263,12 @@
   {
    "from": "atem:sdi_out.11",
    "to": "wp:sdi_in",
-   "medium": "SDI",
-   "assumed": true
+   "medium": "SDI"
   },
   {
    "from": "atem:sdi_out.12",
    "to": "hd:sdi_in",
-   "medium": "SDI",
-   "assumed": true
-  },
-  {
-   "from": "atem:multiview_out.1",
-   "to": "sv:sdi_in.1",
-   "medium": "SDI",
-   "assumed": true
-  },
-  {
-   "from": "wing:xlr_out.1",
-   "to": "atem:audio_in.1",
-   "medium": "XLR→TRS"
-  },
-  {
-   "from": "wing:xlr_out.2",
-   "to": "atem:audio_in.2",
-   "medium": "XLR→TRS"
+   "medium": "SDI"
   },
   {
    "from": "wing:xlr_out.7",
@@ -384,6 +373,81 @@
    "from": "ux:wan",
    "to": "cloud:rtmp_in",
    "medium": "Internet"
+  },
+  {
+   "from": "cam1:sdi_out",
+   "to": "patch:sdi_in5_front",
+   "medium": "SDI (Kamera → Patchfeld)"
+  },
+  {
+   "from": "patch:sdi_in5_rear",
+   "to": "atem:sdi_in.5",
+   "medium": "SDI",
+   "fixed": true
+  },
+  {
+   "from": "wing:xlr_out.1",
+   "to": "patch:xlr_in_l_front",
+   "medium": "XLR"
+  },
+  {
+   "from": "wing:xlr_out.2",
+   "to": "patch:xlr_in_r_front",
+   "medium": "XLR"
+  },
+  {
+   "from": "patch:xlr_in_l_rear",
+   "to": "atem:audio_in.1",
+   "medium": "XLR→TRS",
+   "fixed": true
+  },
+  {
+   "from": "patch:xlr_in_r_rear",
+   "to": "atem:audio_in.2",
+   "medium": "XLR→TRS",
+   "fixed": true
+  },
+  {
+   "from": "atem:sdi_out.3",
+   "to": "hdconv:sdi_in",
+   "medium": "SDI (Rückweg, HDMI Out frei)",
+   "fixed": true
+  },
+  {
+   "from": "atem:multiview_out.1",
+   "to": "mvconv:sdi_in",
+   "medium": "SDI",
+   "fixed": true
+  },
+  {
+   "from": "mvconv:sdi_out",
+   "to": "sv:sdi_in.1",
+   "medium": "SDI",
+   "fixed": true
+  },
+  {
+   "from": "wp:sdi_mon",
+   "to": "sv:sdi_in.2",
+   "medium": "SDI (Stream-Kontrolle)",
+   "fixed": true
+  },
+  {
+   "from": "sv:sdi_loop",
+   "to": "atem:sdi_in.17",
+   "medium": "SDI",
+   "fixed": true
+  },
+  {
+   "from": "hd:sdi_out.1",
+   "to": "atem:sdi_in.19",
+   "medium": "SDI (Fill)",
+   "fixed": true
+  },
+  {
+   "from": "hd:sdi_out.2",
+   "to": "atem:sdi_in.20",
+   "medium": "SDI (Key)",
+   "fixed": true
   }
  ],
  "flows": [
@@ -631,21 +695,40 @@
    "device": "wing",
    "from": "local_in.24",
    "to": "main1"
+  },
+  {
+   "device": "patch",
+   "from": "sdi_in5_front",
+   "to": "sdi_in5_rear"
+  },
+  {
+   "device": "patch",
+   "from": "xlr_in_l_front",
+   "to": "xlr_in_l_rear"
+  },
+  {
+   "device": "patch",
+   "from": "xlr_in_r_front",
+   "to": "xlr_in_r_rear"
+  },
+  {
+   "device": "mvconv",
+   "from": "sdi_in",
+   "to": "sdi_out"
+  },
+  {
+   "device": "wp",
+   "from": "sdi_in",
+   "to": "sdi_mon"
+  },
+  {
+   "device": "sv",
+   "from": "sdi_in.1",
+   "to": "sdi_loop",
+   "label": "Monitor A = MV1"
   }
  ],
  "generic": {
-  "generic/camera-sdi": {
-   "model": "Kamera (Modell offen)",
-   "category": "camera",
-   "ports": [
-    {
-     "id": "sdi_out",
-     "direction": "out",
-     "connector": "BNC",
-     "signal": "SDI"
-    }
-   ]
-  },
   "generic/laptop": {
    "model": "Laptop",
    "category": "computer",
@@ -662,27 +745,6 @@
      "connector": "HDMI-A",
      "signal": "HDMI"
     }
-   ]
-  },
-  "generic/hdmi-to-sdi": {
-   "model": "HDMI→SDI-Wandler (Modell offen)",
-   "category": "converter",
-   "ports": [
-    {
-     "id": "hdmi_in",
-     "direction": "in",
-     "connector": "HDMI-A",
-     "signal": "HDMI"
-    },
-    {
-     "id": "sdi_out",
-     "direction": "out",
-     "connector": "BNC",
-     "signal": "SDI"
-    }
-   ],
-   "unverified": [
-    "ATEM Constellation HD hat keine HDMI-Eingänge – Eingang 3 'HDMI 1' muss über einen Wandler kommen"
    ]
   },
   "generic/neutrik-na2-io-dline": {
@@ -813,6 +875,110 @@
      "signal": "Internet"
     }
    ]
+  },
+  "generic/micro-converter-bidi": {
+   "manufacturer": "Blackmagic Design",
+   "model": "Micro Converter BiDirectional SDI/HDMI (Variante offen)",
+   "category": "converter",
+   "ports": [
+    {
+     "id": "hdmi_in",
+     "direction": "in",
+     "connector": "HDMI-A",
+     "signal": "HDMI"
+    },
+    {
+     "id": "sdi_out",
+     "direction": "out",
+     "connector": "BNC",
+     "signal": "SDI"
+    },
+    {
+     "id": "sdi_in",
+     "direction": "in",
+     "connector": "BNC",
+     "signal": "SDI"
+    },
+    {
+     "id": "hdmi_out",
+     "direction": "out",
+     "connector": "HDMI-A",
+     "signal": "HDMI"
+    }
+   ],
+   "unverified": [
+    "Modellvariante (3G/12G) aus Plan nicht ersichtlich"
+   ]
+  },
+  "generic/micro-converter-sdi-hdmi": {
+   "manufacturer": "Blackmagic Design",
+   "model": "Micro Converter SDI to HDMI (Variante offen)",
+   "category": "converter",
+   "ports": [
+    {
+     "id": "sdi_in",
+     "direction": "in",
+     "connector": "BNC",
+     "signal": "SDI"
+    },
+    {
+     "id": "sdi_out",
+     "direction": "out",
+     "connector": "BNC",
+     "signal": "SDI",
+     "notes": "Loop"
+    },
+    {
+     "id": "hdmi_out",
+     "direction": "out",
+     "connector": "HDMI-A",
+     "signal": "HDMI",
+     "notes": "→ Audio Extractor → Patchfeld HDMI Out 5 + ADAT"
+    }
+   ]
+  },
+  "generic/patchfeld-videoregie": {
+   "model": "Patchfeld Rack-Front (laut Visio-Plan)",
+   "category": "patchbay",
+   "ports": [
+    {
+     "id": "sdi_in5_front",
+     "direction": "in",
+     "connector": "BNC",
+     "signal": "SDI"
+    },
+    {
+     "id": "sdi_in5_rear",
+     "direction": "out",
+     "connector": "BNC",
+     "signal": "SDI"
+    },
+    {
+     "id": "xlr_in_l_front",
+     "direction": "in",
+     "connector": "XLR3F",
+     "signal": "analog-audio"
+    },
+    {
+     "id": "xlr_in_l_rear",
+     "direction": "out",
+     "connector": "XLR3M",
+     "signal": "analog-audio"
+    },
+    {
+     "id": "xlr_in_r_front",
+     "direction": "in",
+     "connector": "XLR3F",
+     "signal": "analog-audio"
+    },
+    {
+     "id": "xlr_in_r_rear",
+     "direction": "out",
+     "connector": "XLR3M",
+     "signal": "analog-audio"
+    }
+   ],
+   "notes": "weitere Buchsen: SDI In 6, SDI Out 5/6/9, HDMI Out 5/10, LC I/O 1/2, ADAT Out"
   }
  },
  "racks": [
@@ -840,9 +1006,13 @@
     "hd",
     "wp",
     "sv",
-    "tpl"
+    "tpl",
+    "patch",
+    "hdconv",
+    "mvconv"
    ],
    "ports": [
+    "Patchfeld: SDI In 5/6, SDI Out 5/6/9, HDMI Out 5 (MV1 mit Ton) und 10 (Aux 10), LC I/O 1/2 (Fiber), ADAT Out, XLR In L/R",
     "tpl:port (Uplink WING-Rack)"
    ],
    "notes": "Zugehörigkeit von Pi, Magewell und Presentation Converter offen"
