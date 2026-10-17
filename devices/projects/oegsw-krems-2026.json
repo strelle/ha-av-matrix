@@ -2,7 +2,7 @@
  "format": "avrig/0.1",
  "name": "Schnittplatz ÖGSW Krems",
  "date": "2026-10-17",
- "notes": "Stand Showtag 2. Kabel und Patch aus Bestandsaufnahme und Live-Abfrage; mit 'assumed' markierte Verbindungen sind nicht am Gerät geprüft. Patch laut Default-Plan 07.10.2026 (Synology home/Veranstlatungstechnik/Blackmagic/00_DEFAULT_Schnittplatz_2026-10-07).",
+ "notes": "Stand Showtag 2. Kabel und Patch aus Bestandsaufnahme und Live-Abfrage; mit 'assumed' markierte Verbindungen sind nicht am Gerät geprüft. Patch laut Default-Plan 07.10.2026 (Synology home/Veranstlatungstechnik/Blackmagic/00_DEFAULT_Schnittplatz_2026-10-07). Audio-Ports des Presentation Converters heute ungenutzt.",
  "instances": [
   {
    "id": "cam1",
@@ -214,6 +214,13 @@
    "name": "2110 IP Mini BiDirect 12G (heute nicht gesteckt)",
    "col": 1,
    "row": 8
+  },
+  {
+   "id": "comfort",
+   "profile": "generic/comfort-monitor-sdi",
+   "name": "Comfortscreen Bühne (Boden)",
+   "col": 3,
+   "row": 7
   }
  ],
  "cables": [
@@ -455,6 +462,11 @@
    "to": "atem:sdi_in.20",
    "medium": "SDI (Key)",
    "fixed": true
+  },
+  {
+   "from": "pres:sdi_out",
+   "to": "comfort:sdi_in",
+   "medium": "SDI"
   }
  ],
  "flows": [
@@ -492,7 +504,7 @@
    "to": "pres:ip_10g",
    "via": "sw360",
    "kind": "ST 2110",
-   "label": "Kanal 1 (ATEM Aux 10) → Beamer"
+   "label": "Kanal 1 (ATEM Aux 10) → Comfortscreen"
   },
   {
    "from": "wp:ethernet",
@@ -513,12 +525,6 @@
    "from": "usbc_front",
    "to": "ip_10g",
    "label": "Sender: USB-C vorne"
-  },
-  {
-   "device": "pres",
-   "from": "ip_10g",
-   "to": "hdmi_out",
-   "label": "Empfänger → HDMI"
   },
   {
    "device": "ipc",
@@ -733,6 +739,18 @@
    "from": "sdi_in.1",
    "to": "sdi_loop",
    "label": "Monitor A = MV1"
+  },
+  {
+   "device": "pres",
+   "from": "usbc_front",
+   "to": "hdmi_out",
+   "label": "HDMI Out spiegelt den Laptop (lokal)"
+  },
+  {
+   "device": "pres",
+   "from": "ip_10g",
+   "to": "sdi_out",
+   "label": "2110-Rückweg (ATEM Aux 10) → Comfortscreen"
   }
  ],
  "generic": {
@@ -1014,6 +1032,18 @@
    ],
    "unverified": [
     "Profil noch nicht recherchiert; Ports aus NMOS-Meldung 14.10.2026"
+   ]
+  },
+  "generic/comfort-monitor-sdi": {
+   "model": "Bühnenmonitor SDI (Modell offen)",
+   "category": "display",
+   "ports": [
+    {
+     "id": "sdi_in",
+     "direction": "in",
+     "connector": "BNC",
+     "signal": "SDI"
+    }
    ]
   }
  },
