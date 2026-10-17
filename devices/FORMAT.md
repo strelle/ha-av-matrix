@@ -35,3 +35,10 @@ Router und PoE-Switch). Ein Rack ist wie ein Gerät wiederverwendbar: als eigene
 - im Projekt: `racks[]` mit `id`, `name`, `members[]` (Instanz-IDs); Kabel innerhalb eines Racks tragen `"fixed": true`.
 - Übergabepunkte (`ports[]` des Racks) sind die Buchsen, an denen andere Racks oder Geräte angeschlossen werden – z. B. der Uplink des
   PoE-Switch zur Videoregie. Beim Aufbau vor Ort muss man nur noch diese Verbindungen stecken und prüfen.
+
+## Set (Zubehör-Bündel, `format: "avkit/0.1"`)
+
+Optionales Zubehör, das als Einheit transportiert und gesteckt wird – z. B. Kamera + Fiber-Wandler + LC-Kabel. Innen fest verkabelt,
+nach außen nur seine Übergabe-Ports (`ports[]`). `accepts[]` nennt die Buchsen, an die es passt (z. B. Patchfeld LC I/O 1/2).
+Im Konfigurator wird ein Set per Drag and Drop auf eine passende Buchse gezogen; die ganze Kette ist danach verbunden.
+Sets liegen in `kits/`.

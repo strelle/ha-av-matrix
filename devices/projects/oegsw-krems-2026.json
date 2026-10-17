@@ -235,6 +235,20 @@
    "name": "DeckLink IP/SDI HD (eGPU-Gehäuse, heute nicht gesteckt)",
    "col": 0,
    "row": 7
+  },
+  {
+   "id": "fibr1",
+   "profile": "generic/fiber-converter-bidi-12g",
+   "name": "Fiber-Wandler 1 (Rack)",
+   "col": 2,
+   "row": -0.9
+  },
+  {
+   "id": "fibr2",
+   "profile": "generic/fiber-converter-bidi-12g",
+   "name": "Fiber-Wandler 2 (Rack)",
+   "col": 2,
+   "row": -0.8
   }
  ],
  "cables": [
@@ -486,6 +500,42 @@
    "from": "comfconv:hdmi_out",
    "to": "comfort:hdmi_in",
    "medium": "HDMI"
+  },
+  {
+   "from": "fibr1:sdi_out",
+   "to": "atem:sdi_in.1",
+   "medium": "SDI",
+   "fixed": true
+  },
+  {
+   "from": "atem:sdi_out.1",
+   "to": "fibr1:sdi_in",
+   "medium": "SDI (Rückweg)",
+   "fixed": true
+  },
+  {
+   "from": "fibr1:lc_io",
+   "to": "patch:lc_io.1",
+   "medium": "LC intern",
+   "fixed": true
+  },
+  {
+   "from": "fibr2:sdi_out",
+   "to": "atem:sdi_in.2",
+   "medium": "SDI",
+   "fixed": true
+  },
+  {
+   "from": "atem:sdi_out.2",
+   "to": "fibr2:sdi_in",
+   "medium": "SDI (Rückweg)",
+   "fixed": true
+  },
+  {
+   "from": "fibr2:lc_io",
+   "to": "patch:lc_io.2",
+   "medium": "LC intern",
+   "fixed": true
   }
  ],
  "flows": [
@@ -775,6 +825,50 @@
    "device": "comfconv",
    "from": "sdi_in",
    "to": "hdmi_out"
+  },
+  {
+   "device": "fibr1",
+   "from": "lc_io",
+   "to": "sdi_out"
+  },
+  {
+   "device": "fibr1",
+   "from": "sdi_in",
+   "to": "lc_io"
+  },
+  {
+   "device": "atem",
+   "from": "sdi_in.1",
+   "to": "me1",
+   "label": "Cam 1 Fiber"
+  },
+  {
+   "device": "atem",
+   "from": "me1",
+   "to": "sdi_out.1",
+   "label": "Rückweg Fiber 1"
+  },
+  {
+   "device": "fibr2",
+   "from": "lc_io",
+   "to": "sdi_out"
+  },
+  {
+   "device": "fibr2",
+   "from": "sdi_in",
+   "to": "lc_io"
+  },
+  {
+   "device": "atem",
+   "from": "sdi_in.2",
+   "to": "me1",
+   "label": "Cam 2 Fiber"
+  },
+  {
+   "device": "atem",
+   "from": "me1",
+   "to": "sdi_out.2",
+   "label": "Rückweg Fiber 2"
   }
  ],
  "generic": {
@@ -1025,6 +1119,13 @@
      "direction": "out",
      "connector": "XLR3M",
      "signal": "analog-audio"
+    },
+    {
+     "id": "lc_io",
+     "count": 2,
+     "direction": "bidi",
+     "connector": "LC",
+     "signal": "SDI-optical"
     }
    ],
    "notes": "weitere Buchsen: SDI In 6, SDI Out 5/6/9, HDMI Out 5/10, LC I/O 1/2, ADAT Out"
@@ -1069,6 +1170,34 @@
      "signal": "HDMI"
     }
    ]
+  },
+  "generic/fiber-converter-bidi-12g": {
+   "manufacturer": "Blackmagic Design",
+   "model": "BiDirectional Fiber 12G (laut Default-Plan, Modell prüfen)",
+   "category": "converter",
+   "ports": [
+    {
+     "id": "sdi_in",
+     "direction": "in",
+     "connector": "BNC",
+     "signal": "SDI-12G"
+    },
+    {
+     "id": "sdi_out",
+     "direction": "out",
+     "connector": "BNC",
+     "signal": "SDI-12G"
+    },
+    {
+     "id": "lc_io",
+     "direction": "bidi",
+     "connector": "LC",
+     "signal": "SDI-optical"
+    }
+   ],
+   "unverified": [
+    "genaues Modell (Micro Converter BiDirectional SDI/Fiber? Teranex Mini?) nicht belegt"
+   ]
   }
  },
  "racks": [
@@ -1100,7 +1229,9 @@
     "patch",
     "hdconv",
     "mvconv",
-    "mini"
+    "mini",
+    "fibr1",
+    "fibr2"
    ],
    "ports": [
     "Patchfeld: SDI In 5/6, SDI Out 5/6/9, HDMI Out 5 (MV1 mit Ton) und 10 (Aux 10), LC I/O 1/2 (Fiber), ADAT Out, XLR In L/R",
