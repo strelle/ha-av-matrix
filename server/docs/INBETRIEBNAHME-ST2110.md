@@ -109,3 +109,12 @@ Wenn etwas nicht stimmt:
 - ob der Anschluss zum Studionetz frei von Videoströmen bleibt (Schritt 1).
 
 Alles davon steht in den Rohdaten aus Schritt 5.
+
+## Erfahrungen mit den echten Geräten (Studio, Oktober 2026)
+
+- **Nur echte 10G-Ports.** Die Wandler verhandeln 1G oder 10G, kein 2,5G. An einem 2,5G-Switch fallen sie auf 1G und senden dann nur Ton und Zusatzdaten, **kein Bild**.
+- **4x12G = vier NMOS-Knoten.** Der 1G-Steuerport reicht sie auf Port 8090/8092/8094/8096 durch; die Knoten nennen aber nur ihre 10G-Adressen. Der Treiber schaltet deshalb über die Adresse, unter der er den Knoten erreicht (`advertised` in `nmos/drivers/nmos.py`).
+- **Ohne DHCP im 2110-Netz** haben Wandler und Switch Link-Local-Adressen (169.254.x.x), die 10G-Seite des 4x12G 10.0.0.51–54. Der Rechner der Kreuzschiene braucht einen zweiten Port im 2110-Netz mit 169.254.x.x/16 **und** 10.0.0.x/24.
+- **Der 360P hält Multicast von Ports ohne Abonnenten fern** (gemessen: wenige Pakete/s am 1G-Port des Rechners bei laufenden Strömen).
+- **Kurzwahltasten am 360P sind frei belegbar:** Ethernet Switch Setup → Control Panel → Button Mapping. Eine Taste zeigt alle Quellen/Ziele, deren Name das Tastenwort enthält; die Zahl im Namen bestimmt die Zifferntaste.
+- Der 360P ist ab Werk PTP-Grandmaster (Priority 1 = 126, Domain 127); die Wandler folgen ihm ohne Einstellung.

@@ -266,6 +266,8 @@ def scale_jpeg(data: bytes, width: int, quality: int) -> tuple[bytes, int, int]:
 def find_library() -> Path | None:
     candidates = [os.environ.get("AVM_NDI_LIB") or "", str(data_dir() / "ndi" / "libndi.so.6")]
     candidates += [f"{d}/libndi.so.6" for d in ("/usr/local/lib", "/usr/lib", "/usr/lib/aarch64-linux-gnu")]
+    # macOS: das offizielle SDK (Install_NDI_SDK_v6_Apple.pkg) legt die Bibliothek hier ab
+    candidates += [str(data_dir() / "ndi" / "libndi.dylib"), "/Library/NDI SDK for Apple/lib/macOS/libndi.dylib", "/usr/local/lib/libndi.dylib"]
     for candidate in candidates:
         if candidate and Path(candidate).is_file():
             return Path(candidate)

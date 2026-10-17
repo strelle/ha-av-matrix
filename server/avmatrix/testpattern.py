@@ -5,7 +5,8 @@ Zum Auflegen auf einen Studiobildschirm – wie jede andere Quelle der Kreuzschi
 * Gesendet wird nur, solange die Quelle eingeschaltet **und** ein Empfänger verbunden ist, dann ein Bild
   je Sekunde (die Uhr ist das Lebenszeichen). Ohne Empfänger wartet ein Thread im NDI-Aufruf – keine Last.
 * Ausgeschaltet gibt es weder Sender noch Thread.
-* Das Bild (1280×720) wird einmal gezeichnet; je Sekunde kommt nur die Uhr dazu.
+* Das Bild (1920×1080, Full HD) wird einmal gezeichnet; je Sekunde kommt nur die Uhr dazu.
+* Gezeichnet wird in einem 1280×720-Raster und über ``_s()`` auf die Bildgröße skaliert.
 
 Der Zustand (ein/aus) steht in ``state.json`` und übersteht einen Neustart. Ohne NDI SDK bleibt die Quelle aus
 (``available: false``); ``/api/testpattern.jpg`` zeigt das Bild trotzdem.
@@ -28,7 +29,13 @@ from .store import JsonFile
 
 _LOGGER = logging.getLogger(__name__)
 STATIC = Path(__file__).parent / "static"
-WIDTH, HEIGHT = 1280, 720
+WIDTH, HEIGHT = 1920, 1080
+_SCALE = HEIGHT / 720  # Entwurfsraster 1280×720 → Bildgröße
+
+
+def _s(value: float) -> int:
+    """Entwurfskoordinate (720p-Raster) → Pixel im Bild."""
+    return round(value * _SCALE)
 BG, FG, MUTED, LINE = (10, 10, 10), (239, 237, 234), (163, 161, 156), (79, 85, 96)
 BARS = [(191, 191, 191), (191, 191, 0), (0, 191, 191), (0, 191, 0), (191, 0, 191), (191, 0, 0), (0, 0, 191), (16, 16, 16)]
 
@@ -142,43 +149,44 @@ class TestPattern:
         name = str(info.get("name") or "Strelle AV Matrix")
         img = Image.new("RGB", (WIDTH, HEIGHT), BG)
         d = ImageDraw.Draw(img)
-        title, text, small = _font("AtkinsonHyperlegibleNext-latin.woff2", 54, 800), _font("AtkinsonHyperlegibleNext-latin.woff2", 28, 500), _font("AtkinsonHyperlegibleMono-latin.woff2", 22)
-        mono = _font("AtkinsonHyperlegibleMono-latin.woff2", 34, 700)
+        title, text, small = _font("AtkinsonHyperlegibleNext-latin.woff2", _s(54), 800), _font("AtkinsonHyperlegibleNext-latin.woff2", _s(28), 500), _font("AtkinsonHyperlegibleMono-latin.woff2", _s(22))
+        mono = _font("AtkinsonHyperlegibleMono-latin.woff2", _s(34), 700)
         # Bildlage: Rahmen, Ecken, Mittenkreuz
-        d.rectangle([24, 24, WIDTH - 25, HEIGHT - 25], outline=LINE, width=2)
-        for cx, cy, sx, sy in ((24, 24, 1, 1), (WIDTH - 25, 24, -1, 1), (24, HEIGHT - 25, 1, -1), (WIDTH - 25, HEIGHT - 25, -1, -1)):
-            d.line([cx, cy, cx + 60 * sx, cy], fill=FG, width=4)
-            d.line([cx, cy, cx, cy + 60 * sy], fill=FG, width=4)
-        d.line([WIDTH // 2 - 24, HEIGHT // 2, WIDTH // 2 + 24, HEIGHT // 2], fill=LINE, width=2)
-        d.line([WIDTH // 2, HEIGHT // 2 - 24, WIDTH // 2, HEIGHT // 2 + 24], fill=LINE, width=2)
+        m = _s(24)
+        d.rectangle([m, m, WIDTH - m - 1, HEIGHT - m - 1], outline=LINE, width=_s(2))
+        for cx, cy, sx, sy in ((m, m, 1, 1), (WIDTH - m - 1, m, -1, 1), (m, HEIGHT - m - 1, 1, -1), (WIDTH - m - 1, HEIGHT - m - 1, -1, -1)):
+            d.line([cx, cy, cx + _s(60) * sx, cy], fill=FG, width=_s(4))
+            d.line([cx, cy, cx, cy + _s(60) * sy], fill=FG, width=_s(4))
+        d.line([WIDTH // 2 - m, HEIGHT // 2, WIDTH // 2 + m, HEIGHT // 2], fill=LINE, width=_s(2))
+        d.line([WIDTH // 2, HEIGHT // 2 - m, WIDTH // 2, HEIGHT // 2 + m], fill=LINE, width=_s(2))
         # Marke (Original-Wortmarke, unverändert) und Name
         try:
             logo = Image.open(STATIC / "brand" / "wortmarke-hell.png").convert("RGBA")
-            logo = logo.resize((300, round(logo.height * 300 / logo.width)), Image.LANCZOS)
-            img.paste(logo, (72, 78), logo)
+            logo = logo.resize((_s(300), round(logo.height * _s(300) / logo.width)), Image.LANCZOS)
+            img.paste(logo, (_s(72), _s(78)), logo)
         except OSError:
             pass
-        d.text((72, 168), name, font=title, fill=FG)
-        d.text((74, 240), f"Testbild · {info.get('hostname', '')} · {WIDTH}×{HEIGHT}", font=small, fill=MUTED)
+        d.text((_s(72), _s(168)), name, font=title, fill=FG)
+        d.text((_s(74), _s(240)), f"Testbild · {info.get('hostname', '')} · {WIDTH}×{HEIGHT}", font=small, fill=MUTED)
         # Farbbalken (75 %) und Graustufen
-        x0, x1, y = 72, 716, 300
+        x0, x1, y = _s(72), _s(716), _s(300)
         step = (x1 - x0) / len(BARS)
         for i, color in enumerate(BARS):
-            d.rectangle([round(x0 + i * step), y, round(x0 + (i + 1) * step) - 1, y + 130], fill=color)
+            d.rectangle([round(x0 + i * step), y, round(x0 + (i + 1) * step) - 1, y + _s(130)], fill=color)
         step = (x1 - x0) / 11
         for i in range(11):
             v = round(255 * i / 10)
-            d.rectangle([round(x0 + i * step), y + 138, round(x0 + (i + 1) * step) - 1, y + 190], fill=(v, v, v))
-        d.rectangle([x0, y, x1 - 1, y + 190], outline=LINE, width=1)
-        d.text((72, 520), "Kreuzschiene am Telefon öffnen", font=text, fill=FG)
-        d.text((72, 560), "QR-Code scannen – das Telefon muss im selben Netz sein.", font=small, fill=MUTED)
+            d.rectangle([round(x0 + i * step), y + _s(138), round(x0 + (i + 1) * step) - 1, y + _s(190)], fill=(v, v, v))
+        d.rectangle([x0, y, x1 - 1, y + _s(190)], outline=LINE, width=1)
+        d.text((_s(72), _s(520)), "Kreuzschiene am Telefon öffnen", font=text, fill=FG)
+        d.text((_s(72), _s(560)), "QR-Code scannen – das Telefon muss im selben Netz sein.", font=small, fill=MUTED)
         # QR-Code: groß, schwarz auf weiß, Adresse als Klartext darunter
         if url:
             matrix = qr_matrix(url)
-            box, quiet = 420, 4
+            box, quiet = _s(420), 4
             scale = box // (len(matrix) + 2 * quiet)
             side = scale * (len(matrix) + 2 * quiet)
-            bx, by = WIDTH - 72 - side, 84
+            bx, by = WIDTH - _s(72) - side, _s(84)
             d.rectangle([bx, by, bx + side - 1, by + side - 1], fill=(255, 255, 255))
             for ry, row in enumerate(matrix):
                 for rx, cell in enumerate(row):
@@ -187,7 +195,7 @@ class TestPattern:
                         d.rectangle([px, py, px + scale - 1, py + scale - 1], fill=(0, 0, 0))
             shown = url.removeprefix("http://").rstrip("/")
             width = d.textlength(shown, font=mono)
-            d.text((bx + side / 2 - width / 2, by + side + 18), shown, font=mono, fill=FG)
+            d.text((bx + side / 2 - width / 2, by + side + _s(18)), shown, font=mono, fill=FG)
         return img
 
     def render(self, now: datetime | None = None) -> Any:
@@ -201,10 +209,10 @@ class TestPattern:
         now = now or datetime.now()
         img = self._base.copy()
         d = ImageDraw.Draw(img)
-        d.text((72, 612), now.strftime("%H:%M:%S"), font=_font("AtkinsonHyperlegibleMono-latin.woff2", 52, 700), fill=FG)
-        d.text((340, 632), now.strftime("%d.%m.%Y"), font=_font("AtkinsonHyperlegibleMono-latin.woff2", 26), fill=MUTED)
+        d.text((_s(72), _s(612)), now.strftime("%H:%M:%S"), font=_font("AtkinsonHyperlegibleMono-latin.woff2", _s(52), 700), fill=FG)
+        d.text((_s(340), _s(632)), now.strftime("%d.%m.%Y"), font=_font("AtkinsonHyperlegibleMono-latin.woff2", _s(26)), fill=MUTED)
         if now.second % 2 == 0:  # Lebenszeichen
-            d.ellipse([560, 632, 584, 656], fill=(255, 75, 66))
+            d.ellipse([_s(560), _s(632), _s(584), _s(656)], fill=(255, 75, 66))
         return img
 
     def jpeg(self, quality: int = 85) -> bytes:

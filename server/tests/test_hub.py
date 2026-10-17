@@ -159,3 +159,16 @@ async def test_devices_overview_has_no_secrets(env):
     env.hub.entries["magewell-s2"].data["password"] = "geheim"
     text = str(env.hub.devices())
     assert "geheim" not in text and "Monitor-1" in text and AVIO in text
+
+
+def test_live_source_has_no_last_seen_so_polls_do_not_change_the_snapshot() -> None:
+    """Ein live gemeldeter Zeitstempel änderte den Stand bei jeder Abfrage – das Panel baute sich dauernd neu auf."""
+    import pathlib
+    import tempfile
+
+    from avmatrix.hub import Hub
+    from avmatrix.store import JsonFile
+    d = pathlib.Path(tempfile.mkdtemp())
+    hub = Hub(JsonFile(d / "c.json"), JsonFile(d / "s.json"))
+    assert hub._source_dict("ndi", "X (Y)", True, "192.0.2.1:5961", 1000.0, 900.0)["last_seen"] is None
+    assert hub._source_dict("ndi", "X (Y)", False, None, 1000.0, 900.0)["last_seen"]

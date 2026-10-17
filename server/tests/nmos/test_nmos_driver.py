@@ -159,6 +159,27 @@ async def test_route_switches_video_audio_and_anc_together(studio) -> None:
     assert state.status.extra["breakaway"] is False and state.status.extra["preview"] == "none"
 
 
+async def test_node_reached_over_an_unadvertised_control_port_is_switched_there(make_net: MakeNet, session) -> None:
+    """Blackmagic 4x12G: its control port serves the NMOS nodes of the four media ports, but every node names only
+    its media address (10.0.0.5x) in ``self``, ``controls`` and ``manifest_href`` – unreachable from the control
+    network. Reached by hand over the control port, the driver must switch and fetch SDPs over that port too."""
+    specs = blackmagic.studio()
+    for spec in specs:
+        spec.advertise_host = "10.255.255.1"  # nirgends erreichbar
+    net = await make_net(specs)
+    driver = driver_for(session, net, timeout=1.0)
+    result = await poll(driver, 2)
+    assert HDMI in result.destinations and BIDI_IN in [s.name for s in result.sources]
+    await driver.async_route(HDMI, BIDI_IN)
+    mini, bidi = net.node(MINI), net.node(BIDI)
+    for essence in ("Video", "Audio", "ANC"):
+        active = mini.active(f"HDMI Out {essence}")
+        assert active["sender_id"] == bidi.sender(f"SDI In {essence}")["id"]
+        assert active["transport_file"]["data"] == bidi.sdp[active["sender_id"]]
+    assert (await poll(driver)).destinations[HDMI].current == BIDI_IN
+    assert all(node.advertised == {"10.255.255.1"} and node.host == "127.0.0.1" for node in driver.devices.values())
+
+
 async def test_route_switches_inactive_senders_on(studio) -> None:
     """Blackmagic-Sender senden erst nach ``master_enable`` (Forum) – der Treiber schaltet sie mit ein."""
     net, driver = studio
