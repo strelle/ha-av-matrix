@@ -4,10 +4,8 @@
     PYTHONPATH=server server/.venv/bin/python tools/ndi-player/ndi_player.py "<video>" "<NDI-Name>" [--port 8099]
 
 Steuerung im Browser: http://<rechner>:8099/  (Countdown, Text, Aus; Vorschau). Zustand in overlay_state.json neben dem Skript.
-Overlay-Arten:
-  countdown: {type, label, until "HH:MM", after_text, hide_at "HH:MM"} – zählt bis `until`, danach `after_text`, ab `hide_at` aus
-  text:      {type, title, subtitle, hide_at?}
-  off
+Was eingeblendet wird und wie es aussieht, steht in design.py (Ebenen main, wifi …); die Datei wird ohne Neustart nachgeladen.
+POST /api/overlay {"<ebene>": {...}} setzt eine Ebene, die anderen bleiben.
 """
 import ctypes as C, io, json, subprocess, sys, threading, time
 from datetime import datetime
@@ -15,7 +13,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import numpy as np
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image
 
 from avmatrix.preview import _SendCreate, _VideoFrame, find_library
 
@@ -25,35 +23,10 @@ FFMPEG = "/Users/strelle/.local/bin/ffmpeg"
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 STATE = HERE / "overlay_state.json"
-FONT = "/System/Library/Fonts/Supplemental/DIN Condensed Bold.ttf"
-NAVY, BLUE, ORANGE, WHITE = (6, 34, 70), (110, 190, 240), (243, 146, 0), (240, 246, 252)
 
 lock = threading.Lock()
-cfg = json.loads(STATE.read_text()) if STATE.exists() else {"type": "off"}
+cfg = json.loads(STATE.read_text()) if STATE.exists() else {}
 last_frame = None
-
-
-def font(px): return ImageFont.truetype(FONT, px)
-
-
-def hm(s):
-    h, m = map(int, s.split(":")); n = datetime.now(); return n.replace(hour=h, minute=m, second=0, microsecond=0)
-
-
-def phase(c):
-    """Was gerade gezeigt wird: (art, titel, untertitel) oder None."""
-    now = datetime.now()
-    if c.get("hide_at") and now >= hm(c["hide_at"]):
-        return None
-    if c.get("type") == "countdown":
-        until = hm(c["until"]); left = int((until - now).total_seconds())
-        if left > 0:
-            m, s = divmod(left, 60); h, m = divmod(m, 60)
-            return ("count", (c.get("label") or "Pause").upper(), f"{h}:{m:02d}:{s:02d}" if h else f"{m:02d}:{s:02d}", f"Weiter um {c['until']} Uhr")
-        return ("text", (c.get("after_text") or "Es geht gleich weiter").upper(), "", "")
-    if c.get("type") == "text":
-        return ("text", (c.get("title") or "").upper(), "", c.get("subtitle") or "")
-    return None
 
 
 import importlib
@@ -61,28 +34,33 @@ import design
 _design_mtime = 0.0
 
 
-def render(ph):
-    """Aussehen kommt aus design.py; ändert sich die Datei, wird sie neu geladen (ohne Neustart)."""
+def D():
+    """design.py – bei Änderung der Datei neu geladen (ohne Neustart); bei Fehler bleibt das alte Design."""
     global _design_mtime
     m = Path(design.__file__).stat().st_mtime
     if m != _design_mtime:
         _design_mtime = m
         try:
             importlib.reload(design)
-        except Exception as e:  # Fehler im Design: altes Design weiterverwenden
+        except Exception as e:
             print("design.py fehlerhaft:", e, flush=True)
-    return design.render(ph)
+    return design
 
 
 class Overlay:
-    def __init__(self): self.key, self.ov = None, None
+    def __init__(self): self.key, self.m, self.ov = None, None, []
 
     def get(self):
         with lock:
-            ph = phase(cfg)
-        m = Path(design.__file__).stat().st_mtime
-        if ph != self.key or m != getattr(self, "m", None):
-            self.key, self.m, self.ov = ph, m, render(ph)
+            c = dict(cfg)
+        d = D()
+        try:
+            show = d.showing(c)
+            if show != self.key or _design_mtime != self.m:
+                self.key, self.m, self.ov = show, _design_mtime, d.render(show)
+        except Exception as e:
+            if self.m != ("err", _design_mtime):
+                print("Einblendung fehlerhaft:", e, flush=True); self.m = ("err", _design_mtime)
         return self.ov
 
 
@@ -107,9 +85,8 @@ def player(path, name):
         if len(data) < size:
             sys.exit(f"ffmpeg beendet ({proc.poll()})")
         fr = np.frombuffer(data, dtype=np.uint8).reshape(H, W, 4).copy()
-        o = ov.get()
-        if o:
-            x0, y0, pre, inv = o; h, w = pre.shape[:2]
+        for x0, y0, pre, inv in ov.get():
+            h, w = pre.shape[:2]
             reg = fr[y0:y0 + h, x0:x0 + w, :3].astype(np.float32)
             fr[y0:y0 + h, x0:x0 + w, :3] = (reg * inv + pre).astype(np.uint8)
         buf = fr.ctypes.data_as(C.c_void_p).value
@@ -118,7 +95,7 @@ def player(path, name):
         if n % 5 == 0:
             last_frame = fr
         if n % (FPS * 60) == 0:
-            print(f"{n} Bilder, Empfänger: {lib.NDIlib_send_get_no_connections(send, 0)}, Overlay: {ov.key[0] if ov.key else 'aus'}", flush=True)
+            print(f"{n} Bilder, Empfänger: {lib.NDIlib_send_get_no_connections(send, 0)}, Overlay: {[k for k, v in (ov.key or {}).items() if v] or 'aus'}", flush=True)
 
 
 PAGE = (HERE / "control.html").read_text(encoding="utf-8") if (HERE / "control.html").exists() else "<p>control.html fehlt</p>"
@@ -137,8 +114,8 @@ class Handler(BaseHTTPRequestHandler):
         if self.path.startswith("/api/state"):
             with lock:
                 c = dict(cfg)
-            ph = phase(c)
-            return self._send(200, json.dumps({"overlay": c, "showing": ph, "now": datetime.now().strftime("%H:%M:%S")}, ensure_ascii=False))
+            c = D().normalize(c)
+            return self._send(200, json.dumps({"overlay": c, "showing": D().showing(c), "now": datetime.now().strftime("%H:%M:%S")}, ensure_ascii=False))
         if self.path.startswith("/api/preview.jpg"):
             fr = last_frame
             if fr is None:
@@ -153,14 +130,16 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(404, b"{}")
         n = int(self.headers.get("Content-Length") or 0)
         try:
-            new = json.loads(self.rfile.read(n) or b"{}")
-            if new.get("type") not in ("off", "countdown", "text"):
-                raise ValueError("type")
-            for k in ("until", "hide_at"):
-                if new.get(k):
-                    hm(new[k])
+            body = json.loads(self.rfile.read(n) or b"{}")
+            d = D()
+            if "type" in body:  # alte Form: Haupteinblendung
+                body = {"main": body}
+            with lock:
+                new = dict(d.normalize(cfg))
+            for sec, data in body.items():
+                new[sec] = d.validate(sec, data)
         except Exception as e:
-            return self._send(400, json.dumps({"error": str(e)}))
+            return self._send(400, json.dumps({"error": str(e)}, ensure_ascii=False))
         with lock:
             cfg = new
             STATE.write_text(json.dumps(cfg, ensure_ascii=False))
