@@ -86,13 +86,6 @@
    "row": 4
   },
   {
-   "id": "lan",
-   "profile": "generic/lan-switch",
-   "name": "Studio-LAN (UniFi)",
-   "col": 1,
-   "row": 5
-  },
-  {
    "id": "atem",
    "profile": "blackmagic/atem-2me-constellation-hd",
    "name": "ATEM 2 M/E Constellation HD",
@@ -171,6 +164,35 @@
    "name": "PA Saal",
    "col": 3,
    "row": 5
+  },
+  {
+   "id": "house",
+   "profile": "generic/house-network",
+   "name": "Hausanschluss (Location)",
+   "col": 3,
+   "row": 6
+  },
+  {
+   "id": "ux",
+   "profile": "generic/unifi-express",
+   "name": "UniFi Express (Router, DHCP)",
+   "address": "192.168.1.1",
+   "col": 1,
+   "row": 5
+  },
+  {
+   "id": "poe",
+   "profile": "generic/poe-switch-unmanaged",
+   "name": "PoE-Switch WING-Rack (unmanaged)",
+   "col": 1,
+   "row": 6
+  },
+  {
+   "id": "tpl",
+   "profile": "generic/tp-link-tl-sg1024",
+   "name": "TP-Link TL-SG1024 Videoregie",
+   "col": 1,
+   "row": 7
   }
  ],
  "cables": [
@@ -281,58 +303,56 @@
   },
   {
    "from": "air:eth_usb",
-   "to": "lan:port",
+   "to": "tpl:port",
    "medium": "Cat6"
   },
   {
    "from": "pi:eth0",
-   "to": "lan:port",
+   "to": "tpl:port",
    "medium": "Cat6"
   },
   {
    "from": "mw:eth",
-   "to": "lan:port",
+   "to": "tpl:port",
    "medium": "Cat6"
   },
   {
    "from": "ulxd:dante_primary",
-   "to": "lan:port",
-   "medium": "Cat6"
+   "to": "poe:port",
+   "medium": "Cat6",
+   "fixed": true
   },
   {
    "from": "wing:eth",
-   "to": "lan:port",
-   "medium": "Cat6"
+   "to": "poe:port",
+   "medium": "Cat6",
+   "fixed": true
   },
   {
    "from": "dline:eth",
-   "to": "lan:port",
-   "medium": "Cat6"
+   "to": "poe:port",
+   "medium": "Cat6",
+   "assumed": true
   },
   {
    "from": "atem:ethernet",
-   "to": "lan:port",
+   "to": "tpl:port",
    "medium": "Cat6"
   },
   {
    "from": "wp:ethernet",
-   "to": "lan:port",
+   "to": "tpl:port",
    "medium": "Cat6"
   },
   {
    "from": "hd:ethernet",
-   "to": "lan:port",
+   "to": "tpl:port",
    "medium": "Cat6"
   },
   {
    "from": "ipc:eth_1g",
-   "to": "lan:port",
+   "to": "tpl:port",
    "medium": "Cat6"
-  },
-  {
-   "from": "lan:wan",
-   "to": "cloud:rtmp_in",
-   "medium": "Internet"
   },
   {
    "from": "ipc:headphones",
@@ -343,27 +363,48 @@
    "from": "ipc:headphones",
    "to": "wing:local_in.24",
    "medium": "Kopfhörer-Klinke (TRRS) → 2× XLR, rechts"
+  },
+  {
+   "from": "house:lan",
+   "to": "ux:wan",
+   "medium": "Cat6 (Location-Port)"
+  },
+  {
+   "from": "ux:lan",
+   "to": "poe:port",
+   "medium": "Cat6",
+   "fixed": true
+  },
+  {
+   "from": "poe:port",
+   "to": "tpl:port",
+   "medium": "Cat6 – einziges Kabel zwischen den Racks"
+  },
+  {
+   "from": "ux:wan",
+   "to": "cloud:rtmp_in",
+   "medium": "Internet"
   }
  ],
  "flows": [
   {
    "from": "air:eth_usb",
    "to": "mw:eth",
-   "via": "lan",
+   "via": "tpl",
    "kind": "NDI",
    "label": "KREMS TRAILER (Loop, ohne Ton)"
   },
   {
    "from": "ulxd:dante_primary",
    "to": "wing:aoip.1",
-   "via": "lan",
+   "via": "poe",
    "kind": "Dante",
    "label": "Strelle1–4 → MOD 1–4"
   },
   {
    "from": "dline:eth",
    "to": "wing:aoip.9",
-   "via": "lan",
+   "via": "poe",
    "kind": "Dante",
    "label": "Stage USB-C → MOD 9/10",
    "assumed": true
@@ -385,7 +426,7 @@
   {
    "from": "wp:ethernet",
    "to": "cloud:rtmp_in",
-   "via": "lan",
+   "via": "ux",
    "kind": "RTMP",
    "label": "Stream ME1"
   },
@@ -644,25 +685,6 @@
     "ATEM Constellation HD hat keine HDMI-Eingänge – Eingang 3 'HDMI 1' muss über einen Wandler kommen"
    ]
   },
-  "generic/lan-switch": {
-   "model": "Studio-LAN 192.168.1.0/24",
-   "category": "router",
-   "ports": [
-    {
-     "id": "port",
-     "count": 24,
-     "direction": "bidi",
-     "connector": "RJ45",
-     "signal": "Ethernet"
-    },
-    {
-     "id": "wan",
-     "direction": "out",
-     "connector": "RJ45",
-     "signal": "Internet"
-    }
-   ]
-  },
   "generic/neutrik-na2-io-dline": {
    "model": "NA2-IO-DLINE (nicht recherchiert)",
    "category": "converter",
@@ -718,6 +740,112 @@
      "signal": "analog-audio"
     }
    ]
+  },
+  "generic/unifi-express": {
+   "manufacturer": "Ubiquiti",
+   "model": "UniFi Express (UX)",
+   "category": "router",
+   "ports": [
+    {
+     "id": "wan",
+     "direction": "bidi",
+     "connector": "RJ45",
+     "signal": "Ethernet 1G"
+    },
+    {
+     "id": "lan",
+     "direction": "bidi",
+     "connector": "RJ45",
+     "signal": "Ethernet 1G"
+    },
+    {
+     "id": "wifi",
+     "direction": "bidi",
+     "connector": "intern",
+     "signal": "Wi-Fi 6"
+    }
+   ],
+   "unverified": [
+    "Portzahl aus Herstellerkenntnis, Quelle nachtragen"
+   ]
+  },
+  "generic/poe-switch-unmanaged": {
+   "model": "PoE-Switch unmanaged (Modell offen)",
+   "category": "router",
+   "ports": [
+    {
+     "id": "port",
+     "count": 8,
+     "direction": "bidi",
+     "connector": "RJ45",
+     "signal": "Ethernet/PoE"
+    }
+   ],
+   "unverified": [
+    "unmanaged: kein IGMP-Snooping – Dante-Multicast geht an alle Ports"
+   ]
+  },
+  "generic/tp-link-tl-sg1024": {
+   "manufacturer": "TP-Link",
+   "model": "TL-SG1024",
+   "category": "router",
+   "ports": [
+    {
+     "id": "port",
+     "count": 24,
+     "direction": "bidi",
+     "connector": "RJ45",
+     "signal": "Ethernet 1G"
+    }
+   ],
+   "unverified": [
+    "unmanaged, kein IGMP-Snooping; Quelle nachtragen"
+   ]
+  },
+  "generic/house-network": {
+   "model": "Hausnetz Location",
+   "category": "service",
+   "ports": [
+    {
+     "id": "lan",
+     "direction": "bidi",
+     "connector": "RJ45",
+     "signal": "Internet"
+    }
+   ]
   }
- }
+ },
+ "racks": [
+  {
+   "id": "wingrack",
+   "name": "WING-Rack",
+   "members": [
+    "wing",
+    "ulxd",
+    "ux",
+    "poe"
+   ],
+   "ports": [
+    "poe:port (Uplink Videoregie)",
+    "ux:wan (Hausanschluss)"
+   ]
+  },
+  {
+   "id": "videoregie",
+   "name": "Videoregie",
+   "members": [
+    "atem",
+    "ipc",
+    "sw360",
+    "hd",
+    "wp",
+    "sv",
+    "tpl"
+   ],
+   "ports": [
+    "tpl:port (Uplink WING-Rack)"
+   ],
+   "notes": "Zugehörigkeit von Pi, Magewell und Presentation Converter offen"
+  }
+ ]
 }

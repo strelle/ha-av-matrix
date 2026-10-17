@@ -78,6 +78,7 @@ aside a { color: var(--video); word-break: break-all; }
       <span><i style="background:var(--audio)"></i>Ton</span>
       <span><i class="dash"></i>Netzstrom (NDI, Dante, 2110, RTMP)</span>
       <span><i style="background:var(--line)"></i>Netzkabel</span>
+      <span><i style="background:var(--audio);width:4px;height:14px"></i>WING-Rack</span><span><i style="background:var(--video);width:4px;height:14px"></i>Videoregie</span>
     </div>
     <label class="tg"><input type="checkbox" id="lan"> Netzkabel zeigen</label>
     <span class="hint">Maus über Gerät oder Buchse zeigt den Fluss · Klick öffnet das Profil</span>
@@ -99,6 +100,9 @@ const el = (t, a = {}, parent) => { const e = document.createElementNS(NS, t); f
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const split = ref => { const [i, p] = ref.split(":"); return [i, p]; };
 const VIRTUAL = new Set(["me1", "main1", "main2"]);
+const NETDEV = new Set(["ux", "poe", "tpl", "house"]);
+const RACK = {}; (P.racks || []).forEach((r, k) => r.members.forEach(m => RACK[m] = {...r, k}));
+const RACKCOL = ["var(--audio)", "var(--video)", "var(--net)"];
 document.getElementById("meta").textContent = `${P.name} · Stand ${P.date} · ${P.instances.length} Geräte`;
 
 // Signalart je Port (aus dem Profil), für die Farbe
@@ -131,9 +135,10 @@ for (const n of sorted) {
   const x = COLX[n.col], y = colY[n.col]; colY[n.col] += h + GAP;
   const pr = prof(n.profile);
   const lanonly = ports.length > 0 && ports.every(p => (n.id === "lan"));
-  const g = el("g", {class: "node" + (n.id === "lan" ? " lanonly" : ""), "data-id": n.id, tabindex: 0}, gN);
+  const g = el("g", {class: "node", "data-id": n.id, tabindex: 0}, gN);
   el("rect", {class: "box", x, y, width: W, height: h, rx: 6}, g);
   el("rect", {class: "head", x: x + 1, y: y + 1, width: W - 2, height: HEAD - 6, rx: 5}, g);
+  if (RACK[n.id]) { el("rect", {x: x, y: y + 4, width: 4, height: h - 8, rx: 2, fill: RACKCOL[RACK[n.id].k % 3]}, g).appendChild(el("title")).textContent = "Rack: " + RACK[n.id].name; }
   el("text", {class: "t", x: x + 10, y: y + 17}, g).textContent = n.name;
   { let m = (pr.model || "").replace(/^(Blackmagic|Behringer|Shure|Elgato|Magewell|Apple)\s+/i, "") + (n.address ? " · " + n.address : ""); if (m.length > 40) m = m.slice(0, 39) + "…"; el("text", {class: "m", x: x + 10, y: y + 30}, g).textContent = m; }
   if (pr.status === "draft") el("circle", {class: "draft", cx: x + W - 12, cy: y + 13, r: 4}, g).appendChild(el("title")).textContent = "Profil: Entwurf, noch nicht am Gerät geprüft";
@@ -163,14 +168,14 @@ function addEdge(from, to, cls, k, title) {
   const p = el("path", {class: "e " + cls, d: curve(a, b), stroke: cls.includes("lan") ? "" : color(k)}, gE);
   p.dataset.title = title; edges.push({from, to, p});
 }
-P.cables.forEach(c => { const [ti] = split(c.to); const lan = ti === "lan" || (split(c.from)[0] === "lan");
-  addEdge(c.from, c.to, (lan ? "lan" : "") + (c.assumed ? " assumed" : ""), sig(...split(c.from)), `${c.medium}${c.assumed ? " · angenommen, nicht geprüft" : ""}`); });
+P.cables.forEach(c => { const lan = NETDEV.has(split(c.to)[0]) || NETDEV.has(split(c.from)[0]);
+  addEdge(c.from, c.to, (lan ? "lan" : "") + (c.assumed ? " assumed" : ""), sig(...split(c.from)), `${c.medium}${c.fixed ? " · fest im Rack" : ""}${c.assumed ? " · angenommen, nicht geprüft" : ""}`); });
 P.flows.filter(f => f.kind !== "intern").forEach(f => addEdge(f.from, f.to, "net" + (f.assumed ? " assumed" : ""), f.kind === "Dante" ? "audio" : f.kind === "ST 2110" ? "video" : "net", `${f.kind}: ${f.label}${f.via ? " · über " + inst[f.via].name : ""}`));
 
 // Verfolgungsgraph: gerichtete Kanten ohne LAN-Kabel (die laufen als Netzströme)
 const fwd = {}, bwd = {};
 const link = (a, b) => { (fwd[a] ||= []).push(b); (bwd[b] ||= []).push(a); };
-P.cables.forEach(c => { if (![c.from, c.to].some(r => ["lan", "sw360"].includes(split(r)[0]))) link(c.from, c.to); });
+P.cables.forEach(c => { if (![c.from, c.to].some(r => NETDEV.has(split(r)[0]) || split(r)[0] === "sw360")) link(c.from, c.to); });
 P.flows.forEach(f => link(f.from, f.to));
 P.routes.forEach(r => link(`${r.device}:${r.from}`, `${r.device}:${r.to}`));
 function trace(starts) {
@@ -214,6 +219,7 @@ svg.addEventListener("click", ev => {
   sideEl.innerHTML = `<h2>${esc(n.name)}</h2>
     <div class="kv">${esc([pr.manufacturer, pr.model].filter(Boolean).join(" "))} · ${esc(pr.category || "")} ${pr.status ? `<span class="pill ${pr.status === "draft" ? "draft" : ""}">${pr.status === "draft" ? "Entwurf" : "geprüft"}</span>` : ""}</div>
     ${n.address ? `<div class="kv">Adresse ${esc(n.address)}</div>` : ""}
+    ${RACK[n.id] ? `<div><b>Rack: ${esc(RACK[n.id].name)}</b> – fest verbaut mit ${esc(RACK[n.id].members.filter(m => m !== n.id).map(m => inst[m].name).join(", "))}<br><span class="kv">Übergabe: ${esc((RACK[n.id].ports || []).join("; "))}</span></div>` : ""}
     ${mods ? `<div><b>Gesteckte Module</b><ul>${mods}</ul></div>` : ""}${slots ? `<div><b>Steckplätze</b><ul>${slots}</ul></div>` : ""}
     <div><b>Anschlüsse laut Hersteller</b><div class="tbl"><table>${(pr.ports || []).map(p => `<tr><td>${esc(p.id)}</td><td>${p.count > 1 ? p.count + "× " : ""}${esc(p.direction)}</td><td>${esc(p.connector)}</td><td>${esc(p.signal)}</td></tr>`).join("")}</table></div></div>
     ${(pr.logic || []).length ? `<div><b>Innere Logik</b><ul>${pr.logic.map(l => `<li>${esc(l.type)}: ${esc((l.from || []).join(", "))} → ${esc((l.to || []).join(", "))}</li>`).join("")}</ul></div>` : ""}

@@ -26,3 +26,12 @@ Hier dasselbe für Bild- und Tontechnik.
 - `flows[]` – Signalfluss über ein Netz (NDI, Dante, ST 2110, RTMP), über welches Netzgerät er läuft.
 - `routes[]` – aktueller innerer Patch eines Geräts (z. B. ATEM Aux 10 ← In 11), live aus der Kreuzschiene oder geplant.
 - `embedded` – alle verwendeten Profile, damit ein Import ohne Bibliothek funktioniert.
+
+## Rack (bautechnischer Verbund)
+
+Ein Rack fasst Geräte zusammen, die fest gemeinsam verbaut sind, samt ihrer festen inneren Verkabelung (z. B. WING-Rack mit WING, ULXD4Q,
+Router und PoE-Switch). Ein Rack ist wie ein Gerät wiederverwendbar: als eigene Datei exportieren, in jedes Projekt importieren.
+
+- im Projekt: `racks[]` mit `id`, `name`, `members[]` (Instanz-IDs); Kabel innerhalb eines Racks tragen `"fixed": true`.
+- Übergabepunkte (`ports[]` des Racks) sind die Buchsen, an denen andere Racks oder Geräte angeschlossen werden – z. B. der Uplink des
+  PoE-Switch zur Videoregie. Beim Aufbau vor Ort muss man nur noch diese Verbindungen stecken und prüfen.
