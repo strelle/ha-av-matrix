@@ -52,8 +52,9 @@ button:focus-visible, input:focus-visible { outline:3px solid var(--focus); outl
   <form class="card" id="f-wifi">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><strong>WLAN-Code (oben rechts)</strong><span class="tally" id="w-tally" style="position:static">AUS</span></div>
     <div class="row"><label>Überschrift<input id="w-label" value="Gäste-WLAN"></label><label>WLAN-Name (SSID)<input id="w-ssid" autocomplete="off" autocapitalize="off" spellcheck="false"></label></div>
-    <div class="row"><label>Passwort<input id="w-pw" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
-      <label>Verschlüsselung<select id="w-sec"><option value="WPA">WPA/WPA2/WPA3</option><option value="WEP">WEP</option><option value="nopass">offen (kein Passwort)</option></select></label></div>
+    <div class="row"><label>Passwort (leer = offenes WLAN)<input id="w-pw" placeholder="—" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+      <label>Verschlüsselung<select id="w-sec"><option value="nopass">offen (kein Passwort)</option><option value="WPA">WPA/WPA2/WPA3</option><option value="WEP">WEP</option></select></label></div>
+    <label>Sonderfeld (optional, z. B. „Kein Passwort nötig“)<input id="w-note"></label>
     <div class="row"><label class="chk"><input type="checkbox" id="w-showpw" checked> Passwort als Text zeigen</label><label class="chk"><input type="checkbox" id="w-hidden"> Verstecktes WLAN</label><label>Ausblenden um (optional)<input type="time" id="w-hide"></label></div>
     <div style="display:flex;gap:10px;flex-wrap:wrap"><button class="go" type="submit">WLAN-Code einblenden</button><button class="off" type="button" id="w-off">WLAN-Code ausblenden</button></div>
   </form>
@@ -65,14 +66,18 @@ document.querySelectorAll("[data-t]").forEach(b => b.onclick = () => { document.
 $("#f-countdown").onsubmit = e => { e.preventDefault(); post({type: "countdown", label: $("#c-label").value, until: $("#c-until").value, after_text: $("#c-after").value, hide_at: $("#c-hide").value || null}).catch(err => $("#st").textContent = "Fehler: " + err.message); };
 $("#f-text").onsubmit = e => { e.preventDefault(); post({type: "text", title: $("#t-title").value, subtitle: $("#t-sub").value, hide_at: $("#t-hide").value || null}).catch(err => $("#st").textContent = "Fehler: " + err.message); };
 $("#off").onclick = () => post({main: {type: "off"}});
-const wifi = on => ({wifi: {on, label: $("#w-label").value, ssid: $("#w-ssid").value, password: $("#w-pw").value, security: $("#w-sec").value, show_password: $("#w-showpw").checked, hidden: $("#w-hidden").checked, hide_at: $("#w-hide").value || null}});
+const wifi = on => ({wifi: {on, label: $("#w-label").value, ssid: $("#w-ssid").value, password: $("#w-pw").value, security: $("#w-sec").value, show_password: $("#w-showpw").checked, hidden: $("#w-hidden").checked, note: $("#w-note").value, hide_at: $("#w-hide").value || null}});
 $("#f-wifi").onsubmit = e => { e.preventDefault(); post(wifi(true)).catch(err => $("#st").textContent = "Fehler: " + err.message); };
 $("#w-off").onclick = () => post(wifi(false)).catch(err => $("#st").textContent = "Fehler: " + err.message);
 let wifiLoaded = false;
+const syncPw = () => { const open = $("#w-sec").value === "nopass"; $("#w-pw").disabled = open; if (open) $("#w-pw").value = ""; $("#w-showpw").closest("label").hidden = open; };
+$("#w-sec").onchange = syncPw;
+$("#w-pw").oninput = () => { if ($("#w-pw").value && $("#w-sec").value === "nopass") { $("#w-sec").value = "WPA"; syncPw(); } };
+syncPw();
 async function tick() {
   try { const d = await (await fetch("/api/state")).json(); const s = d.showing.main, w = d.overlay.wifi || {}, m = d.overlay.main || {type: "off"};
     $("#w-tally").textContent = d.showing.wifi ? "AUF SENDUNG" : "AUS"; $("#w-tally").classList.toggle("on", !!d.showing.wifi);
-    if (!wifiLoaded && d.overlay.wifi) { wifiLoaded = true; $("#w-label").value = w.label || ""; $("#w-ssid").value = w.ssid || ""; $("#w-pw").value = w.password || ""; $("#w-sec").value = w.security || "WPA"; $("#w-showpw").checked = w.show_password !== false; $("#w-hidden").checked = !!w.hidden; $("#w-hide").value = w.hide_at || ""; }
+    if (!wifiLoaded && d.overlay.wifi) { wifiLoaded = true; $("#w-label").value = w.label || ""; $("#w-ssid").value = w.ssid || ""; $("#w-pw").value = w.password || ""; $("#w-sec").value = w.security || "nopass"; syncPw(); $("#w-showpw").checked = w.show_password !== false; $("#w-hidden").checked = !!w.hidden; $("#w-note").value = w.note || ""; $("#w-hide").value = w.hide_at || ""; }
     $("#tally").textContent = (s || d.showing.wifi) ? "AUF SENDUNG" : "AUS"; $("#tally").classList.toggle("on", !!(s || d.showing.wifi));
     $("#st").textContent = `${d.now} · ${s ? (s[0] === "count" ? `${s[1]} ${s[2]}` : s[1]) : "keine Einblendung"}${m.hide_at ? " · aus um " + m.hide_at : ""}${d.showing.wifi ? " · WLAN-Code an" : ""}`;
     const t = m.type; if (t !== "off") document.querySelector(`[data-t="${t}"]`)?.setAttribute("aria-pressed", "true");
